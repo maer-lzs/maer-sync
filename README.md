@@ -28,9 +28,18 @@ stand, and the section at the end says what that leaves unproven.
 
 ### 1. What it needs
 
-**Python 3.10 or newer.** Measured, not guessed: the sources use the
-`X | None` union spelling in 118 places, which is 3.10 and up. Nothing here
-needs anything newer.
+**Python 3.10 or newer**, and one line is the whole reason:
+
+    core/authorization.py:72:    owner: str | None
+
+`X | None` is the union spelling of PEP 604, which is 3.10 and up. **One
+occurrence is enough, and that is the part worth writing down rather than a
+count.** It is a field annotation, annotations are evaluated when the module
+is loaded, and there is no `from __future__ import annotations` anywhere in
+this repository to defer them (measured: zero). So on 3.9 the import fails
+with a type error before a single request is served.
+
+Nothing here needs anything newer than 3.10.
 
 Nothing else. The service code and its tests are standard library only.
 Serving it is the one exception, and that is step 3.
