@@ -25,10 +25,27 @@ def declared():
     return out
 
 
+#: The service's own sources, named POSITIVELY.
+#:
+#: This used to read everything under the root except `tests`, and that was
+#: a list of what had occurred to somebody. The first thing to occur to
+#: nobody was `.venv`: the setup guide creates one inside the clone in step
+#: 3, `uvicorn` brings `click` along, `click` has a field called `choices`,
+#: and `choices` is a kind in the contract. From then on the suite was red
+#: for everyone who followed the guide, and it pointed at the service.
+#:
+#: An exclusion list would have fixed that one name and waited for the next:
+#: a build directory, a cache, a vendored file. Each lands in the fence
+#: silently, with no error and no signal. Naming what the service IS cannot
+#: go quiet that way; a new source directory is an addition somebody has to
+#: make here on purpose.
+SERVICE_DIRS = ("core", "service")
+
+
 def sources():
     return "\n".join(p.read_text(encoding="utf-8")
-                     for p in sorted(ROOT.rglob("*.py"))
-                     if "tests" not in p.parts)
+                     for directory in SERVICE_DIRS
+                     for p in sorted((ROOT / directory).rglob("*.py")))
 
 
 class ContractTests(unittest.TestCase):
@@ -67,6 +84,22 @@ class ContractTests(unittest.TestCase):
                           f"the contract promises the socket field {field}")
         self.assertIn('{"kind": "<kind>", "scope": "<scope>", "version": "<etag>"}',
                       CONTRACT.read_text(encoding="utf-8"))
+
+    def test_a_file_outside_the_service_cannot_redden_the_fence(self):
+        # Its OWN question and not the neighbour's: whether a stray file is
+        # read at all. Asserting the kinds here too would make it tear
+        # whenever the test beside it tears, and a green run would then say
+        # nothing about what was actually asked.
+        stray = ROOT / ".not-the-service-probe"
+        stray.mkdir(exist_ok=True)
+        marker = "not_the_service_marker_9f3a"
+        try:
+            (stray / "intruder.py").write_text(f"{marker} = 1\n", encoding="utf-8")
+            self.assertNotIn(marker, sources(),
+                             "a file outside core/ and service/ reached the fence")
+        finally:
+            (stray / "intruder.py").unlink(missing_ok=True)
+            stray.rmdir()
 
     def test_the_kinds_are_NOT_known_to_the_service(self):
         # The counter direction, and it is the one that matters: the service
