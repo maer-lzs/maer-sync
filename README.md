@@ -289,24 +289,23 @@ by the proxy from step 6, which is also what holds the certificate.
 
     docker compose exec maer-sync /opt/maer-sync/.venv/bin/python -m unittest discover -s tests -t .
 
-**Four tests fail there as of 16.09.2026, and only three of them are correct.**
-Measured, not assumed: `Ran 191 tests … FAILED (failures=1, errors=3)`.
+**The suite is green in the image: `Ran 193 tests … OK (skipped=4)`.** Measured on
+16.09.2026 in the built image, as the unprivileged service user, running exactly that
+module invocation in the built image.
 
-The three errors are the repository-hygiene tests. They ask `git` what the
-repository tracks, an image has no repository, and they belong to the checkout
-rather than here.
+The four skips are the questions this copy cannot put. Three hygiene tests and one
+fence ask `git` what the repository tracks; an image carries the sources without a
+repository and without a git program, so they report a skip **with its reason**
+instead of a result. Nothing is declared expected here, and that is deliberate.
 
-**The fourth is a real one and must not be waved through with them:**
-`test_the_kinds_are_NOT_known_to_the_service` collects `ROOT.rglob("*.py")` and
-excludes only `tests`, so it reads the dependencies under `.venv` as if they were
-this service — and `click` carries a field named `"choices"`, which the contract
-declares as a kind. It fails in the image for the same reason it fails in a clone
-once step 3 has been run.
-
-**The count is the point.** A sentence that declares failures expected is a licence
-to stop looking, and a real one then disappears among the correct ones. So: three
-expected, one not, and when the fence is fixed the number here has to become three
-again — checked, not assumed.
+**Two earlier versions of this section did declare failures expected, and each time
+the sentence hid a real one.** First it said three, and the fourth was a fence that
+read `.venv` as though it were this service. Then it said four, and three of those
+were not abstentions at all but a hole: a missing git program made the call *raise*
+where a missing repository only made it return, and the raise came back as an error.
+A sentence that declares failures normal is a licence to stop looking, and a real
+failure then disappears among the correct ones. If a number appears here again, it
+belongs to a measured run and says what it counted.
 
 ### What was run here, and what is the host's problem
 
