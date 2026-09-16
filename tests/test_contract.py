@@ -101,6 +101,71 @@ class ContractTests(unittest.TestCase):
         for path in declared()["paths"]:
             self.assertIn(path, text, f"the contract promises {path} and the service has no such path")
 
+    def test_every_path_this_service_answers_is_in_the_contract(self):
+        """The other direction, and it was missing.
+
+        The case above asks whether every promise is kept. Nothing asked the
+        reverse: a path added to the service with no line in the contract
+        stayed GREEN here, and the contract quietly stopped describing the
+        service. That is the same one way fence that let a music provider
+        door and a stock count through on the app side, twice in a week.
+
+        It bites immediately: A4 wants a path that hands out the service's
+        static public key, and without this case it could have landed with
+        the contract still saying five paths.
+
+        **Two shapes, because the service builds its paths two ways**, and a
+        scan for whole literals would have found only the first:
+
+        - compared whole, `path == "/v1/health"` in the application, and
+          `scope["path"] != "/v1/changes"` for the socket, which is the same
+          comparison against a differently named left side
+        - taken apart, `parts[1] != "doc"` in `core/paths.py`, where the
+          version is a constant and never appears in the literal
+
+        **The first pattern here was too narrow and found four of the five**,
+        because it insisted the left side be spelled `path`. The socket
+        compares `scope["path"]`. So the comparison is matched on its RIGHT
+        side, which is the part that is actually a path, and the count below
+        is what caught it: a scan that finds fewer paths than the contract
+        declares has a hole, and saying "nothing undeclared" from inside a
+        hole is not a measurement.
+
+        **The limit, said rather than papered over:** a path built a THIRD
+        way is not seen here. The two assertions below are what keeps that
+        from being silent, and the failure text names the shapes so whoever
+        adds one gets told what this looks for.
+        """
+        text = sources()
+        whole = set(re.findall(r'!=\s*"(/v1/[^"]*)"|==\s*"(/v1/[^"]*)"', text))
+        whole = {a or b for a, b in whole}
+        taken_apart = {f"/v1/{name}" for name in re.findall(r'parts\[1\]\s*!=\s*"(\w+)"', text)}
+        answered = whole | taken_apart
+
+        # The hole detector, and it is not decoration: it found the socket
+        # path missing from the first version of this case. A scan that sees
+        # fewer paths than the contract names cannot honestly report that
+        # nothing is undeclared.
+        missed = sorted(set(declared()["paths"]) - answered)
+        self.assertEqual([], missed,
+                         "this scan does not see paths the contract names, so its silence "
+                         "about undeclared ones means nothing: " + ", ".join(missed))
+
+        # Rule 7's second half: a scan that finds nothing passes every
+        # assertion after it while measuring nothing.
+        self.assertGreater(len(answered), 0,
+                           "no path was found in the service at all, so this case measured "
+                           "nothing. It looks for `path == \"/v1/...\"` and for "
+                           "`parts[1] != \"...\"`; a path built another way needs a third "
+                           "pattern here.")
+
+        undeclared = sorted(answered - set(declared()["paths"]))
+        self.assertEqual([], undeclared,
+                         "paths the service answers that the contract does not name: "
+                         + ", ".join(undeclared)
+                         + ". Adding one is a contract change, so it raises the version in "
+                           "BOTH repositories.")
+
     def test_every_declared_header_is_read_here(self):
         text = sources().lower()
         for header in declared()["headers"]:
