@@ -289,9 +289,24 @@ by the proxy from step 6, which is also what holds the certificate.
 
     docker compose exec maer-sync /opt/maer-sync/.venv/bin/python -m unittest discover -s tests -t .
 
-**Three of the repository-hygiene tests fail there, and that is correct:** they ask
-`git` what the repository tracks, and an image has no repository. They belong to the
-checkout, not to the image. Run the suite from the clone, as step 2 says.
+**Four tests fail there as of 16.09.2026, and only three of them are correct.**
+Measured, not assumed: `Ran 191 tests … FAILED (failures=1, errors=3)`.
+
+The three errors are the repository-hygiene tests. They ask `git` what the
+repository tracks, an image has no repository, and they belong to the checkout
+rather than here.
+
+**The fourth is a real one and must not be waved through with them:**
+`test_the_kinds_are_NOT_known_to_the_service` collects `ROOT.rglob("*.py")` and
+excludes only `tests`, so it reads the dependencies under `.venv` as if they were
+this service — and `click` carries a field named `"choices"`, which the contract
+declares as a kind. It fails in the image for the same reason it fails in a clone
+once step 3 has been run.
+
+**The count is the point.** A sentence that declares failures expected is a licence
+to stop looking, and a real one then disappears among the correct ones. So: three
+expected, one not, and when the fence is fixed the number here has to become three
+again — checked, not assumed.
 
 ### What was run here, and what is the host's problem
 
