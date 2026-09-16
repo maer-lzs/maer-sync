@@ -1,0 +1,23 @@
+# The store, and this is the line that matters.
+#
+# The default store is `maer-sync.sqlite` in the working directory, so
+# whoever follows the setup guide inside a clone creates one HERE. It holds
+# scrypt hashes of account secrets and digests of live tokens. Nothing else
+# in this repository would stop a `git add -A` from committing it.
+#
+# In the app repository this line read `SyncService/*.sqlite`, scoped to the
+# directory the service used to live in. That scope came along with the move
+# and left nothing behind, so the pattern had to be written again here rather
+# than being inherited. It was missing for the length of one branch, and the
+# 25 compiled files that branch carried are what made it visible.
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Compiled bytecode. Harmless in itself, and the reason the missing store
+# line was noticed.
+__pycache__/
+*.pyc
+
+# The setup guide creates this inside the clone.
+.venv/
