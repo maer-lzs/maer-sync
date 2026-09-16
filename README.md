@@ -136,6 +136,7 @@ And nothing else does, without a token:
 The knobs, all optional:
 
     MAER_SYNC_DB=maer-sync.sqlite       # the store
+    MAER_SYNC_KEY=<beside the store>    # the static key file, default identity.key
     MAER_SYNC_HOST=127.0.0.1            # bind address
     MAER_SYNC_PORT=8099
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
@@ -249,6 +250,11 @@ It copies the live store through SQLite's backup API, opens the copy the way
 a restore would, compares every document by size, and exits 0 only when the
 copy came back fitting. Schedule it and alarm on the exit code: **a backup
 that was never opened is a file, not a backup.**
+
+**It copies the store and NOT the service's key file**, on purpose: a
+private key inside a backup would let anybody holding an old copy answer as
+this service. Copy `identity.key` separately, and keep it somewhere a
+database backup does not go. See "The identity of this service" below.
 
 ### 9. Point the app at it
 
@@ -522,9 +528,54 @@ in front of it; that proxy has to carry the WebSocket upgrade on
 `/v1/changes`.
 
     MAER_SYNC_DB=maer-sync.sqlite       # the store
+    MAER_SYNC_KEY=<beside the store>    # the static key file, default identity.key
     MAER_SYNC_HOST=127.0.0.1            # bind address
     MAER_SYNC_PORT=8099
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
+
+### The identity of this service
+
+On its first start the service makes itself a static key pair and prints the
+fingerprint. From then on that fingerprint is who it is, and devices hold on
+to it.
+
+    .venv/bin/python -m service key
+
+    key file: /var/lib/maer-sync/identity.key
+    fingerprint: BHWW-K285-92TR-Q3NV-DHHF-SH95
+    this store expects: BHWW-K285-92TR-Q3NV-DHHF-SH95
+    the key BHWW-K285-92TR-Q3NV-DHHF-SH95 is the one this store expects
+
+**The private half is a file beside the store, and deliberately not in the
+database.** A copy of the database travels to wherever backups travel, and a
+private key in it would let anybody holding an old copy answer as this
+service to every device that ever pinned it. The store remembers only the
+fingerprint, which names without proving and may sit in a backup safely.
+
+**So the key file belongs in your backup separately**, and a restore then
+says the right thing by itself. Restored onto the same machine the key is
+still there and nothing is asked. Restored onto a new one the key is not
+there, and this is a different service now.
+
+**A key that changed or went missing stops the service instead of growing a
+new one.** The refusal names the fingerprint it expected, the one it found,
+and the way out. The service exits 4 and binds no port.
+
+Two commands say that a change is wanted, and nothing else in the service
+will ever change an identity:
+
+    .venv/bin/python -m service key --adopt   # the key here is the right one now
+    .venv/bin/python -m service key --new     # make a new identity
+
+`--adopt` is for moving a service onto a machine that keeps its own key.
+`--new` is a deliberate rotation: **every device that pinned the old key
+will refuse this service until somebody accepts the new one.** It keeps the
+previous key file beside the new one as `identity.key.was`, because a
+rotation done by mistake must not be unrecoverable.
+
+**NOT MEASURED:** none of this has run inside the container against a
+volume. It is driven by the suite with real files in temporary directories,
+and by hand on a development machine.
 
 **The runtime is uvicorn plus a WebSocket library, both pinned.** The
 service code and its tests are standard library only, but serving it is

@@ -6,13 +6,13 @@
    "name": "cacophony (Haskell)",
    "file": "vectors/cacophony.txt",
    "url": "https://raw.githubusercontent.com/haskell-cryptography/cacophony/master/vectors/cacophony.txt",
-   "taken": "2026-09-17"
+   "taken": "2026-09-16"
   },
   {
    "name": "snow (Rust)",
    "file": "tests/vectors/snow.txt",
    "url": "https://raw.githubusercontent.com/mcginty/snow/main/tests/vectors/snow.txt",
-   "taken": "2026-09-17"
+   "taken": "2026-09-16"
   }
  ],
  "_note": "Kept HERE and not fetched: a suite that reaches the network measures the network.",

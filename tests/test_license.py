@@ -51,6 +51,10 @@ EXEMPT = {
     "README.md": "prose about the service; the LICENSE file covers the repository",
     "CONTRACT.md": "byte-identical in both repositories with a fence on each side, "
                    "so a header here is a change to the app's repository too",
+    "tests/vectors/noise-nk.json": "somebody else's published numbers, copied verbatim; "
+                                   "a header would alter the bytes whose whole value is "
+                                   "that we did not touch them, and JSON has no comments "
+                                   "to put one in",
 }
 
 SPDX = "SPDX-License-Identifier"
@@ -173,6 +177,35 @@ class EveryFileNamesItsLicence(unittest.TestCase):
         verschwunden = sorted(name for name in EXEMPT if not (ROOT / name).exists())
         self.assertEqual([], verschwunden,
                          "exempted files that are not here any more: " + ", ".join(verschwunden))
+
+    def test_nothing_in_the_source_directories_falls_out_silently(self):
+        """The hole this case closes, found by the reviewer and not by me.
+
+        `_sources()` gathers `*.py` and three files at the root. Everything
+        else inside a source directory is neither checked NOR exempt: it
+        simply is not seen, so it carries no header and nobody says why.
+        `tests/vectors/noise-nk.json` had been sitting in exactly that gap
+        since it was added, and the fence stayed green over it.
+
+        That is the fence's own doctrine turned against itself: an exemption
+        carries its reason at the entry, and an unseen file is an exemption
+        with no entry at all. So every tracked file in a source directory
+        must be one or the other, and a new kind of file has to be decided
+        about rather than slipping past.
+        """
+        if not gitquery.is_a_checkout():
+            raise unittest.SkipTest("not a checkout, so what is tracked cannot be asked")
+        gathered = {p.relative_to(ROOT).as_posix() for p in _sources()}
+        unseen = sorted(
+            rel for rel in gitquery.tracked()
+            if rel.split("/")[0] in SOURCE_DIRS
+            and rel not in gathered
+            and rel not in EXEMPT
+            and "__pycache__" not in rel)
+        self.assertEqual([], unseen,
+                         "tracked files in a source directory that are neither checked "
+                         "nor exempt, so nothing says why they carry no header: "
+                         + ", ".join(unseen))
 
     def test_every_exemption_carries_a_reason(self):
         ohne_grund = sorted(name for name, grund in EXEMPT.items() if not grund.strip())

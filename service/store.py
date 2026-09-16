@@ -104,6 +104,34 @@ class Store:
             # it is what makes the NEXT rollback able to notice.
             self.db.execute("UPDATE meta SET value=? WHERE key='schema'", (str(SCHEMA),))
 
+    # MARK: - Which key this store belongs to
+
+    # The FINGERPRINT of the service's static key, never the key. The key
+    # itself is a file beside this database on purpose, so that a copy of
+    # the database cannot answer as this service; see `service/identity.py`.
+    # What is here is the memory that makes a changed or missing key an
+    # event instead of a silent new identity, and a fingerprint is safe to
+    # carry into every backup because it proves nothing and only names.
+    KEY_ROW = "static_key"
+
+    def remembered_key(self):
+        """The fingerprint this store expects, or None if it never saw one."""
+        row = self.db.execute("SELECT value FROM meta WHERE key=?", (self.KEY_ROW,)).fetchone()
+        return row[0] if row else None
+
+    def remember_key(self, printed):
+        """Record the fingerprint this store belongs to.
+
+        Deliberately blunt: it overwrites. The guard against overwriting by
+        accident is not here but in `core.identity.decide`, which is pure and
+        testable, and in the operator commands that are the only callers with
+        a changed key in hand.
+        """
+        self.db.execute(
+            "INSERT INTO meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (self.KEY_ROW, printed))
+
     # MARK: - Reading
 
     def current(self, owner, kind, scope=""):

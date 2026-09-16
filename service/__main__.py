@@ -24,6 +24,7 @@ import os
 import sys
 
 from .app import make
+from .identity import RefusedToServe, adopt, key_path, make_new, open_identity, standing
 from .rehearsal import backup_and_rehearse
 from .store import Store
 
@@ -112,10 +113,77 @@ def remove_account(owner):
     return 0
 
 
+def key(adopt_it=False, new_one=False):
+    """Show the static key, or say that a change is wanted.
+
+    Three commands in one because they answer one question: who is this
+    service. Showing is the common case and changes nothing, which is why it
+    is the form with no flag.
+
+    `--adopt` and `--new` are the two ways an operator says a change is
+    WANTED. Nothing else in the service will change an identity, so if the
+    key moved without one of these being typed, the service stops and says
+    so rather than handing a new identity to devices that pinned the old.
+    """
+    if adopt_it and new_one:
+        print("--adopt takes the key that is there, --new makes one. Not both.", file=sys.stderr)
+        return 2
+
+    db = os.environ.get("MAER_SYNC_DB", "maer-sync.sqlite")
+    path = key_path(db)
+    store = Store(db)
+    try:
+        if adopt_it:
+            found, was = adopt(store, path)
+            print(f"this service now answers as {found}")
+            if was and was != found:
+                print(f"it answered as {was} before; every device that pinned that one "
+                      "will ask about the change")
+            return 0
+
+        if new_one:
+            found, was, kept = make_new(store, path)
+            print(f"a new identity was made: {found}")
+            if was:
+                print(f"it answered as {was} before. EVERY device that pinned that one will "
+                      "refuse this service until somebody accepts the new key.")
+            if kept:
+                print(f"the previous key file was kept at {kept}, not overwritten")
+            return 0
+
+        verdict, _, found = standing(store, path)
+        print(f"key file: {path}")
+        print(f"fingerprint: {found if found else 'none here'}")
+        print(f"this store expects: {store.remembered_key() or 'nothing yet'}")
+        print(verdict.reason)
+        return 0 if verdict.may_serve else 1
+    except RefusedToServe as refusal:
+        print(f"refused: {refusal}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+
 def serve():
     # The lines go to stderr, where the container runtime collects them.
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+    # BEFORE the port is bound, because a service that answers with the
+    # wrong identity has already done the damage by the time anyone reads a
+    # log line. A refusal here is the event: it names the two ways out and
+    # exits, instead of growing a new key and serving happily while every
+    # pinned device fails with nothing to read.
+    db = os.environ.get("MAER_SYNC_DB", "maer-sync.sqlite")
+    store = Store(db)
+    try:
+        open_identity(store, key_path(db))
+    except RefusedToServe as refusal:
+        print(f"refused to start: {refusal}", file=sys.stderr)
+        return 4
+    finally:
+        store.close()
+
     application = make()
     try:
         import uvicorn
@@ -146,6 +214,11 @@ def parser():
     a.add_argument("owner")
     r = subs.add_parser("account-remove", help="take an account and its documents away")
     r.add_argument("owner")
+    k = subs.add_parser("key", help="show the static key, or say that a change is wanted")
+    k.add_argument("--adopt", action="store_true",
+                   help="the key that is here is the right one now")
+    k.add_argument("--new", action="store_true",
+                   help="make a new identity; every device will have to accept it again")
     return p
 
 
@@ -157,6 +230,8 @@ def main(argv=None):
         return add_account(args.owner)
     if args.command == "account-remove":
         return remove_account(args.owner)
+    if args.command == "key":
+        return key(adopt_it=args.adopt, new_one=args.new)
     return serve()
 
 

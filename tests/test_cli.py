@@ -33,6 +33,17 @@ class TheParserNeverServesByAccident(unittest.TestCase):
         self.assertEqual(cli.parser().parse_args(["backup", "x.sqlite"]).command, "backup")
         self.assertEqual(cli.parser().parse_args(["account", "the-owner"]).command, "account")
         self.assertEqual(cli.parser().parse_args(["account-remove", "the-owner"]).command, "account-remove")
+        self.assertEqual(cli.parser().parse_args(["key"]).command, "key")
+
+    def test_showing_the_key_is_the_form_without_a_flag(self):
+        # Showing changes nothing and is the common case, so it is what you
+        # get by typing the least. The two flags are the operator SAYING a
+        # change is wanted, and nothing else in the service changes one.
+        plain = cli.parser().parse_args(["key"])
+        self.assertFalse(plain.adopt)
+        self.assertFalse(plain.new)
+        self.assertTrue(cli.parser().parse_args(["key", "--adopt"]).adopt)
+        self.assertTrue(cli.parser().parse_args(["key", "--new"]).new)
 
     def test_backup_without_a_path_is_refused_not_served(self):
         with self.assertRaises(SystemExit):
