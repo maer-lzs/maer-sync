@@ -192,6 +192,13 @@ class EveryFileNamesItsLicence(unittest.TestCase):
         with no entry at all. So every tracked file in a source directory
         must be one or the other, and a new kind of file has to be decided
         about rather than slipping past.
+
+        **The limit, and it is worth typing out because it surprised the
+        reviewer:** this asks git what is TRACKED. A file that has merely
+        been created is not seen at all, and a probe that only writes one
+        stays green until it is added. That is the right boundary for a
+        fence about what the repository publishes, and it means the case
+        speaks at `git add` and not before.
         """
         if not gitquery.is_a_checkout():
             raise unittest.SkipTest("not a checkout, so what is tracked cannot be asked")

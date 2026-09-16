@@ -570,8 +570,10 @@ will ever change an identity:
 `--adopt` is for moving a service onto a machine that keeps its own key.
 `--new` is a deliberate rotation: **every device that pinned the old key
 will refuse this service until somebody accepts the new one.** It keeps the
-previous key file beside the new one as `identity.key.was`, because a
-rotation done by mistake must not be unrecoverable.
+previous key file beside the new one as `identity.key.was-<date>-<time>`,
+because a rotation done by mistake must not be unrecoverable. **Every
+rotation keeps its own file**, so the second one does not write over what
+the first put aside; the command prints the name it used.
 
 **NOT MEASURED:** none of this has run inside the container against a
 volume. It is driven by the suite with real files in temporary directories,

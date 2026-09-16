@@ -44,6 +44,7 @@ import base64
 import logging
 import os
 import pathlib
+import time
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
@@ -212,11 +213,27 @@ def make_new(store, path=None):
     rotation done by mistake is otherwise unrecoverable, and the one thing
     worse than an identity change is an identity change that cannot be
     undone.
+
+    **The kept file is DATED, and the first version of this was wrong.** It
+    used one fixed name, so a second rotation overwrote what the first had
+    saved: after three rotations two files existed and the first two keys
+    were gone, while the line printed underneath still said "not
+    overwritten". A promise that holds only for the most recent caller is
+    not a promise. The dated name is the shape `account-remove` already
+    uses for the same job, and the write refuses rather than replaces if a
+    name ever did collide.
     """
     path = pathlib.Path(path) if path is not None else key_path()
     was = store.remembered_key()
     if path.exists():
-        kept = path.with_suffix(path.suffix + ".was")
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        kept = path.with_name(f"{path.name}.was-{stamp}")
+        # Within one second a second rotation would land on the same name,
+        # and this function exists to not lose keys. Count up instead.
+        serial = 2
+        while kept.exists():
+            kept = path.with_name(f"{path.name}.was-{stamp}-{serial}")
+            serial += 1
         os.replace(path, kept)
     else:
         kept = None

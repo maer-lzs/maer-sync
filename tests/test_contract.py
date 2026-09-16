@@ -135,6 +135,13 @@ class ContractTests(unittest.TestCase):
         way is not seen here. The two assertions below are what keeps that
         from being silent, and the failure text names the shapes so whoever
         adds one gets told what this looks for.
+
+        **And the other edge, for whoever is puzzled by a red one day:** this
+        reads TEXT, so a comparison written inside a comment counts as a
+        path. That is the safe direction to be wrong in, because it asks for
+        a line in the contract instead of letting a real route pass, but it
+        does mean an example in a docstring has to be spelled without the
+        comparison.
         """
         text = sources()
         whole = set(re.findall(r'!=\s*"(/v1/[^"]*)"|==\s*"(/v1/[^"]*)"', text))

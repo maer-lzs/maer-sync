@@ -199,6 +199,33 @@ class TheOperatorSaysItIsWanted(unittest.TestCase):
         self.assertIsNotNone(kept)
         self.assertEqual(pathlib.Path(kept).read_text(encoding="utf-8"), before)
 
+    def test_every_rotation_keeps_its_key_not_just_the_last_one(self):
+        """The case my first witness did not have, and it cost a key.
+
+        The old one rotated ONCE and found the old file beside the new, so it
+        was green over a construction that used a single fixed name. A second
+        rotation overwrote what the first had saved: after three rotations two
+        files existed and the first two keys were gone, while the printed line
+        still said the previous file was not overwritten.
+
+        One rotation cannot see that. So this one counts them.
+        """
+        _, first = open_identity(self.store, self.key)
+        seen = {self.key.read_text(encoding="utf-8").strip()}
+        for _ in range(3):
+            make_new(self.store, self.key)
+            seen.add(self.key.read_text(encoding="utf-8").strip())
+
+        self.assertEqual(len(seen), 4, "four identities were made")
+        kept = sorted(p for p in self.key.parent.iterdir() if ".was" in p.name)
+        # Three rotations put three keys aside, and not one of them may have
+        # been written over by the next.
+        self.assertEqual(len(kept), 3, f"a rotation lost a key: {[p.name for p in kept]}")
+        on_disk = {p.read_text(encoding="utf-8").strip() for p in kept}
+        on_disk.add(self.key.read_text(encoding="utf-8").strip())
+        self.assertEqual(on_disk, seen, "every key ever served is still recoverable")
+        self.assertIsNotNone(first)
+
     def test_showing_the_standing_changes_nothing(self):
         _, printed = open_identity(self.store, self.key)
         raw = self.key.read_bytes()
