@@ -19,6 +19,189 @@ the operator's, behind TLS. The takeover end to end (a locked, playing
 device stops when the other starts) needs two devices and is measured in
 the device test.
 
+## Setting it up
+
+**Every command below was run before it was written here**, on macOS with
+Python 3.14 against a throwaway store; the outputs quoted are the ones that
+came back. The two blocks that were NOT run are marked as such where they
+stand, and the section at the end says what that leaves unproven.
+
+### 1. What it needs
+
+**Python 3.10 or newer.** Measured, not guessed: the sources use the
+`X | None` union spelling in 118 places, which is 3.10 and up. Nothing here
+needs anything newer.
+
+Nothing else. The service code and its tests are standard library only.
+Serving it is the one exception, and that is step 3.
+
+### 2. Fetch it
+
+    git clone https://codeberg.org/LzS/maer-sync.git
+    cd maer-sync
+    ./run-tests.sh
+
+The suite is the first thing, on purpose: it needs no server, no network and
+no configuration, so a red run here means the machine is wrong and not the
+setup. It prints its case count and takes about 11.5 seconds, nearly all of
+it scrypt (see "Running the tests").
+
+### 3. Install the runtime
+
+The application is finished without a server; it needs one that speaks ASGI.
+
+    python3 -m venv .venv
+    .venv/bin/python -m pip install --require-hashes -r requirements.txt
+
+`--require-hashes` is not decoration. Without it the pinning in
+`requirements.txt` is a suggestion, and the point of pinning a runtime that
+terminates TLS-protected traffic is that it cannot change under you.
+
+What that installs, and why each one:
+
+| package | why |
+| --- | --- |
+| `uvicorn` | the ASGI server |
+| `wsproto` | the WebSocket implementation, for `/v1/changes` |
+| `h11`, `click`, `typing_extensions` | what those two need |
+
+**`wsproto` and not `websockets`, on purpose:** uvicorn without its
+`[standard]` extra carries no WebSocket at all ("No supported WebSocket
+library detected", measured), and `/v1/changes` needs one. `websockets`
+ships a wheel per platform, so a hash-pinned file would carry dozens of
+hashes or quietly stop working on the machine it was not generated on.
+`wsproto` is one pure-python wheel and one hash.
+
+### 4. Run it
+
+    MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite .venv/bin/python -m service
+
+No subcommand runs the server: that is the common case, and an unknown
+command is refused rather than silently serving. `python3 -m service serve`
+says the same thing out loud.
+
+It answers immediately:
+
+    $ curl -s http://127.0.0.1:8099/v1/health
+    {"ok": true}
+
+And nothing else does, without a token:
+
+    $ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8099/v1/doc/stands
+    401
+
+The knobs, all optional:
+
+    MAER_SYNC_DB=maer-sync.sqlite       # the store
+    MAER_SYNC_HOST=127.0.0.1            # bind address
+    MAER_SYNC_PORT=8099
+    MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
+
+### 5. Lay down an account
+
+    printf '%s' 'the-secret' | .venv/bin/python -m service account someone
+
+    account someone laid down
+
+**The secret comes in on stdin and never in the command line**, because an
+argument is visible to every other process on the machine and lands in the
+shell history. The service stores a scrypt hash, never the secret.
+
+Check it from the outside:
+
+    $ curl -s -X POST http://127.0.0.1:8099/v1/token \
+        -H 'Content-Type: application/json' \
+        -d '{"owner":"someone","secret":"the-secret"}'
+    {"token": "…64 characters…"}
+
+    $ curl -s -o /dev/null -w '%{http_code}\n' \
+        -X PUT 'http://127.0.0.1:8099/v1/doc/stands?scope=' \
+        -H "Authorization: Bearer $TOKEN" -H 'X-Maer-Format: 1' -d '{"a":1}'
+    200
+
+### 6. Put a proxy in front, and prove the socket
+
+**This is the step that goes wrong quietly.** A proxy that forwards REST but
+drops the WebSocket upgrade leaves a service that looks completely healthy:
+sign-in works, documents travel, and only the push is gone, so a change
+arrives thirty seconds late instead of instantly. Nothing logs an error.
+
+**NOT RUN HERE.** The example below is written from the service's own
+requirements, not from a machine this author set up; the proof after it is
+what matters and that one WAS run.
+
+    location /v1/changes {
+        proxy_pass http://127.0.0.1:8099;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8099;
+        proxy_set_header Host $host;
+    }
+
+**The proof, and run it against the PROXY, not against 127.0.0.1:**
+
+    $ curl -s -o /dev/null -w '%{http_code}\n' -N \
+        -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+        -H 'Sec-WebSocket-Version: 13' \
+        -H "Sec-WebSocket-Key: $(head -c16 /dev/urandom | base64)" \
+        -H "Authorization: Bearer $TOKEN" \
+        https://sync.example.com/v1/changes
+    101
+
+**101 means the upgrade got through.** Measured directly against the service:
+with a token the handshake answers `101 Switching Protocols`, without one
+`403`. A `403` here means "not authorized" and not "wrong network"; see the
+contract, which spells that difference out because it is easy to read the
+wrong way.
+
+**Only behind TLS.** The token rides in a header, and over plain http a
+header is readable by everything between the device and the service.
+
+### 7. Let it start by itself
+
+**NOT RUN HERE**, for the same reason as the proxy: this author has no host
+to install it on. It follows from what the service needs and nothing more.
+
+    [Unit]
+    Description=Maer sync service
+    After=network.target
+
+    [Service]
+    User=maer-sync
+    WorkingDirectory=/opt/maer-sync
+    Environment=MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite
+    ExecStart=/opt/maer-sync/.venv/bin/python -m service
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+
+### 8. Back it up, and let the backup prove itself
+
+    .venv/bin/python -m service backup /backups/store-$(date +%F).sqlite
+
+    fits: 1 documents, 7 bytes, came back unchanged
+
+It copies the live store through SQLite's backup API, opens the copy the way
+a restore would, compares every document by size, and exits 0 only when the
+copy came back fitting. Schedule it and alarm on the exit code: **a backup
+that was never opened is a file, not a backup.**
+
+### 9. Point the app at it
+
+In Mär: Settings, the Mär Sync Service section. Three fields, the address
+with its scheme (`https://sync.example.com`), the owner and the secret from
+step 5. Signing in trades the secret for a token the device keeps in its
+keychain; the secret itself is not kept.
+
+The switch above it decides whether anything travels at all. Set up and
+switched off means nothing moves, and the page says so.
+
 ## Why it exists
 
 Five kinds of data travel between a person's devices, and only one of them
@@ -27,12 +210,19 @@ Mär's own and no media server knows them. There is no server that all Mär
 users have, and iCloud blocks Android.
 
 The full reasoning, and the requirements this is built against, live in the
-deliveries repo: `kontext/sync-dienst-anforderungen.md`. That document is
-binding as a whole. What follows is only what this directory implements.
+deliveries repo, `kontext/sync-dienst-anforderungen.md`, **which a reader of
+this repository does not have.** It binds the people who wrote this service;
+it cannot bind a reader who cannot open it, and calling it binding here would
+be a promise without cover. **What binds anyone reading THIS repository is
+`CONTRACT.md` beside this file, and this file.** The requirements document is
+named for the record, not as an instruction.
 
 ## What the core decides
 
-Four units, pure and netless, each with its own tests. They exist as units
+The units below are pure and netless, each with its own tests. **No count
+stands here on purpose:** the sentence said "four" while listing six, and there
+are seven. A number in prose ages with every unit added, and the list beside it
+is the thing that is true. They exist as units
 and not as lines inside request handlers because these are the decisions
 that lose people's data when they are wrong.
 
@@ -54,6 +244,15 @@ that lose people's data when they are wrong.
   of its own: precondition, then format, then size. A client behind the
   current version usually has a SMALLER state, so telling it "too small"
   before "read again" would send it to fix the wrong thing.
+- **`core/authorization.py`**: who is asking, and whether they may. **The
+  requirements set this one apart from the rest**, and its own header quotes
+  why: a mistake here opens other people's listening stands, and that is the
+  kind you do not repair with an update. Three decisions live in it, each one
+  an easy mistake: a missing account and a wrong secret give the SAME answer
+  (anything else turns the endpoint into a list of who has an account here),
+  every secret is compared in constant time, and the owner comes from the
+  store's answer and never from anything the caller said. It was missing from
+  this list while the sentence above it claimed to count the units.
 - **`core/paths.py`**: the shape of a kind and a scope, never the
   membership. A list of the five known kinds would make "add a sixth" a
   service update.
@@ -211,7 +410,9 @@ never opened is a file, not a backup.
 No dependencies: the whole service is standard library only, and the tests
 run under `unittest`. The run prints its case count on purpose.
 
-It takes a few seconds rather than a few milliseconds, and all of that is
+It takes about 11.5 seconds rather than a few milliseconds (measured 11.3 to
+11.6 over several runs, 182 cases before the contract fence joined them), and
+all of that is
 scrypt: the account cases run the real password hashing at the real
 parameters. Turning those down for the suite would make it quick and would
 stop it testing the thing that matters.

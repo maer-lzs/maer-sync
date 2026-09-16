@@ -34,10 +34,10 @@ def sources():
 class ContractTests(unittest.TestCase):
     def test_the_contract_exists_and_names_its_version(self):
         self.assertTrue(CONTRACT.exists(), "CONTRACT.md is the whole point of two repositories")
-        self.assertEqual(declared()["version"], ["1"])
+        self.assertEqual(declared()["version"], ["2"])
         # The version stands twice on purpose: once for a reader, once for
         # this fence. Whoever bumps one and not the other trips here.
-        self.assertIn("**Version: 1**", CONTRACT.read_text(encoding="utf-8"))
+        self.assertIn("**Version: 2**", CONTRACT.read_text(encoding="utf-8"))
 
     def test_every_declared_path_exists_in_this_service(self):
         text = sources()
@@ -55,6 +55,18 @@ class ContractTests(unittest.TestCase):
         for status in declared()["status"]:
             self.assertRegex(text, rf"\b{status}\b",
                              f"the contract promises {status} and this service never answers it")
+
+    def test_the_socket_message_is_the_one_in_the_contract(self):
+        # The shape was agreed by two implementations happening to match,
+        # never written down, and a renamed field would have broken nothing
+        # loudly: the client would read nothing, fall back to polling, and
+        # the takeover would only get slower. Written down now, and held.
+        text = sources()
+        for field in ('"kind"', '"scope"', '"version"'):
+            self.assertIn(field, text,
+                          f"the contract promises the socket field {field}")
+        self.assertIn('{"kind": "<kind>", "scope": "<scope>", "version": "<etag>"}',
+                      CONTRACT.read_text(encoding="utf-8"))
 
     def test_the_kinds_are_NOT_known_to_the_service(self):
         # The counter direction, and it is the one that matters: the service
