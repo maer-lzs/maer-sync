@@ -177,3 +177,45 @@ def sweep(sessions, now, limits=None):
     limits = limits or Limits()
     return [name for name, created_at, last_used_at, proven in sessions
             if standing(created_at, last_used_at, now, proven, limits) != LIVE]
+
+
+def room_for_one(sessions, now, limits=None):
+    """Everything that must leave so that one more session fits. ONE door.
+
+    `sessions` is a sequence of `(id, created_at, last_used_at, proven)`, and
+    the answer is the ids to drop, dead ones included.
+
+    **This exists because the ORDER is the decision, and a caller that made
+    two calls would get it wrong.** Sweeping first and giving way afterwards
+    is not the same as the reverse, and the difference is not academic:
+
+        two proven sessions, silent for hours, and one real device in the
+        middle of its handshake, in a store of three.
+
+    Give way first and the rule evicts the real device, because a handshake
+    gives way before a proven session does and both dead rows still occupy
+    their places. Sweep first and the two dead ones go, the device stays, and
+    nothing gives way at all. **A dead session must never cost a living one
+    its place.**
+
+    **And this is also the answer to when sweeping happens.** The service has
+    no clock, measured: not one `create_task`, timer or sleeping loop
+    anywhere in it, and its lifespan handler only opens and closes the store.
+    A background task would be a new KIND of thing here, one that has to be
+    cancelled on shutdown and that can die without anybody noticing.
+
+    It does not need one. **Correctness never depends on sweeping**, because
+    a session is checked with `standing` when it is USED, so an expired one
+    is refused whether or not anybody has swept it. Sweeping is housekeeping
+    for memory alone, and the store only grows on a handshake. So this runs
+    where the growth is, and nowhere else.
+
+    The price, stated: a service that gets no more handshakes keeps its dead
+    rows until one arrives. They are bounded by the capacity, which is the
+    number that was already answering for memory.
+    """
+    limits = limits or Limits()
+    dead = set(sweep(sessions, now, limits))
+    alive = [(name, last_used_at, proven)
+             for name, _, last_used_at, proven in sessions if name not in dead]
+    return sorted(dead) + give_way(alive, limits)

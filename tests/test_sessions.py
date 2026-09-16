@@ -30,7 +30,8 @@ it was flattering.
 import unittest
 
 from core.sessions import (CAPACITY, IDLE, IDLE_SECONDS, LIVE, MAX_AGE_SECONDS, OLD,
-                           UNPROVEN_IDLE_SECONDS, Limits, give_way, standing, sweep)
+                           UNPROVEN_IDLE_SECONDS, Limits, give_way, room_for_one,
+                           standing, sweep)
 
 NOW = 1_000_000.0
 
@@ -187,6 +188,52 @@ class AFloodCannotPushOutARealDevice(unittest.TestCase):
         later = NOW + 1000
         dead = sweep([(name, NOW, used, proven) for name, used, proven in held], later, limits)
         self.assertEqual(sorted(dead), sorted(name for name, _, proven in held if not proven))
+
+
+class TheOrderIsTheDecision(unittest.TestCase):
+    """That a dead session never costs a living one its place.
+
+    Sweeping and giving way are two rules, and a caller that ran them in the
+    other order would be wrong in a way nothing else here would catch: the
+    dead rows still occupy their places while the eviction rule looks for
+    somebody to remove, and the rule it then applies is "handshakes first".
+    """
+
+    def _full_of_dead_ones_and_one_real_device(self):
+        # Two sessions that proved themselves hours ago and have been silent
+        # since, plus a real device in the middle of its handshake.
+        return [("dead-a", NOW - 9000, NOW - 8000, PROVEN),
+                ("dead-b", NOW - 9000, NOW - 7000, PROVEN),
+                ("a-real-device", NOW - 1, NOW - 1, JUST_A_HANDSHAKE)]
+
+    def test_the_dead_ones_go_and_the_device_stays(self):
+        limits = Limits(capacity=3)
+        leaving = room_for_one(self._full_of_dead_ones_and_one_real_device(), NOW, limits)
+        self.assertEqual(sorted(leaving), ["dead-a", "dead-b"])
+        self.assertNotIn("a-real-device", leaving,
+                         "a dead session must never cost a living one its place")
+
+    def test_the_other_order_would_evict_the_device(self):
+        # The measurement that makes the case above worth its lines. Giving
+        # way FIRST picks the handshake, because both dead rows are still
+        # sitting in the store and a handshake gives way before a proven
+        # session does. Written out so that the order cannot be "simplified"
+        # later by somebody who cannot see what it buys.
+        rows = self._full_of_dead_ones_and_one_real_device()
+        the_wrong_way_round = give_way([(name, used, proven)
+                                        for name, _, used, proven in rows], Limits(capacity=3))
+        self.assertEqual(the_wrong_way_round, ["a-real-device"])
+
+    def test_a_store_of_live_sessions_with_room_loses_nobody(self):
+        rows = [(f"s{i}", NOW - 10, NOW - 1, PROVEN) for i in range(3)]
+        self.assertEqual(room_for_one(rows, NOW, Limits(capacity=10)), [])
+
+    def test_a_full_store_of_live_sessions_still_gives_way(self):
+        # The sweep finds nothing, so this must fall through to the eviction
+        # rule rather than answering "nothing to do".
+        rows = [("busy", NOW - 10, NOW - 1, PROVEN),
+                ("quiet", NOW - 10, NOW - 500, PROVEN)]
+        self.assertEqual(room_for_one(rows, NOW, Limits(capacity=2)), ["quiet"])
 
 
 class SweepingIsNotTheSameQuestion(unittest.TestCase):
