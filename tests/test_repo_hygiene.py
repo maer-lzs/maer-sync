@@ -1,3 +1,8 @@
+# Mär — an audio player for self-hosted open ecosystems
+# Copyright (C) 2026 Laurenz Schröder
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
 """The fence on what must never be committed here.
 
 It measures the TRACKED FILES, not the intention written in `.gitignore`.

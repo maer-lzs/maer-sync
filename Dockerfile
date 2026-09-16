@@ -1,3 +1,8 @@
+# Mär — an audio player for self-hosted open ecosystems
+# Copyright (C) 2026 Laurenz Schröder
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
 # Mär Sync Service — Abbild.
 #
 # Gebaut und gefahren am 16.09.2026 auf dem Tiny, nicht geschrieben und gehofft.
@@ -24,6 +29,10 @@ RUN python -m venv .venv \
 
 COPY core ./core
 COPY service ./service
+# Die Lizenz reist mit. Ein Abbild ist eine Weitergabe, und die GPL verlangt den
+# Text dabei; ohne ihn koennte der Zaun in tests/ hier drin auch gar nicht pruefen,
+# was jeder Dateikopf verspricht.
+COPY LICENSE ./
 COPY run-tests.sh CONTRACT.md README.md ./
 COPY tests ./tests
 
