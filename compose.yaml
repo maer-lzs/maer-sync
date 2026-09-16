@@ -1,0 +1,46 @@
+# Mär Sync Service — Betrieb als Container.
+#
+# Diese Datei ersetzt Schritt 7 der Anleitung: `restart: unless-stopped` ist der
+# Autostart. Es gibt dann keine systemd-Unit, keinen eigenen Systemnutzer und
+# keine Rechte, die man am Speicherort von Hand richten muss.
+name: maer-sync
+
+services:
+  maer-sync:
+    build: .
+    image: maer-sync:local
+    container_name: maer-sync
+    restart: unless-stopped
+
+    # Nur lokal. Was von aussen erreichbar sein soll, entscheidet die Vorschaltung
+    # aus Schritt 6 — und die ist es, die TLS terminiert und den WebSocket-Aufstieg
+    # durchreichen muss.
+    ports:
+      - "127.0.0.1:8099:8099"
+
+    # BENANNTES Volume, kein Pfad im Abbild und kein bind mount: die Ablage
+    # überlebt damit jedes neue Abbild, und sie gehört der UID aus dem Dockerfile.
+    volumes:
+      - maer-sync-store:/var/lib/maer-sync
+
+    environment:
+      MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
+      MAER_SYNC_HOST: 0.0.0.0
+      MAER_SYNC_PORT: 8099
+
+    # Der Dienst beantwortet /v1/health ohne Token — genau dafür ist er da.
+    healthcheck:
+      test: ["CMD", "/opt/maer-sync/.venv/bin/python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8099/v1/health',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+
+volumes:
+  maer-sync-store:
