@@ -7,6 +7,7 @@ instead of going quiet until a device stops syncing.
 """
 import pathlib
 import re
+import tempfile
 import unittest
 
 from tests import gitquery
@@ -44,10 +45,24 @@ def declared():
 SERVICE_DIRS = ("core", "service")
 
 
-def sources():
+#: The root is a parameter so the rule can be asked somewhere else.
+#:
+#: Every real caller leaves it alone and reads this repository. The one
+#: witness that asks what this function does with a file BESIDE the named
+#: directories used to answer that by writing into the source tree, and a
+#: hardened image does not allow it: the service runs as an unprivileged
+#: user under a root owned by somebody else, and the question came back as
+#: an ERROR instead of an answer.
+#:
+#: Widening the thing under test so it can be tested is worth naming, and
+#: it is the shape the app side already uses for the same reason (a runner
+#: takes its carrier, defaulted to the real one). The witness pays for it
+#: by asserting that its built tree is read at all, so a `sources` that
+#: ignored the root could not pass.
+def sources(root=ROOT):
     return "\n".join(p.read_text(encoding="utf-8")
                      for directory in SERVICE_DIRS
-                     for p in sorted((ROOT / directory).rglob("*.py")))
+                     for p in sorted((root / directory).rglob("*.py")))
 
 
 #: Where the repository itself keeps Python, as top level names.
@@ -110,16 +125,33 @@ class ContractTests(unittest.TestCase):
         # read at all. Asserting the kinds here too would make it tear
         # whenever the test beside it tears, and a green run would then say
         # nothing about what was actually asked.
-        stray = ROOT / ".not-the-service-probe"
-        stray.mkdir(exist_ok=True)
-        marker = "not_the_service_marker_9f3a"
-        try:
+        #
+        # Asked on a tree this witness builds, not on the checkout. It used
+        # to write its probe into the source root, which the service's own
+        # hardened image forbids, and there the question came back as an
+        # error rather than an answer. A built tree is also the sharper
+        # place to ask: nothing here depends on what the repository happens
+        # to contain today.
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            for directory in SERVICE_DIRS:
+                (root / directory).mkdir()
+            service_marker = "the_service_marker_4b1c"
+            (root / SERVICE_DIRS[0] / "part.py").write_text(f"{service_marker} = 1\n",
+                                                            encoding="utf-8")
+            stray = root / ".not-the-service-probe"
+            stray.mkdir()
+            marker = "not_the_service_marker_9f3a"
             (stray / "intruder.py").write_text(f"{marker} = 1\n", encoding="utf-8")
-            self.assertNotIn(marker, sources(),
+
+            text = sources(root)
+            # The precondition, and without it the rest measures nothing: a
+            # reader that returned "" for this tree would pass the real
+            # assertion below while reading no service at all.
+            self.assertIn(service_marker, text,
+                          "the built service was not read, so the question was never put")
+            self.assertNotIn(marker, text,
                              "a file outside core/ and service/ reached the fence")
-        finally:
-            (stray / "intruder.py").unlink(missing_ok=True)
-            stray.rmdir()
 
     def test_the_positive_list_still_names_the_whole_service(self):
         # The other direction of the same fix, and the quiet one. Naming the
