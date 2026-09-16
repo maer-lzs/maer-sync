@@ -151,7 +151,7 @@ arrives thirty seconds late instead of instantly. Nothing logs an error.
 
 **RUN, 16.09.2026**, on nginx in front of this service: with the three upgrade
 lines the handshake answers `101` with a token and `403` without. With them
-commented out, REST still answers `200` and the upgrade returns **`404`** —
+commented out, REST still answers `200` and the upgrade returns **`404`**:
 not a hang and not a 502, which is exactly why nothing looks broken.
 
 The example below is written from the service's own
@@ -249,7 +249,7 @@ host, it says so and why.
 
 A container answers several of the steps above at once. It carries its own Python,
 so step 1 stops being a question; it carries the pinned runtime from step 3; and
-`restart: unless-stopped` **replaces step 7 entirely** — no unit file, no system
+`restart: unless-stopped` **replaces step 7 entirely**: no unit file, no system
 user, and no permissions to fix by hand on the store.
 
 **It does not replace step 6.** The proxy in front still terminates TLS and still
@@ -279,7 +279,7 @@ you, and the base image *is* runtime.
 **The store is a named volume, never a path inside the image.** This is the line
 that costs data if it is wrong: a store inside the image is gone with the next
 build, and nothing about that is visible while reading the file. Proven rather than
-asserted — an account and a document were laid down, the container was removed, **the
+asserted: an account and a document were laid down, the container was removed, **the
 image was deleted**, both were rebuilt, and the account and the document were still
 there.
 
@@ -319,14 +319,14 @@ belongs to a measured run and says what it counted.
 **Run against the container** (16.09.2026, this host): `docker compose build`,
 `docker compose up -d` with the port variable set, `/v1/health` answering `{"ok": true}`,
 the healthcheck reaching **healthy**, an account laid down and still present after a
-full `down` and `up` — read back out of the database, not inferred from the file being
-there — and a clean `down` afterwards. The suite inside the image: `Ran 193 tests … OK
+full `down` and `up` (read back out of the database, not inferred from the file being
+there), and a clean `down` afterwards. The suite inside the image: `Ran 193 tests … OK
 (skipped=4)`.
 
 **Run against the service from step 4, not against the container:** the token exchange,
 `401` without a token, and the WebSocket upgrade through the proxy (`101` with a token,
 `403` without). They are listed apart on purpose. An earlier version of this section
-claimed them for the container, and that claim had no run behind it — the container part
+claimed them for the container, and that claim had no run behind it: the container part
 had failed on the port collision at the time, which is what the paragraph below is about.
 
 **The host's, not the image's:** this machine already runs a service on `8099`, so the
@@ -335,7 +335,7 @@ what a host without that collision wants.
 
 **Why the port is a variable and not an override file.** The first attempt here did use
 a `compose.override.yaml`, and the container did not start: **Compose merges list
-entries, it does not replace them** — the override adds a *second* port, the container
+entries, it does not replace them**: the override adds a *second* port, the container
 tries to bind both, and it fails on the one that was taken. That is the very port you
 were avoiding. Measured both ways on this host: with the override, `compose config`
 publishes two ports (`8099` and `18099`); with the variable, one. `ports: !override`
