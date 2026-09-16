@@ -7,17 +7,15 @@ of this repository: no ignore file existed and 25 compiled files rode along
 before anyone looked.
 """
 import pathlib
-import subprocess
 import unittest
+
+from tests import gitquery
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def tracked():
-    out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
-    if out.returncode != 0:
-        raise unittest.SkipTest("not a git checkout")
-    return out.stdout.split()
+    return gitquery.tracked()
 
 
 class RepoHygieneTests(unittest.TestCase):
@@ -36,7 +34,18 @@ class RepoHygieneTests(unittest.TestCase):
         # The intention BESIDE the measurement, not instead of it: without
         # it every fresh run puts the files back and the test above turns
         # into a chore instead of a gate.
-        text = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        ignore = ROOT / ".gitignore"
+        if not ignore.exists():
+            # A copy that is not a checkout has no business carrying one,
+            # and the service's own image deliberately does not. But the
+            # absence is only harmless THERE: in a checkout the file is
+            # tracked, so it going missing is a finding and not an
+            # abstention. Asking git separates the two, and a gate without
+            # a subject must never answer "in order".
+            if gitquery.is_a_checkout():
+                self.fail(".gitignore is missing from a checkout that tracks it")
+            raise unittest.SkipTest("not a checkout, so no ignore file is expected here")
+        text = ignore.read_text(encoding="utf-8")
         for pattern in ("*.sqlite", "__pycache__/", "*.pyc", ".venv/"):
             self.assertIn(pattern, text, f".gitignore does not hold {pattern}")
 

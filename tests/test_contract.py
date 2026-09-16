@@ -7,8 +7,9 @@ instead of going quiet until a device stops syncing.
 """
 import pathlib
 import re
-import subprocess
 import unittest
+
+from tests import gitquery
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / "CONTRACT.md"
@@ -58,15 +59,13 @@ def sources():
 #: itself. Untracked things cannot answer, which is why a `.venv` does not
 #: show up here even though it sits in the clone.
 #:
-#: Without git there is no answer, and the witness says so rather than
-#: passing. It stays a fence ABOVE the fence for that reason: `sources()`
-#: must keep working from a plain unpacked copy.
+#: Where there is no repository to ask, there is no answer, and the witness
+#: says so rather than passing. It stays a fence ABOVE the fence for that
+#: reason: `sources()` must keep working from a plain unpacked copy. Both
+#: ways of being unable to answer live in `gitquery`, because handling only
+#: one of them was the first thing this witness got wrong.
 def tracked_python_roots():
-    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
-                         capture_output=True, text=True)
-    if out.returncode != 0:
-        raise unittest.SkipTest("not a git checkout")
-    return {pathlib.Path(line).parts[0] for line in out.stdout.split() if line}
+    return {pathlib.Path(line).parts[0] for line in gitquery.tracked("*.py")}
 
 
 class ContractTests(unittest.TestCase):
