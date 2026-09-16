@@ -149,7 +149,12 @@ drops the WebSocket upgrade leaves a service that looks completely healthy:
 sign-in works, documents travel, and only the push is gone, so a change
 arrives thirty seconds late instead of instantly. Nothing logs an error.
 
-**NOT RUN HERE.** The example below is written from the service's own
+**RUN, 16.09.2026**, on nginx in front of this service: with the three upgrade
+lines the handshake answers `101` with a token and `403` without. With them
+commented out, REST still answers `200` and the upgrade returns **`404`** —
+not a hang and not a 502, which is exactly why nothing looks broken.
+
+The example below is written from the service's own
 requirements, not from a machine this author set up; the proof after it is
 what matters and that one WAS run.
 
@@ -186,6 +191,16 @@ wrong way.
 header is readable by everything between the device and the service.
 
 ### 7. Let it start by itself
+
+**Or skip this step entirely and use the container** (see "Or run it in a
+container" below): `restart: unless-stopped` is this step, and it needs no
+unit file, no system user and no permissions fixed by hand.
+
+**One thing this step does not say, and it costs an hour:** step 4 runs the
+service as whoever you are, and this step runs it as `maer-sync`. **The store
+and its directory have to belong to that user**, or systemd stops at
+`status=200/CHDIR`, or the service comes up and opens a readonly database.
+Measured on a Debian host, 16.09.2026.
 
 **NOT RUN HERE**, for the same reason as the proxy: this author has no host
 to install it on. It follows from what the service needs and nothing more.
@@ -224,6 +239,73 @@ keychain; the secret itself is not kept.
 
 The switch above it decides whether anything travels at all. Set up and
 switched off means nothing moves, and the page says so.
+
+## Or run it in a container
+
+**Everything in this section was built and run on a Debian host on 16.09.2026**,
+not written from the documentation: the image was built, started, restarted, and the
+store was proven to survive a rebuild. Where something had to differ from a clean
+host, it says so and why.
+
+A container answers several of the steps above at once. It carries its own Python,
+so step 1 stops being a question; it carries the pinned runtime from step 3; and
+`restart: unless-stopped` **replaces step 7 entirely** — no unit file, no system
+user, and no permissions to fix by hand on the store.
+
+**It does not replace step 6.** The proxy in front still terminates TLS and still
+has to pass the WebSocket upgrade through, and that is still the part that fails
+quietly.
+
+    docker compose build
+    docker compose up -d
+
+    $ curl -s http://127.0.0.1:8099/v1/health
+    {"ok": true}
+
+### What the two files decide, and why
+
+**The base image is pinned to the patch, not to `3.13`.** A drifting base image
+turns `--require-hashes` in `requirements.txt` into half a promise: the point of
+pinning the runtime under a TLS-terminated service is that it cannot change under
+you, and the base image *is* runtime.
+
+**The store is a named volume, never a path inside the image.** This is the line
+that costs data if it is wrong: a store inside the image is gone with the next
+build, and nothing about that is visible while reading the file. Proven rather than
+asserted — an account and a document were laid down, the container was removed, **the
+image was deleted**, both were rebuilt, and the account and the document were still
+there.
+
+**The user has a fixed numeric id.** The volume belongs to a uid, and that uid has
+to survive rebuilds of the image, or the service comes back up standing in front of
+its own store without permission to enter it.
+
+**It does not run as root**, and `docker exec … id` says so: `uid=10001(maersync)`.
+
+**The port is bound to `127.0.0.1` only.** What is reachable from outside is decided
+by the proxy from step 6, which is also what holds the certificate.
+
+### Running the suite in the image
+
+    docker compose exec maer-sync /opt/maer-sync/.venv/bin/python -m unittest discover -s tests -t .
+
+**Three of the repository-hygiene tests fail there, and that is correct:** they ask
+`git` what the repository tracks, and an image has no repository. They belong to the
+checkout, not to the image. Run the suite from the clone, as step 2 says.
+
+### What was run here, and what is the host's problem
+
+Run: the build, `up -d`, a restart, `docker restart`, the account and document, the
+delete-and-rebuild proof for the volume, the health check, `401` without a token, and
+the WebSocket upgrade through the proxy against the container — `101` with a token,
+`403` without.
+
+**The host's, not the image's:** this machine already runs a service on `8099`, so the
+probe bound `8097` through a `compose.override.yaml`. The file next to it keeps `8099`,
+which is what a host without that collision wants. Worth knowing if you ever write such
+an override: **Compose merges list entries, it does not replace them** — a plain
+override adds a second port and the container then fails on whichever one is taken.
+`ports: !override` replaces (Compose 2.24 and newer; measured on 5.5.1).
 
 ## Why it exists
 
