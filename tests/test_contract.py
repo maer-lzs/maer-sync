@@ -7,6 +7,7 @@ instead of going quiet until a device stops syncing.
 """
 import pathlib
 import re
+import subprocess
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -46,6 +47,26 @@ def sources():
     return "\n".join(p.read_text(encoding="utf-8")
                      for directory in SERVICE_DIRS
                      for p in sorted((ROOT / directory).rglob("*.py")))
+
+
+#: Where the repository itself keeps Python, as top level names.
+#:
+#: The list above is the only thing that decides what the fence reads, and
+#: nothing made it stay complete: a module in a third directory would drop
+#: out of every check here without a word. So this asks the repository what
+#: it carries instead of holding the list against a second hand copy of
+#: itself. Untracked things cannot answer, which is why a `.venv` does not
+#: show up here even though it sits in the clone.
+#:
+#: Without git there is no answer, and the witness says so rather than
+#: passing. It stays a fence ABOVE the fence for that reason: `sources()`
+#: must keep working from a plain unpacked copy.
+def tracked_python_roots():
+    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        raise unittest.SkipTest("not a git checkout")
+    return {pathlib.Path(line).parts[0] for line in out.stdout.split() if line}
 
 
 class ContractTests(unittest.TestCase):
@@ -100,6 +121,24 @@ class ContractTests(unittest.TestCase):
         finally:
             (stray / "intruder.py").unlink(missing_ok=True)
             stray.rmdir()
+
+    def test_the_positive_list_still_names_the_whole_service(self):
+        # The other direction of the same fix, and the quiet one. Naming the
+        # service positively cannot go red on a stray file any more, but it
+        # can go SILENT: a new source directory would simply never be read,
+        # and every check here would stay green while measuring less.
+        #
+        # Both ways round on purpose. A name in the list with no tracked
+        # source is the same hazard from the other end, because `rglob` on a
+        # directory that is not there returns nothing without complaining.
+        known = set(SERVICE_DIRS) | {"tests"}
+        tracked = tracked_python_roots()
+        named_but_empty = sorted(known - tracked)
+        tracked_but_unfenced = sorted(tracked - known)
+        self.assertEqual((named_but_empty, tracked_but_unfenced), ([], []),
+                         "the fence and the repository have drifted: "
+                         f"named here with no tracked source {named_but_empty}, "
+                         f"tracked as source and read by nothing {tracked_but_unfenced}")
 
     def test_the_kinds_are_NOT_known_to_the_service(self):
         # The counter direction, and it is the one that matters: the service
