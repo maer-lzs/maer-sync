@@ -15,8 +15,19 @@ services:
     # Nur lokal. Was von aussen erreichbar sein soll, entscheidet die Vorschaltung
     # aus Schritt 6 — und die ist es, die TLS terminiert und den WebSocket-Aufstieg
     # durchreichen muss.
+    #
+    # Der HOST-Port ist einstellbar, der Dienst-Port nicht: innen bleibt es 8099,
+    # nach aussen legt ihn jeder Wirt dorthin, wo bei ihm Platz ist. Wer 8099 schon
+    # belegt hat, setzt MAER_SYNC_HOST_PORT und laesst die Datei in Ruhe.
+    #
+    # Warum eine Variable und keine zweite compose-Datei: eine Override-Datei
+    # ERSETZT die Portliste nicht, sie FUEHRT SIE ZUSAMMEN. Der zweite Eintrag
+    # tritt neben den ersten, der Container versucht beide zu binden und scheitert
+    # an dem, der belegt ist — also genau an dem Port, dem man ausweichen wollte.
+    # (`ports: !override` koennte das ab Compose 2.24, verlangt aber wieder eine
+    # zweite Datei fuer etwas, das eine Stelle in dieser hier loest.)
     ports:
-      - "127.0.0.1:8099:8099"
+      - "127.0.0.1:${MAER_SYNC_HOST_PORT:-8099}:8099"
 
     # BENANNTES Volume, kein Pfad im Abbild und kein bind mount: die Ablage
     # überlebt damit jedes neue Abbild, und sie gehört der UID aus dem Dockerfile.

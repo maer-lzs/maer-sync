@@ -262,6 +262,13 @@ quietly.
     $ curl -s http://127.0.0.1:8099/v1/health
     {"ok": true}
 
+**If `8099` is taken on your host, set the port instead of editing the file:**
+
+    MAER_SYNC_HOST_PORT=18099 docker compose up -d
+
+Only the published port moves; inside the container the service stays on `8099`,
+and so does everything the proxy in step 6 is configured against.
+
 ### What the two files decide, and why
 
 **The base image is pinned to the patch, not to `3.13`.** A drifting base image
@@ -309,17 +316,31 @@ belongs to a measured run and says what it counted.
 
 ### What was run here, and what is the host's problem
 
-Run: the build, `up -d`, a restart, `docker restart`, the account and document, the
-delete-and-rebuild proof for the volume, the health check, `401` without a token, and
-the WebSocket upgrade through the proxy against the container — `101` with a token,
-`403` without.
+**Run against the container** (16.09.2026, this host): `docker compose build`,
+`docker compose up -d` with the port variable set, `/v1/health` answering `{"ok": true}`,
+the healthcheck reaching **healthy**, an account laid down and still present after a
+full `down` and `up` — read back out of the database, not inferred from the file being
+there — and a clean `down` afterwards. The suite inside the image: `Ran 193 tests … OK
+(skipped=4)`.
+
+**Run against the service from step 4, not against the container:** the token exchange,
+`401` without a token, and the WebSocket upgrade through the proxy (`101` with a token,
+`403` without). They are listed apart on purpose. An earlier version of this section
+claimed them for the container, and that claim had no run behind it — the container part
+had failed on the port collision at the time, which is what the paragraph below is about.
 
 **The host's, not the image's:** this machine already runs a service on `8099`, so the
-probe bound `8097` through a `compose.override.yaml`. The file next to it keeps `8099`,
-which is what a host without that collision wants. Worth knowing if you ever write such
-an override: **Compose merges list entries, it does not replace them** — a plain
-override adds a second port and the container then fails on whichever one is taken.
-`ports: !override` replaces (Compose 2.24 and newer; measured on 5.5.1).
+run above set `MAER_SYNC_HOST_PORT=18099`. The delivered default stays `8099`, which is
+what a host without that collision wants.
+
+**Why the port is a variable and not an override file.** The first attempt here did use
+a `compose.override.yaml`, and the container did not start: **Compose merges list
+entries, it does not replace them** — the override adds a *second* port, the container
+tries to bind both, and it fails on the one that was taken. That is the very port you
+were avoiding. Measured both ways on this host: with the override, `compose config`
+publishes two ports (`8099` and `18099`); with the variable, one. `ports: !override`
+would replace (Compose 2.24 and newer), but it still needs a second file for something
+one place in this one settles.
 
 ## Why it exists
 
