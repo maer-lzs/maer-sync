@@ -10,17 +10,17 @@ all, while twenty-two of its files carried a header naming one. Nobody
 noticed, because nothing measured it: the app has a fence for this and the
 service did not, which is exactly why the two could drift apart.
 
-Three things are asserted, and the order matters. The licence file exists and
-is not empty. Every source file names a copyright and an SPDX identifier. And
-the check read something at all — a fence over an empty list reports success,
-which is the failure mode that hides every other one.
+Every header makes three promises, and all three are checked here: a
+copyright holder, an SPDX identifier, and additional terms in a file of that
+name. A header promising terms that are not there is the fault this fence was
+built for.
 
-**What is deliberately NOT asserted yet:** the fourth header line points at
-`LICENSE-ADDITIONAL-TERMS`, and that document's shape is still being decided.
-Asserting it here would promise something about a file whose form is not
-settled — a fence pointing at a moving target, which is the same fault as a
-header pointing at a missing file, only from the other side. The line goes in
-when the shape is decided.
+**Rule 7 runs through the whole file.** A copy that cannot answer a question
+abstains with its reason; a copy that CAN answer and finds nothing goes red.
+Both halves are needed: abstaining everywhere hides real faults, and asking
+everywhere turns an image or an unpacked archive red for carrying what it was
+meant to carry. The first version of this fence got that wrong in its own
+first run, in the very class it was written against.
 
 Exemptions carry their reason at the entry, not in a list somewhere else. An
 exemption whose reason has to be reconstructed is an exemption nobody reviews.
@@ -32,10 +32,10 @@ from tests import gitquery
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-#: The licence file itself. It must exist and carry text: a repository whose
-#: headers name a licence, with no licence text in it, says "all rights
-#: reserved" to anyone reading it as law, and the opposite in every header.
-LICENCE_FILE = "LICENSE"
+#: Both licence files. A repository whose headers name a licence, with no
+#: licence text in it, says "all rights reserved" to anyone reading it as law,
+#: and the opposite in every header.
+LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 
 #: Where source lives. Named positively, like the contract fence next door: a
 #: negative list would quietly read `.venv` once somebody installs one.
@@ -55,6 +55,7 @@ EXEMPT = {
 
 SPDX = "SPDX-License-Identifier"
 COPYRIGHT = "Copyright (C)"
+TERMS = "LICENSE-ADDITIONAL-TERMS"
 HEAD_LINES = 10
 
 
@@ -73,63 +74,100 @@ def _sources():
     return sorted(set(found))
 
 
+def _claims_a_licence():
+    """Whether this copy can be asked for a licence file at all.
+
+    Rule 7, and the reason it is a function rather than an assumption: a
+    checkout and an image both carry the sources AND the licence, so both can
+    be asked. An unpacked fragment that carries neither cannot — and calling
+    that a failure would make the fence red for a copy that never promised
+    anything.
+
+    The question is answered by the copy's OWN content, not by a proxy: if a
+    file here carries a licence header, this copy makes a claim about a
+    licence, and then the licence has to be here. Asking `README.md` instead
+    would be a stand-in for the thing itself.
+    """
+    for p in _sources():
+        try:
+            kopf = p.read_text(encoding="utf-8").splitlines()[:HEAD_LINES]
+        except OSError:
+            continue
+        if any(SPDX in zeile for zeile in kopf):
+            return True
+    return False
+
+
 class TheLicenceIsHere(unittest.TestCase):
 
-    def test_the_licence_file_exists_and_is_not_empty(self):
-        p = ROOT / LICENCE_FILE
-        self.assertTrue(p.is_file(), f"{LICENCE_FILE} is missing, while every header names a licence")
-        # Size, not readability: a file truncated to nothing is perfectly
-        # readable and says nothing.
-        self.assertGreater(p.stat().st_size, 0, f"{LICENCE_FILE} exists but is empty")
+    def setUp(self):
+        if not _claims_a_licence():
+            raise unittest.SkipTest(
+                "no file here carries a licence header, so this copy makes no "
+                "claim a licence file could answer for")
+
+    def test_the_licence_files_exist_and_are_not_empty(self):
+        for name in LICENCE_FILES:
+            p = ROOT / name
+            self.assertTrue(p.is_file(), f"{name} is missing, while the headers here name it")
+            # Size, not readability: a file truncated to nothing is perfectly
+            # readable and says nothing.
+            self.assertGreater(p.stat().st_size, 0, f"{name} exists but is empty")
 
     def test_the_licence_is_the_one_the_headers_name(self):
-        # The headers say GPL-3.0-or-later. A LICENSE file carrying some other
-        # licence would leave every header lying, and nothing else would notice.
-        text = (ROOT / LICENCE_FILE).read_text(encoding="utf-8")
+        # A LICENSE file carrying some other licence would leave every header
+        # lying, and nothing else would notice.
+        text = (ROOT / "LICENSE").read_text(encoding="utf-8")
         self.assertIn("GNU GENERAL PUBLIC LICENSE", text)
         self.assertIn("Version 3", text)
+
+    def test_the_additional_terms_are_terms_under_that_licence(self):
+        # The fourth header line points here by name. If this file ever stops
+        # being terms under the GPL, every header points at something else.
+        text = (ROOT / TERMS).read_text(encoding="utf-8")
+        self.assertIn("GNU GPL Version 3, Section 7", text)
+        # Section 10 forbids further restrictions; the terms say so themselves,
+        # and that sentence is what keeps them compatible.
+        self.assertIn("may\nnot be removed", text)
 
 
 class EveryFileNamesItsLicence(unittest.TestCase):
 
     def test_something_was_read_at_all(self):
-        # First, and on its own. A fence over an empty list passes every other
-        # assertion in this file while measuring nothing.
+        # Rule 7's second half, first and on its own. A fence over an empty
+        # list passes every other assertion here while measuring nothing.
         self.assertGreater(len(_sources()), 0,
                            "the header check found no files — it measured nothing, "
                            "so its silence is not a result")
 
-    def test_every_source_file_carries_a_header(self):
+    def test_every_source_file_carries_a_complete_header(self):
         ohne = []
         for p in _sources():
             rel = p.relative_to(ROOT).as_posix()
             if rel in EXEMPT:
                 continue
-            # Unreadable is a finding, not a skip: the app's version of this
-            # fence swallowed the exception and counted the file as fine.
+            # Unreadable is a finding, not a skip: this copy CAN read its own
+            # files, so a failure to is a fault, not an unanswerable question.
             try:
                 kopf = p.read_text(encoding="utf-8").splitlines()[:HEAD_LINES]
             except OSError as fehler:
                 ohne.append(f"{rel}: could not be read ({fehler.strerror})")
                 continue
-            if not any(SPDX in zeile for zeile in kopf):
-                ohne.append(f"{rel}: no {SPDX} in its first {HEAD_LINES} lines")
-            elif not any(COPYRIGHT in zeile for zeile in kopf):
-                ohne.append(f"{rel}: names a licence but no copyright holder")
-        self.assertEqual([], ohne, "files with an incomplete licence header: " + "; ".join(ohne))
+            for was, marke in (("an SPDX identifier", SPDX),
+                               ("a copyright holder", COPYRIGHT),
+                               ("the additional terms", TERMS)):
+                if not any(marke in zeile for zeile in kopf):
+                    ohne.append(f"{rel}: its header is missing {was}")
+        self.assertEqual([], ohne, "incomplete licence headers: " + "; ".join(ohne))
 
     def test_every_exemption_names_a_file_that_is_here(self):
         # The other direction, and the quiet one: an exemption for a file that
         # no longer exists stops exempting anything and starts being a note
         # nobody can check. It also hides a rename.
         #
-        # Only a working copy can be asked this. An image carries the sources
+        # Only a working copy can be asked. An image carries the sources
         # without the repository's own files — `.gitignore` is not there, and
-        # its absence says nothing about the exemption. Asking anyway turned
-        # this witness red inside the image on its first run: a question this
-        # copy cannot put, coming back as a failure instead of an abstention.
-        # That is the fault this very repository fixed two commits ago, rebuilt
-        # here by the person who found it.
+        # its absence says nothing about the exemption.
         if not gitquery.is_a_checkout():
             raise unittest.SkipTest("not a checkout, so the repository's own files are not here")
         verschwunden = sorted(name for name in EXEMPT if not (ROOT / name).exists())

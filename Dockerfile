@@ -32,7 +32,7 @@ COPY service ./service
 # Die Lizenz reist mit. Ein Abbild ist eine Weitergabe, und die GPL verlangt den
 # Text dabei; ohne ihn koennte der Zaun in tests/ hier drin auch gar nicht pruefen,
 # was jeder Dateikopf verspricht.
-COPY LICENSE ./
+COPY LICENSE LICENSE-ADDITIONAL-TERMS ./
 COPY run-tests.sh CONTRACT.md README.md ./
 COPY tests ./tests
 

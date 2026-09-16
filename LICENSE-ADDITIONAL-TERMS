@@ -1,0 +1,39 @@
+Mär Sync Service: Additional Terms under GNU GPL Version 3, Section 7
+
+Copyright (C) 2026 Laurenz Schröder
+
+These terms are granted and imposed by the sole copyright holder of Mär. They
+supplement the GNU General Public License version 3; in every other respect
+that License applies unchanged.
+
+────────────────────────────────────────────────────────────────────────
+PART 1: NAME AND ARTWORK
+────────────────────────────────────────────────────────────────────────
+
+Forks are welcome, but the name is not part of what the licence hands over.
+"Mär", and "Maer", its plain-ASCII spelling, and the project artwork are
+reserved to the copyright holder, in any capitalisation; the GNU General
+Public License grants no rights in them. Only the copyright holder may
+publish this service under either spelling. Anyone else who publishes it,
+changed or not, gives it a name of their own.
+
+This concerns what is published, not the source code. The source keeps the
+project's name wherever it is copied, you may run it for your own use, and
+you may say freely that your work is a fork of the Mär sync service or a
+server for Mär.
+
+────────────────────────────────────────────────────────────────────────
+PART 2: CONTRIBUTIONS
+────────────────────────────────────────────────────────────────────────
+
+By contributing to this project you agree that your contribution is licensed
+under the GNU General Public License version 3.
+
+The reservation of the name and the artwork in Part 1 is not affected by
+contributing, and it does not restrict forks: they carry their own name.
+
+────────────────────────────────────────────────────────────────────────
+
+Part 1 states additional terms permitted by section 7(c) and section 7(e);
+they are not "further restrictions" within the meaning of section 10 and may
+not be removed.
