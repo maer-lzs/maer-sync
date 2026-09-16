@@ -18,4 +18,11 @@
 # a red probe counts only when the run reports the count you expect.
 set -e
 cd "$(dirname "$0")"
-exec python3 -m unittest discover -s tests -t . -v "$@"
+# The environment of step 2 if it is there, the bare interpreter otherwise.
+# Since the encrypted session, the suite needs what the service is built
+# from, and a run that silently used a Python without it would either fail
+# with an import error that looks like a broken checkout, or, worse, skip
+# the cases and stay green.
+PY=python3
+[ -x .venv/bin/python ] && PY=.venv/bin/python
+exec "$PY" -m unittest discover -s tests -t . -v "$@"

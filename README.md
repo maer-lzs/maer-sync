@@ -55,21 +55,20 @@ own Python on a small server:
 tables. The only thing with a floor at all is `Connection.backup`, which is
 Python 3.7 and up, so the 3.10 above already covers it.
 
-Nothing else. The service code and its tests are standard library only.
-Serving it is the one exception, and that is step 3.
+Nothing else from the language itself. **Two things come from outside**, and
+both are named where they are installed: an ASGI server, because the
+application is finished without one but cannot be reached without one, and
+`cryptography`, because the encrypted session needs X25519 and
+ChaCha20-Poly1305 and Python ships neither. That is step 2, and it now comes
+BEFORE the tests: the suite tests the encrypted session too, so it needs what
+that session is built from.
 
-### 2. Fetch it
+### 2. Fetch it and install what it needs
 
     git clone https://codeberg.org/LzS/maer-sync.git
     cd maer-sync
-    ./run-tests.sh
-
-The suite is the first thing, on purpose: it needs no server, no network and
-no configuration, so a red run here means the machine is wrong and not the
-setup. It prints its case count and takes about 11.5 seconds, nearly all of
-it scrypt (see "Running the tests").
-
-### 3. Install the runtime
+    python3 -m venv .venv
+    .venv/bin/python -m pip install --require-hashes -r requirements.txt
 
 The application is finished without a server; it needs one that speaks ASGI.
 
@@ -87,6 +86,27 @@ What that installs, and why each one:
 | `uvicorn` | the ASGI server |
 | `wsproto` | the WebSocket implementation, for `/v1/changes` |
 | `h11`, `click`, `typing_extensions` | what those two need |
+| `cryptography` | X25519 and ChaCha20-Poly1305 for the encrypted session |
+| `cffi`, `pycparser` | what `cryptography` needs |
+
+**The crypto half is pinned PER PLATFORM, and that is a difference worth
+knowing before it surprises you.** `cryptography` is compiled: 45 wheels for
+one version, and `cffi` another 99. The file carries the hashes for macOS on
+arm64 and x86_64 and for Linux on x86_64 and aarch64, glibc and musl.
+Anywhere else, `--require-hashes` fails loudly with "no matching
+distribution" rather than installing something unpinned, and the fix is to
+add that platform's hashes to the file.
+
+### 3. Run the tests
+
+    ./run-tests.sh
+
+The suite needs no server, no network and no configuration, so a red run here
+means the machine is wrong and not the setup. It prints its case count and
+takes about 11.5 seconds, nearly all of it scrypt (see "Running the tests").
+It uses `.venv` if one is there, which is why step 2 comes first now: the
+handshake cases are held against published test vectors, and those need the
+same primitives the service uses.
 
 **`wsproto` and not `websockets`, on purpose:** uvicorn without its
 `[standard]` extra carries no WebSocket at all ("No supported WebSocket
@@ -299,6 +319,11 @@ by the proxy from step 6, which is also what holds the certificate.
 **The suite is green in the image: `Ran 193 tests … OK (skipped=4)`.** Measured on
 16.09.2026 in the built image, as the unprivileged service user, running exactly that
 module invocation in the built image.
+
+**That number moves with the encrypted session**: seven cases came with it, so the
+next run in the image should say 200. It is left as measured rather than predicted,
+because a number in this file that nobody ran is the thing this file keeps warning
+about; whoever builds the image next writes what it actually said.
 
 The four skips are the questions this copy cannot put. Three hygiene tests and one
 fence ask `git` what the repository tracks; an image carries the sources without a
