@@ -41,6 +41,20 @@ with a type error before a single request is served.
 
 Nothing here needs anything newer than 3.10.
 
+**And `sqlite3`, which is standard library and still worth one command.** It
+is a C extension binding the system's SQLite, so a self-compiled or
+slimmed-down Python can be missing it, and then the import fails before
+anything else does. That is not a theoretical case for people who build their
+own Python on a small server:
+
+    $ python3 -c "import sqlite3, sys; print(sys.version.split()[0], sqlite3.sqlite_version)"
+    3.14.6 3.53.4
+
+**No SQLite version floor beyond that.** Measured against the sources: no
+`VACUUM INTO`, no `RETURNING`, no `json_` functions, no upsert, no `STRICT`
+tables. The only thing with a floor at all is `Connection.backup`, which is
+Python 3.7 and up, so the 3.10 above already covers it.
+
 Nothing else. The service code and its tests are standard library only.
 Serving it is the one exception, and that is step 3.
 
