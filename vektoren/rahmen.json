@@ -1,0 +1,73 @@
+{
+  "quelle": "core/frames.py",
+  "format": "zwei Byte Kopflaenge big endian, JSON-Kopf (sortierte Schluessel, ohne Leerzeichen), dann roher Koerper",
+  "gueltig": [
+    {
+      "name": "leerer_koerper",
+      "head": {
+        "method": "GET",
+        "target": "/v1/health"
+      },
+      "body_hex": "",
+      "frame_hex": "00267b226d6574686f64223a22474554222c22746172676574223a222f76312f6865616c7468227d",
+      "head_len": 38
+    },
+    {
+      "name": "kleiner_koerper",
+      "head": {
+        "method": "PUT",
+        "target": "/v1/docs/x",
+        "headers": {
+          "If-Match": "3"
+        }
+      },
+      "body_hex": "68616c6c6f",
+      "frame_hex": "00417b2268656164657273223a7b2249662d4d61746368223a2233227d2c226d6574686f64223a22505554222c22746172676574223a222f76312f646f63732f78227d68616c6c6f",
+      "head_len": 65
+    },
+    {
+      "name": "antwort",
+      "head": {
+        "status": 412,
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "body_hex": "7b2261223a317d",
+      "frame_hex": "003c7b2268656164657273223a7b22436f6e74656e742d54797065223a226170706c69636174696f6e2f6a736f6e227d2c22737461747573223a3431327d7b2261223a317d",
+      "head_len": 60
+    },
+    {
+      "name": "koerper_mit_nullbyte",
+      "head": {
+        "method": "POST",
+        "target": "/v1/token"
+      },
+      "body_hex": "000102ff",
+      "frame_hex": "00267b226d6574686f64223a22504f5354222c22746172676574223a222f76312f746f6b656e227d000102ff",
+      "head_len": 38
+    }
+  ],
+  "ungueltig": [
+    {
+      "name": "zu_kurz",
+      "frame_hex": "00",
+      "erwartet": "NotAFrame"
+    },
+    {
+      "name": "kopf_abgeschnitten",
+      "frame_hex": "00106162",
+      "erwartet": "NotAFrame"
+    },
+    {
+      "name": "kopf_kein_json",
+      "frame_hex": "00037b7b7b",
+      "erwartet": "NotAFrame"
+    },
+    {
+      "name": "leer",
+      "frame_hex": "",
+      "erwartet": "NotAFrame"
+    }
+  ]
+}
