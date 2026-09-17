@@ -17,6 +17,15 @@ Werkzeugkette, und der Rueckweg heisst Abbild wegwerfen.
 Abbild nicht vor, bricht der Bau ab und nennt den Holbefehl, statt auf ein
 Etikett auszuweichen.
 
+**Eine eigene Schicht, und nur eine.** `Dockerfile` setzt auf das gepinnte
+Grundabbild genau ein Paket: `musl-dev`. Gemessen und nicht vermutet: das
+Grundabbild bringt `gcc` mit, aber nicht `musl-dev`, und jede Crate mit einem
+Proc-Macro (hier `curve25519-dalek-derive`) wird als Shared Object fuer den Wirt
+gebaut, wobei `ld` die Startdateien der C-Bibliothek sucht. Ohne `musl-dev`
+bricht das mit `cannot find crti.o` ab, **bei beiden Crate-Serien**, es ist also
+kein Crate-Problem. `bau.sh` baut die Schicht beim ersten Aufruf selbst; ihre
+Paketfassungen haengen am Grundabbild, und das ist am Digest gepinnt.
+
 **Was hier NICHT liegt: eine Crate.** Der Auftrag haelt die Crate-Liste als
 eigenen Entscheid fest, und bis der vorliegt, traegt der Zweig kein
 `Cargo.toml` mit Abhaengigkeiten. Die gemessenen Baeume stehen im Bericht.
