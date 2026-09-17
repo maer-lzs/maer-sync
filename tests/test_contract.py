@@ -102,7 +102,7 @@ def tracked_python_roots():
 #: a reworded promise, a status that quietly changed meaning, and above all a
 #: path added to the PROSE TABLE instead of to the machine block, which no
 #: case reads. This digest covers every byte.
-CONTRACT_DIGEST = "4ff277396fec10a1f9726f66511c7edf0a9927882371ddeb0de5340896191b9e"
+CONTRACT_DIGEST = "547d9a750caa94dadbcffbb5cb06e833710ba86d5f034eef6e6384f1b922dd5a"
 
 #: The same for the published vectors, which also live twice. They are
 #: somebody else's numbers, copied verbatim, so a difference between the two
@@ -141,10 +141,10 @@ class TheTwoCopiesAreOneFile(unittest.TestCase):
 class ContractTests(unittest.TestCase):
     def test_the_contract_exists_and_names_its_version(self):
         self.assertTrue(CONTRACT.exists(), "CONTRACT.md is the whole point of two repositories")
-        self.assertEqual(declared()["version"], ["4"])
+        self.assertEqual(declared()["version"], ["5"])
         # The version stands twice on purpose: once for a reader, once for
         # this fence. Whoever bumps one and not the other trips here.
-        self.assertIn("**Version: 4**", CONTRACT.read_text(encoding="utf-8"))
+        self.assertIn("**Version: 5**", CONTRACT.read_text(encoding="utf-8"))
 
     def test_every_declared_path_exists_in_this_service(self):
         text = sources()

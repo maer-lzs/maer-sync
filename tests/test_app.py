@@ -176,8 +176,12 @@ class NothingTheCallerWroteIsAnIdentity(unittest.TestCase):
 
     def test_the_listener_list_is_keyed_by_the_caller_too(self):
         adds = [line for line in self.source() if "listeners.add(" in line]
-        self.assertEqual(len(adds), 1, f"the listener list gained a writer: {adds}")
-        self.assertIn("caller.owner", adds[0])
+        # Two writers since version 5: the socket in the clear and the socket
+        # inside a session. Both key by the caller the STORE named, never
+        # by anything the client wrote.
+        self.assertEqual(len(adds), 2, f"the listener list gained a writer: {adds}")
+        for add in adds:
+            self.assertIn("caller.owner", add)
 
 
 class HandingOutAToken(AppCase):

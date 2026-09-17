@@ -107,6 +107,16 @@ class SessionStore:
             raise UnknownSession("this session has ended")
         return row
 
+    def is_live(self, name):
+        """Whether a session of this name can still carry messages. The
+        socket asks before it accepts, so a stranger with a made up name is
+        turned away at the door instead of being put on a list."""
+        try:
+            self._live_row(name)
+        except UnknownSession:
+            return False
+        return True
+
     def unseal(self, name, ciphertext, ad=b""):
         """Open one message. Raises `UnknownSession`, or whatever the cipher
         raises when the message is not authentic.

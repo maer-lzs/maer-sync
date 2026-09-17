@@ -140,6 +140,7 @@ The knobs, all optional:
     MAER_SYNC_HOST=127.0.0.1            # bind address
     MAER_SYNC_PORT=8099
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
+    MAER_SYNC_PLAIN_WAYS=on             # off: the five older ways answer only inside a session
 
 ### 5. Lay down an account
 
@@ -532,6 +533,7 @@ in front of it; that proxy has to carry the WebSocket upgrade on
     MAER_SYNC_HOST=127.0.0.1            # bind address
     MAER_SYNC_PORT=8099
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
+    MAER_SYNC_PLAIN_WAYS=on             # off: the five older ways answer only inside a session
 
 ### The identity of this service
 
@@ -590,6 +592,29 @@ the first put aside; the command prints the name it used.
 **NOT MEASURED:** none of this has run inside the container against a
 volume. It is driven by the suite with real files in temporary directories,
 and by hand on a development machine.
+
+### Inside a session
+
+Once a device holds the key it opens a handshake on `/v1/session` and from
+then on sends every ordinary request SEALED: `POST /v1/session` with the
+session's name in `X-Maer-Session` and a sealed frame as the body. The frame
+is the ordinary wire, whole (method, target, headers, body), the service runs
+it through the same doors a plain request goes through, and the reply comes
+back sealed. Nobody between the device and this process reads the token, the
+path or the document. The exact shape stands in `CONTRACT.md`, version 5.
+
+**The five older ways keep answering in the clear until you turn them off.**
+A device that was not updated speaks in the clear, and it must keep syncing
+until it is. When every device speaks inside, set `MAER_SYNC_PLAIN_WAYS=off`:
+a plain request then gets a `426` with a sentence, a plain socket the close
+code `4426`, and `/v1/health`, `/v1/key` and `/v1/session` keep answering.
+The suite drives both settings; **which one your devices need is measured on
+them, not here.**
+
+**A restart ends every session, on purpose.** The keys live in memory and
+nowhere else, so a session that survived a restart would be one whose keys
+were on disk. The device answers a `410` with one new handshake and one
+retry, and nobody sees a sentence.
 
 **The runtime is uvicorn plus a WebSocket library, both pinned.** The
 service code and its tests are standard library only, but serving it is

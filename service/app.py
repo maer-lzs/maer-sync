@@ -39,10 +39,11 @@ import os
 from urllib.parse import unquote
 
 from core.authorization import DENIED, caller_for
+from core.frames import NotAFrame, pack, request_of, unpack
 from core.paths import parse_document_path, parse_listing_path, valid_scope
 
 from .identity import RefusedToServe, key_path, open_identity, public_of
-from .sessions import SessionStore
+from .sessions import SessionStore, UnknownSession
 from .store import Store
 
 # Every refusal and every failed sign-in leaves a line here, with the
@@ -121,9 +122,23 @@ class Listeners:
             self.remove(owner, send)
 
 
+#: Whether the five older ways still answer OUTSIDE a session. On by default,
+#: because devices that speak only the plain ways keep syncing until they are
+#: updated; an operator turns it off once every device speaks inside, and
+#: from then on a plain request is told to come back inside a session. The
+#: two paths of the session itself and the health route are never behind it.
+PLAIN_WAYS = "MAER_SYNC_PLAIN_WAYS"
+
+#: The marker an INNER request carries in its scope, so the plain ways gate
+#: knows it came through a session and not over the wire in the clear.
+INSIDE = "maer.inside"
+
+
 class App:
-    def __init__(self, store, max_body_bytes=None, identity=None, sessions=None):
+    def __init__(self, store, max_body_bytes=None, identity=None, sessions=None, plain_ways=None):
         self.store = store
+        self.plain_ways = plain_ways if plain_ways is not None else (
+            os.environ.get(PLAIN_WAYS, "on").lower() not in ("off", "0", "no", "false"))
         # The service's static private key, and the sessions built from it.
         # BOTH optional, and the two paths that need them answer 503 when
         # they are absent rather than pretending: an application assembled
@@ -174,6 +189,10 @@ class App:
         # token. That is the point of the pattern: the caller proves nothing
         # until it is INSIDE the session, which is what lets a sign in be
         # protected, and a sign in happens before there is any token at all.
+        if not self.plain_ways and not scope.get(INSIDE):
+            # Told, not silently refused: a device that still speaks in the
+            # clear must learn that this service only listens inside.
+            return await _json(send, 426, {"reason": "this service speaks only inside a session"})
         if path == "/v1/token":
             if method != "POST":
                 return await _json(send, 405, {"reason": f"{method} is not what this path is for"})
@@ -226,7 +245,9 @@ class App:
             "fingerprint": printed})
 
     async def _session(self, scope, receive, send):
-        """Answer a handshake and hand back the name of the session.
+        """Without a session header: answer a handshake and hand back the
+        name of the session. With one: carry a sealed request in that
+        session.
 
         The body is the caller's first Noise message, raw bytes, and the
         answer is the service's reply, raw bytes, with the name in a header.
@@ -243,6 +264,11 @@ class App:
         except BodyTooLarge:
             return await _json(send, 413, {"reason": "a handshake is not this large"})
 
+        _, headers = self._caller(scope)
+        name = headers.get("x-maer-session")
+        if name is not None:
+            return await self._sealed(scope, send, name, body)
+
         private, _ = self.identity
         try:
             name, reply, _ = self.sessions.open(body, private)
@@ -252,6 +278,82 @@ class App:
             log.warning("handshake refused from=%s", _client(scope))
             return await _json(send, 400, {"reason": "this is not a handshake"})
         return await _bytes(send, 200, reply, [(b"x-maer-session", name.encode("ascii"))])
+
+    async def _sealed(self, scope, send, name, body):
+        """One request inside a session: unseal, run it through the same
+        doors every request goes through, seal the reply.
+
+        **The inside is the ordinary wire.** The frame carries a method, a
+        target, headers and a body, so the token rides in an `Authorization`
+        header exactly as the contract says, only nobody between the device
+        and this process can read it. Nothing about the five older ways is
+        learned twice.
+
+        A session that has ended is a 410 and nothing else: the device's
+        answer is one new handshake and one retry, never a sentence to a
+        person. A message that does not open is a 400, and the session
+        survives it: the cipher's counter moves only on success, so noise
+        sent under a stolen name costs its owner nothing.
+        """
+        try:
+            plaintext = self.sessions.unseal(name, body)
+        except UnknownSession:
+            return await _json(send, 410, {"reason": "this session has ended"})
+        except Exception:
+            log.warning("sealed message refused from=%s", _client(scope))
+            return await _json(send, 400, {"reason": "this is not a sealed message"})
+        try:
+            head, inner_body = unpack(plaintext)
+            method, path, query, inner_headers = request_of(head)
+        except NotAFrame:
+            return await _json(send, 400, {"reason": "this is not a request"})
+        if path in ("/v1/session", "/v1/key"):
+            # A session does not nest, and the key is what the session was
+            # built from; asking for either from inside says nothing.
+            return await _json(send, 400, {"reason": "this path is not answered inside a session"})
+
+        status, reply_headers, reply_body = await self._inner(scope, method, path, query,
+                                                             inner_headers, inner_body)
+        # Proven means: this session carried a request that proved WHO was
+        # asking. A token that was accepted proves it, and so does a sign in
+        # that the store said yes to. A 401 proves nothing.
+        if status != 401 and ("authorization" in inner_headers or path == "/v1/token"):
+            try:
+                self.sessions.prove(name)
+            except UnknownSession:
+                return await _json(send, 410, {"reason": "this session has ended"})
+        try:
+            sealed = self.sessions.seal(name, pack({"status": status, "headers": reply_headers}, reply_body))
+        except UnknownSession:
+            return await _json(send, 410, {"reason": "this session has ended"})
+        return await _bytes(send, 200, sealed)
+
+    async def _inner(self, outer, method, path, query, headers, body):
+        """Run one request through `_http` as if it had arrived on its own,
+        and collect what it answered. The client address is the outer one,
+        so log lines name the device and not the session."""
+        wire_headers = [(k.encode("utf-8"), v.encode("utf-8")) for k, v in headers.items()]
+        wire_headers.append((b"content-length", str(len(body)).encode("ascii")))
+        scope = {"type": "http", "method": method, "path": path, "query_string": query,
+                 "headers": wire_headers, "client": outer.get("client"), INSIDE: True}
+        handed = [False]
+        sent = []
+
+        async def receive():
+            if handed[0]:
+                return {"type": "http.disconnect"}
+            handed[0] = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        async def send(message):
+            sent.append(message)
+
+        await self._http(scope, receive, send)
+        start = next(m for m in sent if m["type"] == "http.response.start")
+        reply_body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+        reply_headers = {k.decode("utf-8"): v.decode("utf-8") for k, v in start["headers"]
+                         if k.lower() != b"content-length"}
+        return start["status"], reply_headers, reply_body
 
     async def _token(self, scope, receive, send):
         try:
@@ -364,11 +466,18 @@ class App:
             await send({"type": "websocket.close", "code": 4004})
             return
 
+        caller, headers = self._caller(scope)
+        name = headers.get("x-maer-session")
+        if name is not None:
+            return await self._sealed_socket(scope, receive, send, name)
+        if not self.plain_ways:
+            await send({"type": "websocket.close", "code": 4426})
+            return
+
         # The handshake carries the token in a header like every other
         # request. An unauthorized socket is closed before it is accepted:
         # accepting first and closing after would put a stranger on the
         # announcement list for as long as that takes.
-        caller, _ = self._caller(scope)
         if not caller.authorized:
             log.warning("unauthorized socket from=%s", _client(scope))
             await send({"type": "websocket.close", "code": 4401})
@@ -389,6 +498,66 @@ class App:
                 # ever announces cannot be talked into doing something else.
         finally:
             self.listeners.remove(caller.owner, send)
+
+    async def _sealed_socket(self, scope, receive, send, name):
+        """The changes socket inside a session.
+
+        The token cannot ride in the upgrade request, because that request
+        is the one thing on this path that is not sealed. So the socket is
+        accepted first, and the FIRST frame the device sends is a sealed
+        request head carrying its `Authorization`; only then is the device
+        put on the list. A stranger with a made up name is turned away
+        before the accept, like an unauthorized socket in the clear. Every
+        announcement afterwards goes out sealed, as bytes.
+
+        **A socket wants a session of its own.** A session's counters run in
+        the order messages are sealed, and a stream of announcements
+        interleaved with the replies of a request session would arrive out
+        of that order. The device opens two handshakes, one per direction
+        of use, and the store's capacity was chosen with that in mind.
+        """
+        if self.identity is None or not self.sessions.is_live(name):
+            await send({"type": "websocket.close", "code": 4410})
+            return
+        message = await receive()
+        if message["type"] != "websocket.connect":
+            return
+        await send({"type": "websocket.accept"})
+
+        first = await receive()
+        try:
+            if first["type"] != "websocket.receive" or first.get("bytes") is None:
+                raise NotAFrame("the first frame is not sealed bytes")
+            head, _ = unpack(self.sessions.unseal(name, first["bytes"]))
+            _, _, _, inner_headers = request_of(head)
+        except UnknownSession:
+            await send({"type": "websocket.close", "code": 4410})
+            return
+        except Exception:
+            log.warning("sealed socket refused from=%s", _client(scope))
+            await send({"type": "websocket.close", "code": 4400})
+            return
+        caller = caller_for(inner_headers.get("authorization"), self.store.owner_of_token)
+        if not caller.authorized:
+            log.warning("unauthorized sealed socket from=%s", _client(scope))
+            await send({"type": "websocket.close", "code": 4401})
+            return
+        self.sessions.prove(name)
+
+        async def sealed_send(announcement):
+            # The listeners speak text; this socket speaks sealed bytes.
+            text = announcement.get("text", "")
+            await send({"type": "websocket.send",
+                        "bytes": self.sessions.seal(name, text.encode("utf-8"))})
+
+        self.listeners.add(caller.owner, sealed_send)
+        try:
+            while True:
+                message = await receive()
+                if message["type"] == "websocket.disconnect":
+                    break
+        finally:
+            self.listeners.remove(caller.owner, sealed_send)
 
     # MARK: - Lifespan
 
