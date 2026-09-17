@@ -10,6 +10,7 @@ see the app repository, and says so rather than pretending: what it buys is
 that a wire change touching only this side goes red here at the next run,
 instead of going quiet until a device stops syncing.
 """
+import hashlib
 import pathlib
 import re
 import tempfile
@@ -86,6 +87,55 @@ def sources(root=ROOT):
 #: one of them was the first thing this witness got wrong.
 def tracked_python_roots():
     return {pathlib.Path(line).parts[0] for line in gitquery.tracked("*.py")}
+
+
+#: The digest of the contract as it stands in BOTH repositories today.
+#:
+#: **What this buys, and what it cannot buy.** No fence inside one repository
+#: can see the other, so nothing here can DETECT that the two copies drifted
+#: apart. What it can do is make a change loud on the side where it is made:
+#: whoever edits one byte of this file is stopped here and told, in the
+#: failure text, that the other side has to move with it.
+#:
+#: The version number does not cover that. It is declared by hand, so a
+#: change that leaves it alone is invisible to every other case in this file:
+#: a reworded promise, a status that quietly changed meaning, and above all a
+#: path added to the PROSE TABLE instead of to the machine block, which no
+#: case reads. This digest covers every byte.
+CONTRACT_DIGEST = "ce9ea661e03b95d9efac7bcf6426a5144ae4790b77aad3bdae2321b19336d376"
+
+#: The same for the published vectors, which also live twice. They are
+#: somebody else's numbers, copied verbatim, so a difference between the two
+#: copies would mean one of them is not a copy any more.
+VECTORS_DIGEST = "f33e06a31acb005ff39acea462a19fe02f3354a6da113abfa6febadd13d6f196"
+
+
+def digest_of(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+class TheTwoCopiesAreOneFile(unittest.TestCase):
+    """The files that live in two repositories, held from the inside.
+
+    Two of them: the contract, which is the whole reason there are two
+    repositories at all, and the Noise vectors, which are somebody else's
+    numbers that both halves are measured against.
+    """
+
+    def test_the_contract_is_the_agreed_bytes(self):
+        self.assertEqual(
+            digest_of(CONTRACT), CONTRACT_DIGEST,
+            "CONTRACT.md has changed. That is allowed, and it is never a one "
+            "sided change: put the same new digest in the app repository's "
+            "fence and carry the same file over, or the two ends have "
+            "quietly stopped describing the same service.")
+
+    def test_the_vectors_are_the_agreed_bytes(self):
+        self.assertEqual(
+            digest_of(ROOT / "tests" / "vectors" / "noise-nk.json"), VECTORS_DIGEST,
+            "the published vectors have changed. They are copied verbatim "
+            "from two foreign implementations, so a change here is either a "
+            "new provenance in both repositories or a mistake.")
 
 
 class ContractTests(unittest.TestCase):
@@ -172,6 +222,25 @@ class ContractTests(unittest.TestCase):
                          + ", ".join(undeclared)
                          + ". Adding one is a contract change, so it raises the version in "
                            "BOTH repositories.")
+
+    def test_no_declared_header_name_carries_an_underscore(self):
+        """A shape with a reason, and the reason is the proxy.
+
+        This service is reached through one, by its own instructions, and
+        nginx DROPS a request header whose name contains an underscore
+        unless it is told otherwise. A header nobody set and a header the
+        proxy ate look exactly the same from in here.
+
+        The two custom headers that exist travel through a real proxy today
+        and work, which is where the shape comes from: it is measured at a
+        deployment rather than argued about. This keeps the next one in the
+        same shape instead of leaving it to whoever adds it.
+        """
+        with_underscores = sorted(h for h in declared()["headers"] if "_" in h)
+        self.assertEqual([], with_underscores,
+                         "a proxy in front of this service may drop these without a word, "
+                         "and a header it ate is indistinguishable from one nobody set: "
+                         + ", ".join(with_underscores))
 
     def test_every_declared_header_is_read_here(self):
         text = sources().lower()
