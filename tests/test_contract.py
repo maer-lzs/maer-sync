@@ -102,7 +102,7 @@ def tracked_python_roots():
 #: a reworded promise, a status that quietly changed meaning, and above all a
 #: path added to the PROSE TABLE instead of to the machine block, which no
 #: case reads. This digest covers every byte.
-CONTRACT_DIGEST = "e81f905e8be1d6b0383aed5dc2a3e87c85f20c1d74eea01ec033d01a8bfe44a9"
+CONTRACT_DIGEST = "4ff277396fec10a1f9726f66511c7edf0a9927882371ddeb0de5340896191b9e"
 
 #: The same for the published vectors, which also live twice. They are
 #: somebody else's numbers, copied verbatim, so a difference between the two
@@ -141,10 +141,10 @@ class TheTwoCopiesAreOneFile(unittest.TestCase):
 class ContractTests(unittest.TestCase):
     def test_the_contract_exists_and_names_its_version(self):
         self.assertTrue(CONTRACT.exists(), "CONTRACT.md is the whole point of two repositories")
-        self.assertEqual(declared()["version"], ["3"])
+        self.assertEqual(declared()["version"], ["4"])
         # The version stands twice on purpose: once for a reader, once for
         # this fence. Whoever bumps one and not the other trips here.
-        self.assertIn("**Version: 3**", CONTRACT.read_text(encoding="utf-8"))
+        self.assertIn("**Version: 4**", CONTRACT.read_text(encoding="utf-8"))
 
     def test_every_declared_path_exists_in_this_service(self):
         text = sources()
@@ -244,6 +244,44 @@ class ContractTests(unittest.TestCase):
                          "a proxy in front of this service may drop these without a word, "
                          "and a header it ate is indistinguishable from one nobody set: "
                          + ", ".join(with_underscores))
+
+    def test_every_status_this_service_answers_is_in_the_contract(self):
+        """The other direction for STATUSES, and it was missing.
+
+        The paths got both directions two slices ago; the statuses got one,
+        and the very first status the service learned afterwards slipped
+        through it. **503 was answered by the code and named nowhere**, so
+        a device met a number with no meaning attached, for a situation a
+        person can actually fix.
+
+        **Two shapes again**, because a status reaches the wire two ways,
+        and a scan for the first alone would have reported that 409 and 412
+        are not answered at all:
+
+        - at the answer door, `_json(send, 404, …)`
+        - as a named constant, `STALE = 412` in `core/writes.py`, which the
+          write path hands back
+
+        The hole detector below is the same one the paths have, and it is
+        what makes the limit safe to live with: a status built a third way
+        is invisible here, but then the scan sees fewer than the contract
+        declares and this case says so instead of staying quiet.
+        """
+        text = sources()
+        at_the_door = set(re.findall(r"_(?:json|bytes)\(send, (\d{3})", text))
+        as_constants = set(re.findall(r"^[A-Z_]+ = ([1-5]\d\d)$", text, re.M))
+        answered = at_the_door | as_constants
+
+        missed = sorted(set(declared()["status"]) - answered, key=int)
+        self.assertEqual([], missed,
+                         "this scan does not see statuses the contract names, so its "
+                         "silence about undeclared ones means nothing: " + ", ".join(missed))
+
+        undeclared = sorted(answered - set(declared()["status"]), key=int)
+        self.assertEqual([], undeclared,
+                         "statuses the service answers that the contract does not name, "
+                         "so a device meets a number with no meaning attached: "
+                         + ", ".join(undeclared))
 
     def test_every_declared_header_is_read_here(self):
         text = sources().lower()
