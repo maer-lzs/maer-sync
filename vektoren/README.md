@@ -36,6 +36,31 @@ benannt, statt sie wegzureden.
 - **Handschlag:** `Noise_NK_25519_ChaChaPoly_SHA256`, die zwei veroeffentlichten
   Vektoren mit ihren Schluesseln und Nachrichten.
 
+## Der Kopf: eine Bedeutung, zwei erlaubte Schreibweisen
+
+**VERDIKT des Gegenlesers (18.09.2026), gemessen, nicht gemeint:** der Kopf ist
+ein JSON-Objekt in UTF-8 mit sortierten Schluesseln. Nicht-ASCII darf **roh
+oder entwertet** geschrieben werden, gelesen wird die **Bedeutung**. Es gibt
+keine Byte-Kanonik, und die drei Umsetzungen schreiben heute schon verschieden:
+`core/frames.py` entwertet (`json.dumps`, Vorgabe `ensure_ascii`),
+`MaerSyncFrame.swift` und `src/frames.rs` schreiben rohes UTF-8. Der Dienst
+liest beides. **Ein Leser, der nur eine Schreibweise annimmt, ist der Befund,
+nicht der Umlaut.**
+
+Deshalb traegt `rahmen.json` den Abschnitt `gleiche_bedeutung`: ein Rahmen mit
+einem Umlaut in ZWEI gueltigen Schreibweisen (entwertet, 49 Byte Kopf; roh, 45)
+und EINER Bedeutung. Der Zeuge prueft, dass beide dieselbe Bedeutung ergeben
+und dass die eigene Schreibweise genau eine der beiden ist.
+
+**Warum der Satz hier steht und nicht im Vertrag.** Er stand kurz in
+`CONTRACT.md`, und das war falsch: Invariante 1 des Auftrags verlangt den
+Vertrag **byte-gleich** in beiden Repos, Fassung 5, Digest `547d9a75…`. Ein
+Satz dort hebt den Digest und laesst die App-Seite mit der alten Zahl stehen,
+ohne dass einer der beiden Zaeune es merkt, weil jede Seite nur ihre Datei
+gegen ihre eigene Konstante haelt. Die Vertragsfassung 6 mit diesem Satz ist
+ein eigener Schritt auf `main`, mit der App-Konstante im selben Zug. Hier
+beschreibt der Satz nur, was die Vektoren zeigen.
+
 ## Was noch NICHT gemessen ist
 
 **Es gibt auf diesem Wirt keine Rust-Werkzeugkette** (weder `cargo` noch `rustc`,

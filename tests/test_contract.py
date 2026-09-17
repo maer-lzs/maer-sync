@@ -102,7 +102,7 @@ def tracked_python_roots():
 #: a reworded promise, a status that quietly changed meaning, and above all a
 #: path added to the PROSE TABLE instead of to the machine block, which no
 #: case reads. This digest covers every byte.
-CONTRACT_DIGEST = "fc35e150baf06accbfd23bdf8ab8d843a83a87f5870fdaf52414712824a60e22"
+CONTRACT_DIGEST = "547d9a750caa94dadbcffbb5cb06e833710ba86d5f034eef6e6384f1b922dd5a"
 
 #: The same for the published vectors, which also live twice. They are
 #: somebody else's numbers, copied verbatim, so a difference between the two
