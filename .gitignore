@@ -21,3 +21,8 @@ __pycache__/
 
 # The setup guide creates this inside the clone.
 .venv/
+
+# Der Bau laeuft im Container und legt alles unter `ziel/` ab: die
+# Registry-Kopie, das Abbau-Verzeichnis und die Erzeugnisse. Nichts davon
+# gehoert ins Repo, und ohne diese Zeile nimmt ein `add -A` es mit.
+ziel/
