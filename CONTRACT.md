@@ -70,6 +70,12 @@ then a small JSON head, then the raw body:
     request head: {"method": "GET", "target": "/v1/doc/stands?scope=", "headers": {"Authorization": "Bearer <token>", ...}}
     reply head:   {"status": 200, "headers": {"ETag": "3", "X-Maer-Format": "1", ...}}
 
+The head is a JSON object in UTF-8 with sorted keys. Non-ASCII may be written
+raw or escaped, and the reader takes the meaning: there is no byte canon, and
+the three implementations already differ (Python escapes, Swift and Rust write
+raw UTF-8). A reader that accepts only one spelling is the fault, not the
+character.
+
 So the token rides in `Authorization` exactly as above, only sealed, and a
 second client built from this file learns nothing twice. The body is bytes on
 purpose: documents are the bulk, and base64 would make each a third larger.

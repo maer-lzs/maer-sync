@@ -1,3 +1,8 @@
+// Mär — an audio player for self-hosted open ecosystems
+// Copyright (C) 2026 Laurenz Schröder
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
 //! Die Gestalt dessen, was INNEN in einer Sitzung reist.
 //!
 //! Zwei Byte Kopflaenge big endian, ein kleiner JSON-Kopf, dann der rohe

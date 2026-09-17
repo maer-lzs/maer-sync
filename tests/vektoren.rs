@@ -1,3 +1,8 @@
+// Mär — an audio player for self-hosted open ecosystems
+// Copyright (C) 2026 Laurenz Schröder
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
 //! Scheibe 1 gegen die drei Vektor-Dateien.
 //!
 //! Die Zeugen lesen ihre Sollwerte aus `vektoren/`, nicht aus einer zweiten
@@ -223,25 +228,35 @@ fn ein_falscher_dienst_schluessel_haelt_den_handschlag_an() {
 }
 
 #[test]
-fn ein_kopf_mit_nicht_ascii_weicht_heute_von_python_ab() {
-    // KEIN gruener Haken, sondern eine festgehaltene Luecke.
+fn zwei_schreibweisen_eines_kopfs_haben_eine_bedeutung() {
+    // VERDIKT des Gegenlesers (18.09.2026), gemessen an Vertrag, Hashes und der
+    // Swift-Seite: gleiche BEDEUTUNG genuegt, es gibt keine Byte-Kanonik. Der
+    // Kopf ist ein JSON-Objekt in UTF-8 mit sortierten Schluesseln; Nicht-ASCII
+    // darf roh oder entwertet stehen.
     //
-    // Gemessen: fuer den Kopf `{"method":"GET","target":"/v1/docs/hoerbuch"}`
-    // mit einem Umlaut schreibt Pythons `json.dumps` 49 Byte, weil es
-    // Nicht-ASCII als `ö` entwertet; `serde_json` schreibt 45 Byte mit
-    // rohem UTF-8. Beide Seiten LESEN beides richtig, die Rahmen sind also
-    // austauschbar, aber sie sind nicht byte-gleich.
-    //
-    // Die Vektordatei kann das nicht sehen, weil in ihr nur ASCII steht. Das
-    // ist die Luecke, nicht der Umlaut. Dieser Zeuge haelt den heutigen Stand
-    // fest, damit er nicht still kippt, und der Entscheid, ob der Kopf
-    // byte-gleich sein MUSS oder ob gleiche Bedeutung genuegt, liegt beim
-    // Gegenleser.
-    let kopf: Value = serde_json::json!({"method": "GET", "target": "/v1/docs/hörbuch"});
-    let rahmen = frames::pack(&kopf, b"").expect("packbar");
-    let kopflaenge = u16::from_be_bytes([rahmen[0], rahmen[1]]) as usize;
-    assert_eq!(kopflaenge, 45, "roh geschriebenes UTF-8; Python schreibt hier 49");
-    // Und das Wichtigere: der eigene Rahmen ist wieder lesbar.
-    let (zurueck, _) = frames::unpack(&rahmen).expect("lesbar");
-    assert_eq!(zurueck, kopf);
+    // Deshalb steht hier keine Byte-Gleichheit mehr, sondern die Pflicht, die
+    // wirklich gilt: BEIDE Schreibweisen muessen dieselbe Bedeutung ergeben, und
+    // die eigene muss eine der beiden sein. Ein Leser, der nur eine annimmt,
+    // ist der Befund.
+    let v = lese("vektoren/rahmen.json");
+    let fall = &v["gleiche_bedeutung"];
+    let bedeutung = &fall["bedeutung"];
+    let body = roh(fall["body_hex"].as_str().unwrap());
+    let schreibweisen = fall["schreibweisen"].as_array().expect("schreibweisen");
+    assert_eq!(schreibweisen.len(), 2, "zwei Schreibweisen, sonst messe ich nichts");
+    assert_ne!(schreibweisen[0]["frame_hex"], schreibweisen[1]["frame_hex"],
+               "zwei gleiche Schreibweisen waeren eine");
+
+    let mut treffer = 0;
+    for s in schreibweisen {
+        let rahmen = roh(s["frame_hex"].as_str().unwrap());
+        let (kopf, koerper) = frames::unpack(&rahmen)
+            .unwrap_or_else(|e| panic!("Schreibweise {} ist nicht lesbar: {e}", s["name"]));
+        assert_eq!(&kopf, bedeutung, "Bedeutung der Schreibweise {}", s["name"]);
+        assert_eq!(koerper, body, "Koerper der Schreibweise {}", s["name"]);
+        assert_eq!(u16::from_be_bytes([rahmen[0], rahmen[1]]) as u64,
+                   s["head_len"].as_u64().unwrap());
+        if frames::pack(bedeutung, &body).expect("packbar") == rahmen { treffer += 1; }
+    }
+    assert_eq!(treffer, 1, "die eigene Schreibweise muss genau eine der beiden sein");
 }

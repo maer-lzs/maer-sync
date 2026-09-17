@@ -1,3 +1,8 @@
+# Mär — an audio player for self-hosted open ecosystems
+# Copyright (C) 2026 Laurenz Schröder
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
 # Eine Schicht auf dem abgenommenen Grundabbild, mit gepinnter Paketfassung.
 #
 # WARUM sie noetig ist, gemessen: `rust:1.85-alpine` bringt `gcc` mit, aber

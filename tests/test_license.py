@@ -39,10 +39,12 @@ LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 
 #: Where source lives. Named positively, like the contract fence next door: a
 #: negative list would quietly read `.venv` once somebody installs one.
-SOURCE_DIRS = ("core", "service", "tests")
+#: Seit dem Rust-Zweig liegt Quelltext auch in `src`, und der Zaun muss ihn
+#: sehen: sonst faellt genau das Neue durch, und zwar still.
+SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug")
 
 #: Files at the root that are source too, each named on purpose.
-ROOT_FILES = ("Dockerfile", "compose.yaml", "run-tests.sh")
+ROOT_FILES = ("Dockerfile", "compose.yaml", "run-tests.sh", "Cargo.toml")
 
 #: Exempt, each with the reason at the entry — not in a list elsewhere.
 EXEMPT = {
@@ -51,6 +53,19 @@ EXEMPT = {
     "README.md": "prose about the service; the LICENSE file covers the repository",
     "CONTRACT.md": "byte-identical in both repositories with a fence on each side, "
                    "so a header here is a change to the app's repository too",
+    "Cargo.lock": "cargo writes this file; a header would be rewritten away, and the "
+                  "pins it holds are checked by the fence on Cargo.toml instead",
+    "LICENSE": "it is the licence",
+    "LICENSE-ADDITIONAL-TERMS": "it is the additional terms",
+    "vektoren/README.md": "prose about the vectors next to them; the LICENSE file covers it",
+    "werkzeug/README.md": "prose about the build harness; the LICENSE file covers it",
+    "vektoren/abdruecke.json": "numbers, and JSON has no comment to put a header in; "
+                               "where they come from is stated in the README beside them",
+    "vektoren/rahmen.json": "numbers, and JSON has no comment to put a header in; "
+                            "where they come from is stated in the README beside them",
+    "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim from "
+                              "tests/vectors so the Rust side reads the same file; a header "
+                              "would alter the bytes whose whole value is that nobody touched them",
     "tests/vectors/noise-nk.json": "somebody else's published numbers, copied verbatim; "
                                    "a header would alter the bytes whose whole value is "
                                    "that we did not touch them, and JSON has no comments "
@@ -70,7 +85,14 @@ def _sources():
         d = ROOT / directory
         if not d.is_dir():
             continue
-        found.extend(sorted(p for p in d.rglob("*.py") if "__pycache__" not in p.parts))
+        # `*.py` UND `*.rs`: die Rust-Seite traegt denselben Kopf in ihrer
+        # Kommentarform. Wer hier nur eine Endung sammelt, prueft die andere
+        # nie und merkt es nicht.
+        # Endungen UND der Dockerfile-Name: wer hier nur sammelt, was er kennt,
+        # prueft das Neue nie und merkt es nicht.
+        for muster in ("*.py", "*.rs", "*.sh", "Dockerfile"):
+            found.extend(sorted(p for p in d.rglob(muster)
+                                if "__pycache__" not in p.parts and "ziel" not in p.parts))
     for name in ROOT_FILES:
         p = ROOT / name
         if p.is_file():
@@ -178,7 +200,7 @@ class EveryFileNamesItsLicence(unittest.TestCase):
         self.assertEqual([], verschwunden,
                          "exempted files that are not here any more: " + ", ".join(verschwunden))
 
-    def test_nothing_in_the_source_directories_falls_out_silently(self):
+    def test_nothing_in_the_repository_falls_out_silently(self):
         """The hole this case closes, found by the reviewer and not by me.
 
         `_sources()` gathers `*.py` and three files at the root. Everything
@@ -203,10 +225,15 @@ class EveryFileNamesItsLicence(unittest.TestCase):
         if not gitquery.is_a_checkout():
             raise unittest.SkipTest("not a checkout, so what is tracked cannot be asked")
         gathered = {p.relative_to(ROOT).as_posix() for p in _sources()}
+        # Ueber das GANZE Repo, nicht nur ueber die Quellverzeichnisse. Die
+        # frueheste Fassung fragte nur innerhalb von SOURCE_DIRS, und genau
+        # daneben ist der Rust-Zweig entstanden: Cargo.toml, Cargo.lock, zwei
+        # Verzeichnisse und vier Vektordateien lagen ausserhalb und fielen
+        # still durch, waehrend der Zaun gruen blieb. Dieselbe Klasse wie die,
+        # gegen die er gebaut wurde, nur eine Ebene weiter aussen.
         unseen = sorted(
             rel for rel in gitquery.tracked()
-            if rel.split("/")[0] in SOURCE_DIRS
-            and rel not in gathered
+            if rel not in gathered
             and rel not in EXEMPT
             and "__pycache__" not in rel)
         self.assertEqual([], unseen,

@@ -69,5 +69,27 @@
       "frame_hex": "",
       "erwartet": "NotAFrame"
     }
-  ]
+  ],
+  "gleiche_bedeutung": {
+    "warum": "Der Kopf ist ein JSON-Objekt in UTF-8 mit sortierten Schluesseln. Nicht-ASCII darf ROH oder ENTWERTET geschrieben werden, gelesen wird die Bedeutung; der Vertrag verlangt keine Byte-Kanonik, und die drei Umsetzungen schreiben heute schon verschieden (Python entwertet, Swift und Rust roh). Ein Leser, der nur eine Schreibweise annimmt, ist der Befund, nicht der Umlaut.",
+    "bedeutung": {
+      "method": "GET",
+      "target": "/v1/docs/hörbuch"
+    },
+    "body_hex": "00ff646174656e",
+    "schreibweisen": [
+      {
+        "name": "entwertet",
+        "frame_hex": "00317b226d6574686f64223a22474554222c22746172676574223a222f76312f646f63732f685c75303066367262756368227d00ff646174656e",
+        "head_len": 49,
+        "geschrieben_von": "core/frames.py (json.dumps, ensure_ascii Vorgabe)"
+      },
+      {
+        "name": "roh",
+        "frame_hex": "002d7b226d6574686f64223a22474554222c22746172676574223a222f76312f646f63732f68c3b67262756368227d00ff646174656e",
+        "head_len": 45,
+        "geschrieben_von": "MaerSyncFrame.swift (JSONSerialization) und src/frames.rs (serde_json)"
+      }
+    ]
+  }
 }
