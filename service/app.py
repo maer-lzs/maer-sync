@@ -34,12 +34,15 @@ why so many services end up putting tokens in URLs.
 
 import json
 import logging
+import base64
 import os
 from urllib.parse import unquote
 
 from core.authorization import DENIED, caller_for
 from core.paths import parse_document_path, parse_listing_path, valid_scope
 
+from .identity import RefusedToServe, key_path, open_identity, public_of
+from .sessions import SessionStore
 from .store import Store
 
 # Every refusal and every failed sign-in leaves a line here, with the
@@ -119,8 +122,16 @@ class Listeners:
 
 
 class App:
-    def __init__(self, store, max_body_bytes=None):
+    def __init__(self, store, max_body_bytes=None, identity=None, sessions=None):
         self.store = store
+        # The service's static private key, and the sessions built from it.
+        # BOTH optional, and the two paths that need them answer 503 when
+        # they are absent rather than pretending: an application assembled
+        # without an identity is a real thing (every witness that only wants
+        # documents builds one), and a service that answered a handshake
+        # without a key would be answering as nobody.
+        self.identity = identity
+        self.sessions = sessions if sessions is not None else SessionStore()
         self.listeners = Listeners()
         self.max_body_bytes = max_body_bytes or int(
             os.environ.get("MAER_SYNC_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES))
@@ -151,6 +162,18 @@ class App:
         # that hands tokens out. It says nothing about the store.
         if path == "/v1/health":
             return await _json(send, 200, {"ok": True})
+        if path == "/v1/key":
+            if method != "GET":
+                return await _json(send, 405, {"reason": f"{method} is not what this path is for"})
+            return await self._key(send)
+        if path == "/v1/session":
+            if method != "POST":
+                return await _json(send, 405, {"reason": f"{method} is not what this path is for"})
+            return await self._session(scope, receive, send)
+        # The two paths of the encrypted session, and neither asks for a
+        # token. That is the point of the pattern: the caller proves nothing
+        # until it is INSIDE the session, which is what lets a sign in be
+        # protected, and a sign in happens before there is any token at all.
         if path == "/v1/token":
             if method != "POST":
                 return await _json(send, 405, {"reason": f"{method} is not what this path is for"})
@@ -182,6 +205,53 @@ class App:
         if method == "PUT":
             return await self._put(scope, receive, send, caller.owner, headers, kind, query_scope)
         return await _json(send, 405, {"reason": f"{method} is not what this path is for"})
+
+    async def _key(self, send):
+        """The service's static PUBLIC key, so a device can pin it.
+
+        No token, and it could not sensibly ask for one: this is the first
+        thing a device fetches, before it can speak to anything privately.
+
+        **This is the trust on first use channel, and it says so.** Over a
+        plain connection whoever sits in the middle can hand out their own
+        key here. That is the migration the operator chose: trust the first
+        time, hold on afterwards. The holding is what turns a later swap into
+        an event, and it is the device's half.
+        """
+        if self.identity is None:
+            return await _json(send, 503, {"reason": "this service has no static key"})
+        private, printed = self.identity
+        return await _json(send, 200, {
+            "key": base64.b64encode(public_of(private)).decode("ascii"),
+            "fingerprint": printed})
+
+    async def _session(self, scope, receive, send):
+        """Answer a handshake and hand back the name of the session.
+
+        The body is the caller's first Noise message, raw bytes, and the
+        answer is the service's reply, raw bytes, with the name in a header.
+        Nothing here is JSON: these are two fixed shape messages of a
+        protocol, and wrapping them in a document would only invite somebody
+        to add a field to it.
+        """
+        if self.identity is None:
+            return await _json(send, 503, {"reason": "this service has no static key"})
+        try:
+            body = await _read_body(receive, self.max_body_bytes)
+        except BodyIncomplete:
+            return await _json(send, 400, {"reason": "the handshake broke off mid request"})
+        except BodyTooLarge:
+            return await _json(send, 413, {"reason": "a handshake is not this large"})
+
+        private, _ = self.identity
+        try:
+            name, reply, _ = self.sessions.open(body, private)
+        except Exception:
+            # Every way of not being a handshake is one answer. Saying which
+            # would tell somebody probing exactly how far they got.
+            log.warning("handshake refused from=%s", _client(scope))
+            return await _json(send, 400, {"reason": "this is not a handshake"})
+        return await _bytes(send, 200, reply, [(b"x-maer-session", name.encode("ascii"))])
 
     async def _token(self, scope, receive, send):
         try:
@@ -392,5 +462,19 @@ async def _json(send, status, payload, headers=()):
 
 
 def make(path=None):
-    """The application, with the store it serves."""
-    return App(Store(path or os.environ.get("MAER_SYNC_DB", "maer-sync.sqlite")))
+    """The application, with the store it serves and the key it answers as.
+
+    The identity is opened HERE and not inside `App`, for the same reason
+    `serve()` opens it before binding a port: making one is a decision with a
+    consequence for every device, so it belongs where an application is
+    assembled on purpose, not where one is constructed by a witness that only
+    wanted somewhere to put a document.
+
+    A refusal is not swallowed. It reaches the caller, and `serve()` turns it
+    into an exit with the reason; an application that cannot say who it is
+    must not come up.
+    """
+    where = path or os.environ.get("MAER_SYNC_DB", "maer-sync.sqlite")
+    store = Store(where)
+    identity = open_identity(store, key_path(where))
+    return App(store, identity=identity)

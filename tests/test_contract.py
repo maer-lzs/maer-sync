@@ -102,7 +102,7 @@ def tracked_python_roots():
 #: a reworded promise, a status that quietly changed meaning, and above all a
 #: path added to the PROSE TABLE instead of to the machine block, which no
 #: case reads. This digest covers every byte.
-CONTRACT_DIGEST = "ce9ea661e03b95d9efac7bcf6426a5144ae4790b77aad3bdae2321b19336d376"
+CONTRACT_DIGEST = "e81f905e8be1d6b0383aed5dc2a3e87c85f20c1d74eea01ec033d01a8bfe44a9"
 
 #: The same for the published vectors, which also live twice. They are
 #: somebody else's numbers, copied verbatim, so a difference between the two
@@ -141,10 +141,10 @@ class TheTwoCopiesAreOneFile(unittest.TestCase):
 class ContractTests(unittest.TestCase):
     def test_the_contract_exists_and_names_its_version(self):
         self.assertTrue(CONTRACT.exists(), "CONTRACT.md is the whole point of two repositories")
-        self.assertEqual(declared()["version"], ["2"])
+        self.assertEqual(declared()["version"], ["3"])
         # The version stands twice on purpose: once for a reader, once for
         # this fence. Whoever bumps one and not the other trips here.
-        self.assertIn("**Version: 2**", CONTRACT.read_text(encoding="utf-8"))
+        self.assertIn("**Version: 3**", CONTRACT.read_text(encoding="utf-8"))
 
     def test_every_declared_path_exists_in_this_service(self):
         text = sources()
@@ -227,9 +227,12 @@ class ContractTests(unittest.TestCase):
         """A shape with a reason, and the reason is the proxy.
 
         This service is reached through one, by its own instructions, and
-        nginx DROPS a request header whose name contains an underscore
-        unless it is told otherwise. A header nobody set and a header the
-        proxy ate look exactly the same from in here.
+        nginx makes a request header whose name contains an underscore
+        INVALID (`underscores_in_headers off`, the default) and then throws
+        invalid headers away (`ignore_invalid_headers on`, also the default).
+        Two directives and not one: whoever ever turns the second off changes
+        the behaviour without touching the first. Either way a header nobody
+        set and a header the proxy ate look exactly the same from in here.
 
         The two custom headers that exist travel through a real proxy today
         and work, which is where the shape comes from: it is measured at a

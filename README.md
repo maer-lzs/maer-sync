@@ -535,6 +535,18 @@ in front of it; that proxy has to carry the WebSocket upgrade on
 
 ### The identity of this service
 
+**Two paths carry no token, and that is the pattern rather than an
+omission.** `/v1/key` hands out the public half so a device can pin it, and
+`/v1/session` trades a Noise handshake for an encrypted session. The caller
+proves who it is INSIDE the session, which is what lets a sign in be
+protected: a sign in carries the account secret and happens before there is
+any token to prove anything with.
+
+**`/v1/key` is the trust on first use channel, and over a plain connection
+whoever sits in the middle can answer it with their own key.** That is the
+chosen migration: trust the first time, hold on afterwards. The holding
+happens on the device, and it is what turns a later swap into an event.
+
 On its first start the service makes itself a static key pair and prints the
 fingerprint. From then on that fingerprint is who it is, and devices hold on
 to it.
