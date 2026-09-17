@@ -7,9 +7,18 @@
 # linux/amd64 und linux/arm64/v8, also beide Wirte mit einer Angabe. Ein
 # Wechsel des Digests ist ein neuer Abbild-Entscheid (Regel 4).
 #
-# Das Ziel wird NICHT gesetzt: das Abbild ist alpine, sein Vorgabe-Ziel ist
-# schon `<arch>-unknown-linux-musl` (im Abbild gemessen). Ein zusaetzliches
-# --target waere eine zweite Wahrheit, die auseinanderlaufen kann.
+# Das Ziel wird AUSDRUECKLICH gesetzt, und der frueheste Stand dieses Skripts
+# begruendete das Gegenteil. Gemessen: ohne `--target` gilt
+# `-C target-feature=+crt-static` auch fuer Proc-Macros, und dann bricht der Bau
+# ab (»cannot produce proc-macro for curve25519-dalek-derive as the target
+# x86_64-unknown-linux-musl does not support these crate types«). Mit gesetztem
+# Ziel gelten die Schalter nur fuer das Ziel, das Proc-Macro baut weiter, und
+# erst dann entsteht ein Erzeugnis, das ohne musl laeuft.
+#
+# Ohne `+crt-static` ist das Erzeugnis NICHT statisch: `ldd` nennt den
+# musl-Lader, und in einem glibc-Abbild startet es nicht. Mit dem Schalter
+# laeuft dasselbe Erzeugnis dort und rechnet die Vektoren nach. `ldd` allein
+# taugt als Beweis nicht, weil es bei static-pie den Lader ohnehin nennt.
 #
 # CARGO_HOME liegt im Projekt, nicht im Heim des Wirts: der Bau soll nichts
 # ausserhalb des Baums hinterlassen, und "Rueckweg" heisst hier wegwerfen.
@@ -38,11 +47,21 @@ docker image inspect "$ABBILD" >/dev/null 2>&1 || {
     || { echo "bau: die Schicht liess sich nicht bauen" >&2; exit 1; }
 }
 
+# Ziel je Wirt: der Tiny ist x86_64, der Pi ist aarch64, jedes Ziel hat also
+# einen eigenen Bauwirt und es gibt keine Kreuzkompilierung.
+case "$(uname -m)" in
+  x86_64)  ZIEL=x86_64-unknown-linux-musl;  SCHALTER=CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;;
+  aarch64) ZIEL=aarch64-unknown-linux-musl; SCHALTER=CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;;
+  *) echo "bau: unbekannte Architektur $(uname -m)" >&2; exit 1 ;;
+esac
+
 mkdir -p "$WURZEL/ziel/cargo-home"
 exec docker run --rm \
   -v "$WURZEL:/bau" \
   -e CARGO_HOME=/bau/ziel/cargo-home \
   -e CARGO_TARGET_DIR=/bau/ziel/abbau \
+  -e CARGO_BUILD_TARGET="$ZIEL" \
+  -e "$SCHALTER=-C target-feature=+crt-static" \
   -w /bau \
   "$ABBILD" \
   cargo "$@"
