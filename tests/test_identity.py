@@ -54,6 +54,16 @@ class TheWrittenForm(unittest.TestCase):
         self.assertEqual(fingerprint(public_of(one)), fingerprint(public_of(one)))
         self.assertNotEqual(fingerprint(public_of(one)), fingerprint(public_of(other)))
 
+    def test_four_fixed_keys_print_what_the_application_prints_for_them(self):
+        # Fixed values, because the application computes the same
+        # fingerprint in another language and the two are only known to
+        # agree by vectors; a self comparison on each side would let both
+        # drift together. The same four stand in the application's witness.
+        self.assertEqual(fingerprint(bytes([0x07]) * 32), "9ER6-Z3JE-79VH-BMG1-TNSX-1AJ2")
+        self.assertEqual(fingerprint(bytes(range(32))), "CC6W-TAB6-RGSP-D48J-AH4B-QCJV")
+        self.assertEqual(fingerprint(bytes(32)), "CSM7-NBFR-CAYQ-EV4F-R65R-X7WE")
+        self.assertEqual(fingerprint(bytes([0xFF]) * 32), "NYB1-6XGF-E9HN-ZFDM-99D0-MRY3")
+
     def test_a_truncated_key_is_refused_rather_than_fingerprinted(self):
         # A short key means something was cut on the way here, which is
         # exactly when a fingerprint must not come back looking fine.
