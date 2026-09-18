@@ -13,6 +13,7 @@
 
 pub mod admission;
 pub mod authorization;
+pub mod contract;
 pub mod formats;
 pub mod frames;
 pub mod handshake;
