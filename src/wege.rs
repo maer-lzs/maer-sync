@@ -124,6 +124,12 @@ fn grund(status: u16, satz: &str) -> Antwort {
     als_json(status, json!({ "reason": satz }), vec![])
 }
 
+/// Eine Antwort ohne Koerper. Fuer die Faelle, in denen die Python-Fassung
+/// gar nicht antwortet und das Geraet die Antwort des SERVERS sieht.
+fn leer(status: u16) -> Antwort {
+    antwort(status, "application/json", Vec::new(), vec![])
+}
+
 fn falsche_methode(method: &str) -> Antwort {
     grund(405, &format!("{method} is not what this path is for"))
 }
@@ -441,7 +447,13 @@ impl App {
             a.headers.get("if-match").map(|s| s.as_str()),
             a.headers.get("x-maer-declared-shrink").map(|s| s == "1").unwrap_or(false));
         let Ok((urteil, etikett)) = geschrieben else {
-            return grund(500, "the store could not be written to");
+            // **Leer, und das ist die Gestalt, nicht die Bequemlichkeit.** Die
+            // Python-Fassung kann hier gar nicht antworten: der Fehler fliegt
+            // aus dem Laden heraus, und was das Geraet sieht, ist die 500 des
+            // SERVERS, ohne Koerper. Ein Satz an dieser Stelle waere
+            // nuetzlicher und machte die zwei Fassungen unterscheidbar; die
+            // 500 selbst nennt der Vertrag ohnehin nicht, auf keiner Seite.
+            return leer(500);
         };
 
         if !urteil.accepted() {
