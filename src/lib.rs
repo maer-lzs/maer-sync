@@ -11,6 +11,11 @@
 //! `core/identity.py` und `core/handshake.py` der Python-Fassung; diese hier
 //! ist eine zweite Umsetzung derselben Zahlen, keine neue Absicht.
 
+pub mod admission;
+pub mod formats;
 pub mod frames;
 pub mod handshake;
 pub mod identity;
+pub mod paths;
+pub mod versions;
+pub mod writes;

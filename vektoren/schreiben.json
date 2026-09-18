@@ -1,0 +1,607 @@
+{
+  "_was": "Die reine Haelfte von Scheibe 2, erzeugt mit der Python-Fassung. Jeder Fall traegt die Eingaben und das erwartete Urteil MIT SEINEM SATZ: ein Urteil ohne Satz waere genau die stille Abweisung, gegen die diese Tore gebaut sind.",
+  "rotate": [
+    {
+      "ids": [],
+      "keep": 1,
+      "kept": [],
+      "dropped": []
+    },
+    {
+      "ids": [
+        "a"
+      ],
+      "keep": 1,
+      "kept": [
+        "a"
+      ],
+      "dropped": []
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "keep": 1,
+      "kept": [
+        "c"
+      ],
+      "dropped": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "keep": 2,
+      "kept": [
+        "b",
+        "c"
+      ],
+      "dropped": [
+        "a"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "keep": 3,
+      "kept": [
+        "a",
+        "b",
+        "c"
+      ],
+      "dropped": []
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "keep": 9,
+      "kept": [
+        "a",
+        "b",
+        "c"
+      ],
+      "dropped": []
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h"
+      ],
+      "keep": 3,
+      "kept": [
+        "f",
+        "g",
+        "h"
+      ],
+      "dropped": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e"
+      ]
+    }
+  ],
+  "rotate_fehler": [
+    {
+      "ids": [
+        "a"
+      ],
+      "keep": 0
+    },
+    {
+      "ids": [
+        "a"
+      ],
+      "keep": -1
+    }
+  ],
+  "admit": [
+    {
+      "stored_bytes": null,
+      "incoming_bytes": 0,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "first state, 0 bytes, nothing to lose"
+      }
+    },
+    {
+      "stored_bytes": null,
+      "incoming_bytes": 100,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "first state, 100 bytes, nothing to lose"
+      }
+    },
+    {
+      "stored_bytes": 0,
+      "incoming_bytes": 50,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "stored state was empty, 50 bytes accepted"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 0,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": false,
+        "reason": "an empty state never replaces a full one (100 bytes stored)"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 0,
+      "declared_shrink": true,
+      "verdict": {
+        "accepted": true,
+        "reason": "empty state accepted, the client declared it (was 100 bytes)"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 40,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": false,
+        "reason": "state shrank to 40%, below the 50% floor (100 to 40 bytes)"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 40,
+      "declared_shrink": true,
+      "verdict": {
+        "accepted": true,
+        "reason": "shrink to 40% accepted, the client declared it (100 to 40 bytes)"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 50,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "50 bytes, 50% of the stored state"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 51,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "51 bytes, 51% of the stored state"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 100,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "100 bytes, 100% of the stored state"
+      }
+    },
+    {
+      "stored_bytes": 100,
+      "incoming_bytes": 250,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": true,
+        "reason": "250 bytes, 250% of the stored state"
+      }
+    },
+    {
+      "stored_bytes": 3,
+      "incoming_bytes": 1,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": false,
+        "reason": "state shrank to 33%, below the 50% floor (3 to 1 bytes)"
+      }
+    },
+    {
+      "stored_bytes": 7,
+      "incoming_bytes": 3,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": false,
+        "reason": "state shrank to 43%, below the 50% floor (7 to 3 bytes)"
+      }
+    },
+    {
+      "stored_bytes": 1000,
+      "incoming_bytes": 499,
+      "declared_shrink": false,
+      "verdict": {
+        "accepted": false,
+        "reason": "state shrank to 50%, below the 50% floor (1000 to 499 bytes)"
+      }
+    }
+  ],
+  "admit_fehler": [
+    {
+      "stored_bytes": null,
+      "incoming_bytes": -1
+    },
+    {
+      "stored_bytes": -5,
+      "incoming_bytes": 1
+    }
+  ],
+  "write_verdict": [
+    {
+      "stored_format": null,
+      "writer_format": 1,
+      "verdict": {
+        "accepted": true,
+        "reason": "first state at format 1"
+      }
+    },
+    {
+      "stored_format": 1,
+      "writer_format": 1,
+      "verdict": {
+        "accepted": true,
+        "reason": "format 1 over 1"
+      }
+    },
+    {
+      "stored_format": 1,
+      "writer_format": 2,
+      "verdict": {
+        "accepted": true,
+        "reason": "format 2 over 1"
+      }
+    },
+    {
+      "stored_format": 2,
+      "writer_format": 1,
+      "verdict": {
+        "accepted": false,
+        "reason": "a client at format 1 must not overwrite a document written at format 2: the newer form carries fields the older one would drop"
+      }
+    },
+    {
+      "stored_format": 5,
+      "writer_format": 9,
+      "verdict": {
+        "accepted": true,
+        "reason": "format 9 over 5"
+      }
+    },
+    {
+      "stored_format": 9,
+      "writer_format": 5,
+      "verdict": {
+        "accepted": false,
+        "reason": "a client at format 5 must not overwrite a document written at format 9: the newer form carries fields the older one would drop"
+      }
+    }
+  ],
+  "serve_verdict": [
+    {
+      "store_schema": null,
+      "service_schema": 1,
+      "verdict": {
+        "accepted": true,
+        "reason": "empty store, laid out at schema 1"
+      }
+    },
+    {
+      "store_schema": 1,
+      "service_schema": 1,
+      "verdict": {
+        "accepted": true,
+        "reason": "store at schema 1, service at 1"
+      }
+    },
+    {
+      "store_schema": 1,
+      "service_schema": 2,
+      "verdict": {
+        "accepted": true,
+        "reason": "store at schema 1, service at 2"
+      }
+    },
+    {
+      "store_schema": 2,
+      "service_schema": 1,
+      "verdict": {
+        "accepted": false,
+        "reason": "the store is at schema 2 and this service only knows 1: a rolled-back service does not migrate backwards"
+      }
+    },
+    {
+      "store_schema": 3,
+      "service_schema": 3,
+      "verdict": {
+        "accepted": true,
+        "reason": "store at schema 3, service at 3"
+      }
+    }
+  ],
+  "decide": [
+    {
+      "eingaben": {
+        "stored_bytes": null,
+        "stored_format": null,
+        "stored_etag": null,
+        "incoming_bytes": 10,
+        "writer_format": 1
+      },
+      "status": 200,
+      "reason": "first state, 10 bytes, nothing to lose",
+      "accepted": true
+    },
+    {
+      "eingaben": {
+        "stored_bytes": null,
+        "stored_format": null,
+        "stored_etag": null,
+        "incoming_bytes": 10,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 412,
+      "reason": "no such document, but the write named version 3",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 120,
+        "writer_format": 1
+      },
+      "status": 412,
+      "reason": "this document exists and the write named no version; read it, merge, and write again naming what you read",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 120,
+        "writer_format": 1,
+        "if_match": "2"
+      },
+      "status": 412,
+      "reason": "version 2 is not the stored one; read it, merge, and write again",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 120,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 200,
+      "reason": "120 bytes, 120% of the stored state",
+      "accepted": true
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 2,
+        "stored_etag": "3",
+        "incoming_bytes": 120,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 409,
+      "reason": "a client at format 1 must not overwrite a document written at format 2: the newer form carries fields the older one would drop",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 0,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 409,
+      "reason": "an empty state never replaces a full one (100 bytes stored)",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 0,
+        "writer_format": 1,
+        "if_match": "3",
+        "declared_shrink": true
+      },
+      "status": 200,
+      "reason": "empty state accepted, the client declared it (was 100 bytes)",
+      "accepted": true
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 1,
+        "stored_etag": "3",
+        "incoming_bytes": 10,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 409,
+      "reason": "state shrank to 10%, below the 50% floor (100 to 10 bytes)",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 2,
+        "stored_etag": "3",
+        "incoming_bytes": 1,
+        "writer_format": 1,
+        "if_match": "3"
+      },
+      "status": 409,
+      "reason": "a client at format 1 must not overwrite a document written at format 2: the newer form carries fields the older one would drop",
+      "accepted": false
+    },
+    {
+      "eingaben": {
+        "stored_bytes": 100,
+        "stored_format": 2,
+        "stored_etag": "3",
+        "incoming_bytes": 1,
+        "writer_format": 1,
+        "if_match": "2"
+      },
+      "status": 412,
+      "reason": "version 2 is not the stored one; read it, merge, and write again",
+      "accepted": false
+    }
+  ],
+  "status": {
+    "STALE": 412,
+    "REFUSED": 409,
+    "WRITTEN": 200
+  },
+  "paths": [
+    {
+      "pfad": "/v1/doc/stands",
+      "document": "stands",
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/stands/",
+      "document": "stands",
+      "listing": null
+    },
+    {
+      "pfad": "v1/doc/stands",
+      "document": "stands",
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/Stands",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v2/doc/stands",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/docs/stands",
+      "document": null,
+      "listing": "stands"
+    },
+    {
+      "pfad": "/v1/doc/a",
+      "document": "a",
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "document": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/1stands",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/st_ands",
+      "document": null,
+      "listing": null
+    },
+    {
+      "pfad": "/v1/doc/st-ands",
+      "document": "st-ands",
+      "listing": null
+    }
+  ],
+  "scopes": [
+    {
+      "scope": "",
+      "gueltig": true
+    },
+    {
+      "scope": null,
+      "gueltig": true
+    },
+    {
+      "scope": "abc",
+      "gueltig": true
+    },
+    {
+      "scope": "A.b_c:d-e",
+      "gueltig": true
+    },
+    {
+      "scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "gueltig": true
+    },
+    {
+      "scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "gueltig": false
+    },
+    {
+      "scope": "a/b",
+      "gueltig": false
+    },
+    {
+      "scope": "a b",
+      "gueltig": false
+    }
+  ],
+  "konstanten": {
+    "DEFAULT_SHRINK_FLOOR": 0.5,
+    "VERSION": "v1"
+  }
+}
