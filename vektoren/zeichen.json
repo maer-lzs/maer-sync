@@ -1,0 +1,166 @@
+{
+  "_was": "Scheibe 3, reine Haelfte. Abdruecke, Kopfzeilen und die Zerlegung der gespeicherten Form, mit der Python-Fassung erzeugt. Die scrypt-Rechnung selbst fehlt noch, ihre Crate ist ein eigener Entscheid; was hier liegt, misst alles davor und alle Abweisungen.",
+  "DENIED": "not authorized",
+  "parameter": {
+    "n": 32768,
+    "r": 8,
+    "p": 1,
+    "salt_bytes": 16,
+    "key_bytes": 32
+  },
+  "token_digest": [
+    {
+      "token": "",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "token": "a",
+      "digest": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+    },
+    {
+      "token": "ein-zeichen",
+      "digest": "945cae89bdd0bdc6802f68c146bb774ebf07ea1c23db7ffe0b40ee27570aa0d4"
+    },
+    {
+      "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "digest": "a8ae6e6ee929abea3afcfc5258c8ccd6f85273e0d4626d26c7279f3250f77c8e"
+    },
+    {
+      "token": "mit Umlaut oeae",
+      "digest": "eebd7776295c65c6be7ece26beac8c341dd80b4b247ba9fda5abd56d41700cb1"
+    },
+    {
+      "token": "  fuehrende Leerzeichen",
+      "digest": "c6465820f31748fbdc7f75aa132fc4f923651908879baa1f5221fb872ff4e31f"
+    }
+  ],
+  "caller_for": [
+    {
+      "header": null,
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "Bearer gueltiges-zeichen",
+      "owner": "lzs",
+      "reason": "authorized",
+      "authorized": true
+    },
+    {
+      "header": "bearer gueltiges-zeichen",
+      "owner": "lzs",
+      "reason": "authorized",
+      "authorized": true
+    },
+    {
+      "header": "BEARER gueltiges-zeichen",
+      "owner": "lzs",
+      "reason": "authorized",
+      "authorized": true
+    },
+    {
+      "header": "Bearer  gueltiges-zeichen",
+      "owner": "lzs",
+      "reason": "authorized",
+      "authorized": true
+    },
+    {
+      "header": "Bearer falsches",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "Basic gueltiges-zeichen",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "gueltiges-zeichen",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "Bearer",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "Bearer   ",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    },
+    {
+      "header": "Bearer gueltiges-zeichen extra",
+      "owner": null,
+      "reason": "not authorized",
+      "authorized": false
+    }
+  ],
+  "gespeicherte_formen": [
+    {
+      "secret": "hallo",
+      "stored": "scrypt$32768$8$1$000102030405060708090a0b0c0d0e0f$6a9e5b4631b3501f6331fbebabeed295b367bc6ffb68ac9f193b92a37d2bccea",
+      "passt": true,
+      "passt_nicht": false
+    },
+    {
+      "secret": "zweites Geheimnis",
+      "stored": "scrypt$32768$8$1$abababababababababababababababab$d3262f2f777f3bcd7447d1e77be3b9165c36b7022d15676ae89470cfa0058b6c",
+      "passt": true,
+      "passt_nicht": false
+    }
+  ],
+  "unlesbare_formen": [
+    {
+      "stored": "",
+      "matches": false
+    },
+    {
+      "stored": "scrypt",
+      "matches": false
+    },
+    {
+      "stored": "scrypt$1$2$3$4",
+      "matches": false
+    },
+    {
+      "stored": "bcrypt$32768$8$1$aabb$ccdd",
+      "matches": false
+    },
+    {
+      "stored": "scrypt$x$8$1$aabb$ccdd",
+      "matches": false
+    },
+    {
+      "stored": "scrypt$32768$8$1$zz$ccdd",
+      "matches": false
+    },
+    {
+      "stored": "scrypt$32768$8$1$aabb$zz",
+      "matches": false
+    },
+    {
+      "stored": "scrypt$32768$8$1$aabb$ccdd$extra",
+      "matches": false
+    }
+  ],
+  "leeres_angebot": [
+    {
+      "stored": "scrypt$32768$8$1$000102030405060708090a0b0c0d0e0f$6a9e5b4631b3501f6331fbebabeed295b367bc6ffb68ac9f193b92a37d2bccea",
+      "offered": "",
+      "matches": false
+    }
+  ]
+}

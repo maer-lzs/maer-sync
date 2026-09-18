@@ -12,6 +12,7 @@
 //! ist eine zweite Umsetzung derselben Zahlen, keine neue Absicht.
 
 pub mod admission;
+pub mod authorization;
 pub mod formats;
 pub mod frames;
 pub mod handshake;
