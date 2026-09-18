@@ -36,6 +36,7 @@ use crate::identity::public_of;
 use crate::listeners::Listeners;
 use crate::paths::{parse_document_path, parse_listing_path, valid_scope};
 use crate::sessions::Limits;
+use crate::protokoll::{woher, Zeile};
 use crate::sitzungsladen::{SessionStore, SitzungsFehler};
 use crate::store::Store;
 
@@ -154,6 +155,10 @@ pub struct App {
     pub listeners: Listeners,
     pub plain_ways: bool,
     pub max_body_bytes: usize,
+    /// Was seit dem letzten Abholen zu melden war. Der Transport leert sie
+    /// und schreibt sie; hier faellt nur die Entscheidung, dass es eine Zeile
+    /// wert ist.
+    pub protokoll: Vec<Zeile>,
 }
 
 impl App {
@@ -170,6 +175,7 @@ impl App {
             max_body_bytes: std::env::var("MAER_SYNC_MAX_BODY_BYTES").ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(DEFAULT_MAX_BODY_BYTES),
+            protokoll: Vec::new(),
         }
     }
 
@@ -220,6 +226,9 @@ impl App {
                        |d| store.owner_of_token(d).ok().flatten())
         };
         if !caller.authorized() {
+            self.protokoll.push(Zeile::warnung(format!(
+                "unauthorized from={} method={} path={}",
+                woher(a.client.as_deref()), a.method, a.path)));
             return als_json(401, json!({ "reason": caller.reason }),
                             vec![("www-authenticate".into(), "Bearer".into())]);
         }
@@ -284,7 +293,11 @@ impl App {
         match self.sessions.open(&a.body, &private, b"") {
             // Jede Art, kein Handschlag zu sein, ist EINE Antwort. Zu sagen,
             // welche, verriete jemandem beim Abtasten, wie weit er kam.
-            Err(_) => grund(400, "this is not a handshake"),
+            Err(_) => {
+                self.protokoll.push(Zeile::warnung(format!(
+                    "handshake refused from={}", woher(a.client.as_deref()))));
+                grund(400, "this is not a handshake")
+            }
             Ok((name, reply, _)) =>
                 als_bytes(200, reply, vec![("x-maer-session".into(), name)]),
         }
@@ -305,7 +318,11 @@ impl App {
         let klartext = match self.sessions.unseal(name, &a.body, b"") {
             Ok(k) => k,
             Err(SitzungsFehler::Unbekannt(_)) => return grund(410, "this session has ended"),
-            Err(SitzungsFehler::Chiffre(_)) => return grund(400, "this is not a sealed message"),
+            Err(SitzungsFehler::Chiffre(_)) => {
+                self.protokoll.push(Zeile::warnung(format!(
+                    "sealed message refused from={}", woher(a.client.as_deref()))));
+                return grund(400, "this is not a sealed message");
+            }
         };
         let Ok((kopf, koerper)) = unpack(&klartext) else {
             return grund(400, "this is not a request");
@@ -389,8 +406,17 @@ impl App {
             // Dieselbe Antwort für ein falsches Geheimnis und für ein Konto,
             // das es nicht gibt. Alles andere macht daraus eine Liste, wer
             // ein Konto hat.
-            Ok(None) | Err(_) => grund(401, crate::authorization::DENIED),
-            Ok(Some(zeichen)) => als_json(200, json!({ "token": zeichen }), vec![]),
+            Ok(None) | Err(_) => {
+                self.protokoll.push(Zeile::warnung(format!(
+                    "sign-in refused from={} owner={owner}", woher(a.client.as_deref()))));
+                grund(401, crate::authorization::DENIED)
+            }
+            Ok(Some(zeichen)) => {
+                self.protokoll.push(Zeile::hinweis(format!(
+                    "sign-in from={} owner={owner} device={device}",
+                    woher(a.client.as_deref()))));
+                als_json(200, json!({ "token": zeichen }), vec![])
+            }
         }
     }
 
@@ -423,6 +449,9 @@ impl App {
             return grund(400, "the write named no format");
         };
         if a.body.len() > self.max_body_bytes {
+            self.protokoll.push(Zeile::warnung(format!(
+                "write too large from={} owner={owner} kind={sorte} scope={bereich} limit={}",
+                woher(a.client.as_deref()), self.max_body_bytes)));
             return grund(413, "the document is larger than this host takes");
         }
         // Die einzige Unvollständigkeit, die auch hier noch zu sehen ist: eine
@@ -432,6 +461,9 @@ impl App {
         // Ganze jedem Leser weg.
         if let Some(angekuendigt) = a.headers.get("content-length").and_then(|v| v.parse::<usize>().ok()) {
             if angekuendigt != a.body.len() {
+                self.protokoll.push(Zeile::warnung(format!(
+                    "incomplete write from={} owner={owner} kind={sorte} scope={bereich} \
+announced={angekuendigt}", woher(a.client.as_deref()))));
                 return grund(400, "the write ended before the body did");
             }
         }
@@ -439,6 +471,9 @@ impl App {
         // LEERER Körper ist kein kaputtes Dokument: das ist der leere Stand,
         // den der Laden mit seinem eigenen Satz beantwortet.
         if !a.body.is_empty() && serde_json::from_slice::<Value>(&a.body).is_err() {
+            self.protokoll.push(Zeile::warnung(format!(
+                "unreadable write from={} owner={owner} kind={sorte} scope={bereich} bytes={}",
+                woher(a.client.as_deref()), a.body.len())));
             return grund(400, "the write is not readable as a document");
         }
 
@@ -457,6 +492,9 @@ impl App {
         };
 
         if !urteil.accepted() {
+            self.protokoll.push(Zeile::warnung(format!(
+                "refused from={} owner={owner} kind={sorte} scope={bereich} status={} reason={}",
+                woher(a.client.as_deref()), urteil.status, urteil.reason)));
             let gehalten = self.store.current(owner, sorte, bereich).ok().flatten();
             let extra = gehalten.map(|h| vec![("etag".to_string(), h.etag)]).unwrap_or_default();
             return als_json(urteil.status, json!({ "reason": urteil.reason }), extra);

@@ -94,16 +94,26 @@ for n, g in [
   ("test_a_listing_of_a_name_that_is_not_one_is_a_404", "wege.json: 'Art mit Grossbuchstaben ist kein Weg'"),
 ]:
     z(A, "ListingWhatOtherDevicesWrote", n, "tafel", WEGE, g)
-for n in ["test_a_refused_write_leaves_a_line_with_who_what_and_why",
-          "test_a_failed_sign_in_leaves_a_line_with_the_source_address",
-          "test_an_unauthorized_request_leaves_a_line_too",
-          "test_an_accepted_write_leaves_no_warning",
-          "test_no_log_statement_names_a_token_a_secret_or_a_body"]:
-    z(A, "TheOperatorSeesEveryRefusal", n, "keiner", "",
-      "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, "
-      "nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist "
-      "(ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den "
-      "Betreiber unsichtbar, solange er dauert")
+PROT = "tests/protokoll.rs::jede_abweisung_hinterlaesst_die_zeile_der_python_fassung"
+for n, g in [
+  ("test_a_refused_write_leaves_a_line_with_who_what_and_why",
+   "protokoll.json: 'ein Schrieb, den das Tor abweist', mit Quelle, Besitzer, Art, "
+   "Bereich, Status und Grund"),
+  ("test_a_failed_sign_in_leaves_a_line_with_the_source_address",
+   "protokoll.json: 'eine Anmeldung mit falschem Geheimnis'; das Geheimnis steht in "
+   "keiner Zeile, der Zeuge prueft es eigens"),
+  ("test_an_unauthorized_request_leaves_a_line_too",
+   "protokoll.json: 'mit einem Zeichen, das niemandem gehoert'; das Zeichen steht in "
+   "keiner Zeile"),
+  ("test_an_accepted_write_leaves_no_warning",
+   "protokoll.json: 'ein angenommener Schrieb sagt NICHTS', null Zeilen"),
+]:
+    z(A, "TheOperatorSeesEveryRefusal", n, "tafel", PROT, g)
+z(A, "TheOperatorSeesEveryRefusal", "test_no_log_statement_names_a_token_a_secret_or_a_body",
+  "zeuge", "tests/protokoll.rs::keine_protokoll_anweisung_nennt_ein_zeichen_ein_geheimnis_oder_einen_koerper",
+  "ein Zaun ueber dem QUELLTEXT, an ganzen Woertern und nach der QUELLE des Werts "
+  "gefragt: Kopfzeilen und Koerper duerfen nie in eine Zeile, der Koerper darf "
+  "gezaehlt werden")
 z(A, "AHalfWriteNeverReplacesAWholeDocument", "test_a_write_that_breaks_off_mid_body_is_refused",
   "draht", "werkzeug/befehlsprobe.py und der Lauf am Erzeugnis",
   "nur am Draht sichtbar: angekuendigt 50, geschickt 7, dann Abbruch, 400")

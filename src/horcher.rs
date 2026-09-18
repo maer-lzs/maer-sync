@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 
 use crate::authorization::caller_for;
 use crate::frames::{request_of, unpack};
+use crate::protokoll::{woher, Zeile};
 use crate::sitzungsladen::SitzungsFehler;
 use crate::wege::{Ansage, App};
 
@@ -104,6 +105,8 @@ enum Zustand {
 
 pub struct Horcher {
     zustand: Zustand,
+    /// Woher der Rufer kommt, fuer die Protokollzeilen nach dem Annehmen.
+    von: String,
     /// Der Name, unter dem dieser Horcher auf der Liste steht. Aus derselben
     /// Quelle wie ein Sitzungsname, damit zwei Horcher desselben Besitzers
     /// sich nicht gegenseitig austragen.
@@ -121,13 +124,20 @@ impl App {
     /// Einen Horcher eroeffnen. Die Abweisungen fallen HIER, vor dem ersten
     /// Wort: in der Python-Fassung steht das Schliessen ebenso vor dem
     /// `receive`, und das ist kein Zufall, sondern der Punkt.
-    pub fn horcher_oeffnen(&mut self, pfad: &str, kopfzeilen: &BTreeMap<String, String>)
+    pub fn horcher_oeffnen(&mut self, pfad: &str, kopfzeilen: &BTreeMap<String, String>,
+                           client: Option<&str>)
         -> (Horcher, Vec<Tat>)
     {
+        // Die Quelle kommt als Argument, nicht aus einer Kopfzeile. Eine
+        // Kopfzeile schreibt der RUFER, und eine Protokollzeile, deren
+        // Herkunftsfeld der Rufer selbst setzen kann, ist keine Auskunft
+        // ueber ihn, sondern eine von ihm.
+        let von = woher(client);
         let id = crate::authorization::hex(
             &crate::authorization::zufall(16).unwrap_or_else(|_| vec![0; 16]));
         let zu = |grund: u16| (
-            Horcher { zustand: Zustand::Zu, id: id.clone(), besitzer: None, sitzung: None },
+            Horcher { zustand: Zustand::Zu, id: id.clone(), von: von.clone(),
+                      besitzer: None, sitzung: None },
             vec![Tat::Schliessen(grund)],
         );
 
@@ -139,7 +149,7 @@ impl App {
                 return zu(SITZUNG_ZU_ENDE);
             }
             return (Horcher {
-                zustand: Zustand::WartetVersiegelt, id,
+                zustand: Zustand::WartetVersiegelt, id, von,
                 besitzer: None, sitzung: Some(name.clone()),
             }, vec![]);
         }
@@ -153,10 +163,11 @@ impl App {
                        |d| laden.owner_of_token(d).ok().flatten())
         };
         if !caller.authorized() {
+            self.protokoll.push(Zeile::warnung(format!("unauthorized socket from={von}")));
             return zu(NICHT_BERECHTIGT);
         }
         (Horcher {
-            zustand: Zustand::WartetImKlaren, id,
+            zustand: Zustand::WartetImKlaren, id, von,
             besitzer: caller.owner, sitzung: None,
         }, vec![])
     }
@@ -192,6 +203,8 @@ impl App {
                     Err(SitzungsFehler::Chiffre(_)) => return Self::schliessen(h, KEIN_RAHMEN),
                 };
                 let Ok((kopf, _)) = unpack(&klar) else {
+                    self.protokoll.push(Zeile::warnung(format!(
+                        "sealed socket refused from={}", h.von)));
                     return Self::schliessen(h, KEIN_RAHMEN);
                 };
                 let Ok((_, _, _, innere)) = request_of(&kopf) else {
@@ -203,6 +216,8 @@ impl App {
                                |d| laden.owner_of_token(d).ok().flatten())
                 };
                 if !caller.authorized() {
+                    self.protokoll.push(Zeile::warnung(format!(
+                        "unauthorized sealed socket from={}", h.von)));
                     return Self::schliessen(h, NICHT_BERECHTIGT);
                 }
                 if self.sessions.prove(&name).is_err() {

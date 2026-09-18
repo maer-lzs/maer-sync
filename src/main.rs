@@ -354,7 +354,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
 
     let (mut horcher, taten) = {
         let mut app = dienst.app.lock().unwrap();
-        app.horcher_oeffnen(&pfad, &kopfzeilen)
+        app.horcher_oeffnen(&pfad, &kopfzeilen, Some(&_von))
     };
     // Eine Abweisung reist als Schliesscode, und ohne Aufstieg gibt es keine
     // Leitung, auf der er reisen könnte. Also sagt es der Status: dieselbe

@@ -108,7 +108,7 @@ fn jeder_gemessene_fall_des_horchers_antwortet_genauso() {
         let sname = sitzung.as_ref().map(|(n, _, _)| n.clone()).unwrap_or_default();
         let zeilen = kopfzeilen(&an["headers"], &st.zeichen, &st.fremdes, &sname);
 
-        let (mut h, mut taten) = st.app.horcher_oeffnen(pfad, &zeilen);
+        let (mut h, mut taten) = st.app.horcher_oeffnen(pfad, &zeilen, Some("10.0.0.7:51234"));
         if taten.is_empty() {
             taten.extend(st.app.horcher_wort(&mut h, Wort::Verbunden));
         }
@@ -196,7 +196,7 @@ fn ein_getrennter_horcher_steht_nicht_mehr_auf_der_liste() {
     let mut st = aufbauen();
     let zeilen = BTreeMap::from([
         ("authorization".to_string(), format!("Bearer {}", st.zeichen))]);
-    let (mut h, taten) = st.app.horcher_oeffnen("/v1/changes", &zeilen);
+    let (mut h, taten) = st.app.horcher_oeffnen("/v1/changes", &zeilen, Some("10.0.0.7:51234"));
     assert!(taten.is_empty());
     st.app.horcher_wort(&mut h, Wort::Verbunden);
     assert_eq!(st.app.listeners.count(BESITZER), 1);
@@ -217,8 +217,8 @@ fn zwei_horcher_desselben_besitzers_hoeren_beide() {
     let mut st = aufbauen();
     let zeilen = BTreeMap::from([
         ("authorization".to_string(), format!("Bearer {}", st.zeichen))]);
-    let (mut a, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen);
-    let (mut b, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen);
+    let (mut a, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen, Some("10.0.0.7:51234"));
+    let (mut b, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen, Some("10.0.0.7:51234"));
     assert_ne!(a.id, b.id, "zwei Verbindungen sind zwei Kennungen");
     st.app.horcher_wort(&mut a, Wort::Verbunden);
     st.app.horcher_wort(&mut b, Wort::Verbunden);
@@ -238,7 +238,7 @@ fn was_der_klient_auf_dem_horchweg_sagt_bewegt_nichts() {
     let mut st = aufbauen();
     let zeilen = BTreeMap::from([
         ("authorization".to_string(), format!("Bearer {}", st.zeichen))]);
-    let (mut h, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen);
+    let (mut h, _) = st.app.horcher_oeffnen("/v1/changes", &zeilen, Some("10.0.0.7:51234"));
     st.app.horcher_wort(&mut h, Wort::Verbunden);
 
     for wort in [Wort::Text("gib mir alles".into()), Wort::Bytes(vec![1, 2, 3]),

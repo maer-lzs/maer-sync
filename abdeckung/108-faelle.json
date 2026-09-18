@@ -262,33 +262,33 @@
     },
     {
       "fall": "test_app.TheOperatorSeesEveryRefusal.test_a_failed_sign_in_leaves_a_line_with_the_source_address",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist (ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den Betreiber unsichtbar, solange er dauert"
+      "art": "tafel",
+      "gegenpart": "tests/protokoll.rs::jede_abweisung_hinterlaesst_die_zeile_der_python_fassung",
+      "grund": "protokoll.json: 'eine Anmeldung mit falschem Geheimnis'; das Geheimnis steht in keiner Zeile, der Zeuge prueft es eigens"
     },
     {
       "fall": "test_app.TheOperatorSeesEveryRefusal.test_a_refused_write_leaves_a_line_with_who_what_and_why",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist (ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den Betreiber unsichtbar, solange er dauert"
+      "art": "tafel",
+      "gegenpart": "tests/protokoll.rs::jede_abweisung_hinterlaesst_die_zeile_der_python_fassung",
+      "grund": "protokoll.json: 'ein Schrieb, den das Tor abweist', mit Quelle, Besitzer, Art, Bereich, Status und Grund"
     },
     {
       "fall": "test_app.TheOperatorSeesEveryRefusal.test_an_accepted_write_leaves_no_warning",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist (ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den Betreiber unsichtbar, solange er dauert"
+      "art": "tafel",
+      "gegenpart": "tests/protokoll.rs::jede_abweisung_hinterlaesst_die_zeile_der_python_fassung",
+      "grund": "protokoll.json: 'ein angenommener Schrieb sagt NICHTS', null Zeilen"
     },
     {
       "fall": "test_app.TheOperatorSeesEveryRefusal.test_an_unauthorized_request_leaves_a_line_too",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist (ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den Betreiber unsichtbar, solange er dauert"
+      "art": "tafel",
+      "gegenpart": "tests/protokoll.rs::jede_abweisung_hinterlaesst_die_zeile_der_python_fassung",
+      "grund": "protokoll.json: 'mit einem Zeichen, das niemandem gehoert'; das Zeichen steht in keiner Zeile"
     },
     {
       "fall": "test_app.TheOperatorSeesEveryRefusal.test_no_log_statement_names_a_token_a_secret_or_a_body",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "die Rust-Fassung PROTOKOLLIERT nicht. Das ist eine offene Luecke im Gegenstand, nicht in den Zeugen: ohne die Zeilen ist der Fall, fuer den der Dienst gebaut ist (ein Geraet schreibt leer, wird abgewiesen, der Klient schluckt die 409), fuer den Betreiber unsichtbar, solange er dauert"
+      "art": "zeuge",
+      "gegenpart": "tests/protokoll.rs::keine_protokoll_anweisung_nennt_ein_zeichen_ein_geheimnis_oder_einen_koerper",
+      "grund": "ein Zaun ueber dem QUELLTEXT, an ganzen Woertern und nach der QUELLE des Werts gefragt: Kopfzeilen und Koerper duerfen nie in eine Zeile, der Koerper darf gezaehlt werden"
     },
     {
       "fall": "test_app.TheSocketNeedsATokenToo.test_a_bad_token_is_closed_too",

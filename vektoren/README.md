@@ -6,7 +6,8 @@ Jede Datei mit einem Erzeuger wird so neu gezogen:
 
     python3 vektoren/erzeuge_wege.py    > vektoren/wege.json
     python3 vektoren/erzeuge_horcher.py > vektoren/horcher.json
-    python3 vektoren/erzeuge_befehle.py > vektoren/befehle.json
+    python3 vektoren/erzeuge_befehle.py   > vektoren/befehle.json
+    python3 vektoren/erzeuge_protokoll.py > vektoren/protokoll.json
 
 Eine Datei braucht zusaetzlich einen SERVER, also eine venv mit uvicorn (die
 Anleitung steht in der README des Repos):
@@ -41,6 +42,7 @@ Implementierung.
 | `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
+| `protokoll.json` | **an der laufenden Anwendung gemessen**, der Protokoll-Handler mitgeschrieben | mittel: die Saetze sind unsere eigenen, aber nichts darin ist behauptet |
 | `befehle.json` | **an der echten Python-CLI gemessen**, jeder Befehl gefahren | mittel: Ausgang und Satz sind unsere eigenen, aber nichts darin ist behauptet |
 | `abweisung.json` | **an der Python-Fassung unter uvicorn gemessen**, Aufstieg versucht und die Antwort gelesen | mittel: es misst, was ein fremder Server aus unserem Schliesscode macht, und genau das ist die Frage |
 | `horcher.json` | **am laufenden Socket gemessen**, jeder Fall als echter ASGI-Socket gefahren | mittel: die Schliesscodes sind unsere eigene Tafel, aber nichts darin ist behauptet |

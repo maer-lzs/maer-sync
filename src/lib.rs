@@ -24,6 +24,7 @@ pub mod identity;
 pub mod kennung;
 pub mod listeners;
 pub mod paths;
+pub mod protokoll;
 pub mod restore;
 pub mod sessions;
 pub mod sitzungsladen;

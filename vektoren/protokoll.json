@@ -1,0 +1,117 @@
+{
+  "was": "Welche Zeile welche Abweisung hinterlaesst, und was nie darin steht.",
+  "wie": "Die echte Anwendung gefahren und der Protokoll-Handler mitgeschrieben; gemessen wird die NACHRICHT, nicht die fertige Zeile.",
+  "gestalt": "Pythons logging setzt davor '%(asctime)s %(levelname)s %(name)s ' mit dem Namen 'maer.sync'.",
+  "hinweis": "darf_nicht_enthalten nennt je Fall die Werte, die in KEINER Zeile auftauchen duerfen: ein Zeichen, ein Geheimnis, ein Koerper.",
+  "faelle": [
+    {
+      "name": "ohne Zeichen an ein Schriftstueck",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "unauthorized from=10.0.0.7:51234 method=GET path=/v1/doc/playback"
+        }
+      ]
+    },
+    {
+      "name": "mit einem Zeichen, das niemandem gehoert",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "unauthorized from=10.0.0.7:51234 method=GET path=/v1/doc/playback"
+        }
+      ],
+      "darf_nicht_enthalten": [
+        "unsinnszeichen"
+      ]
+    },
+    {
+      "name": "eine Anmeldung mit falschem Geheimnis",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "sign-in refused from=10.0.0.7:51234 owner=anna"
+        }
+      ],
+      "darf_nicht_enthalten": [
+        "falschgeheim"
+      ]
+    },
+    {
+      "name": "eine Anmeldung, die glueckt",
+      "zeilen": [
+        {
+          "stufe": "INFO",
+          "nachricht": "sign-in from=10.0.0.7:51234 owner=anna device=geraet-9"
+        }
+      ],
+      "darf_nicht_enthalten": [
+        "ein hinreichend langes geheimnis"
+      ]
+    },
+    {
+      "name": "ein Handschlag, der keiner ist",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "handshake refused from=10.0.0.7:51234"
+        }
+      ]
+    },
+    {
+      "name": "ein unlesbarer Schrieb",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "unreadable write from=10.0.0.7:51234 owner=anna kind=playback scope=g1 bytes=10"
+        }
+      ],
+      "darf_nicht_enthalten": [
+        "nicht json"
+      ]
+    },
+    {
+      "name": "ein Schrieb, der mitten im Koerper abbricht",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "incomplete write from=10.0.0.7:51234 owner=anna kind=playback scope=g1 announced=99"
+        }
+      ]
+    },
+    {
+      "name": "ein angenommener Schrieb sagt NICHTS",
+      "zeilen": []
+    },
+    {
+      "name": "ein Schrieb, den das Tor abweist",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "refused from=10.0.0.7:51234 owner=anna kind=playback scope=g2 status=412 reason=this document exists and the write named no version; read it, merge, and write again naming what you read"
+        }
+      ]
+    },
+    {
+      "name": "ein Horcher ohne Zeichen",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "unauthorized socket from=10.0.0.7:51234"
+        }
+      ]
+    },
+    {
+      "name": "ein Horcher mit fremdem Zeichen",
+      "zeilen": [
+        {
+          "stufe": "WARNING",
+          "nachricht": "unauthorized socket from=10.0.0.7:51234"
+        }
+      ],
+      "darf_nicht_enthalten": [
+        "anderesunsinnszeichen"
+      ]
+    }
+  ]
+}
