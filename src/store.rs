@@ -31,6 +31,9 @@ use crate::writes::{decide, Write, WriteDecision};
 /// Aufgaben.
 pub const SCHEMA: i64 = 2;
 
+/// Unter welchem Namen der Abdruck des statischen Schluessels im Speicher steht.
+pub const KEY_ROW: &str = "static_key";
+
 /// Wie viele Fassungen eines Dokuments ueberleben.
 pub const DEFAULT_KEEP: i64 = 10;
 
@@ -247,6 +250,28 @@ impl Store {
 
         tx.commit()?;
         Ok((decision, Some(version.to_string())))
+    }
+
+    // ------------------------------------------------ Der gemerkte Schluessel
+
+    /// Der Abdruck, den dieser Speicher erwartet, oder nichts.
+    pub fn remembered_key(&self) -> Result<Option<String>, StoreError> {
+        Ok(self.db
+            .query_row("SELECT value FROM meta WHERE key=?1", params![KEY_ROW], |r| r.get(0))
+            .optional()?)
+    }
+
+    /// Festhalten, zu wem dieser Speicher gehoert.
+    ///
+    /// Mit Absicht stumpf: es ueberschreibt. Der Schutz vor dem versehentlichen
+    /// Ueberschreiben steht nicht hier, sondern in `identity::decide`, das rein
+    /// und pruefbar ist.
+    pub fn remember_key(&mut self, printed: &str) -> Result<(), StoreError> {
+        self.db.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2) \
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![KEY_ROW, printed])?;
+        Ok(())
     }
 
     // ------------------------------------------------ Konten und Zeichen

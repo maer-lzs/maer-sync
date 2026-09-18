@@ -507,6 +507,28 @@ fn prozent_lesen(s: &str) -> String {
 /// base64 nach RFC 4648, mit Füllung. Zwanzig Zeilen statt einer Crate: das
 /// hier ist eine Tabelle und drei Verschiebungen, und die Abhängigkeit wäre
 /// mehr, als die Frage wert ist.
+pub fn base64_lesen(text: &str) -> Option<Vec<u8>> {
+    const TAFEL: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut aus = Vec::new();
+    let (mut puffer, mut wie_viel) = (0u32, 0u32);
+    for c in text.trim().bytes() {
+        if c == b'=' { break; }
+        if c.is_ascii_whitespace() { continue; }
+        // Streng gelesen: ein Zeichen, das nicht in die Tafel gehoert, macht
+        // die ganze Eingabe ungueltig. Es zu ueberspringen hiesse, eine
+        // beschaedigte Datei als kuerzeren Schluessel zu lesen.
+        let i = TAFEL.iter().position(|&t| t == c)?;
+        puffer = (puffer << 6) | i as u32;
+        wie_viel += 6;
+        if wie_viel >= 8 {
+            wie_viel -= 8;
+            aus.push((puffer >> wie_viel) as u8);
+        }
+    }
+    Some(aus)
+}
+
 pub fn base64(roh: &[u8]) -> String {
     const TAFEL: &[u8; 64] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

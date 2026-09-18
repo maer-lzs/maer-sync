@@ -19,6 +19,7 @@ pub mod frames;
 pub mod handshake;
 pub mod horcher;
 pub mod identity;
+pub mod kennung;
 pub mod listeners;
 pub mod paths;
 pub mod restore;
