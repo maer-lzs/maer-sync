@@ -86,7 +86,7 @@ impl CipherState {
         let Some(key) = self.key else {
             return Ok(plaintext.to_vec());
         };
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+        let cipher = ChaCha20Poly1305::new(&Key::from(key));
         let out = cipher
             .encrypt(&self.aead_nonce(), Payload { msg: plaintext, aad: ad })
             .map_err(|_| HandshakeError("encryption failed".into()))?;
@@ -97,7 +97,7 @@ impl CipherState {
         let Some(key) = self.key else {
             return Ok(ciphertext.to_vec());
         };
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
+        let cipher = ChaCha20Poly1305::new(&Key::from(key));
         let out = cipher
             .decrypt(&self.aead_nonce(), Payload { msg: ciphertext, aad: ad })
             .map_err(|_| HandshakeError("the sealed message does not open".into()))?;
