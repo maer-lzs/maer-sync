@@ -28,9 +28,16 @@ hkdf = "=0.13.0"
 # Lieferstueck: neun Crates bauen fuer musl, die wasm-Anteile der Serie
 # fallen dort weg. Neueste stabile Serie.
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
-# Zeitkonstanter Vergleich. Gemessen: als DIREKTE Abhaengigkeit kostet er
-# NULL zusaetzliche Crates, er liegt ohnehin zweifach im Baum (ueber
+# ⚠️ OFFENER ENTSCHEID (Regel 4), vorgelegt am 18.09.2026, Wort steht aus.
+#
+# Zeitkonstanter Vergleich. Gemessen: als DIREKTE Abhaengigkeit kostet er NULL
+# zusaetzliche Crates, er liegt ohnehin zweifach im Baum (ueber
 # curve25519-dalek). Von Hand vergleichen waere die Sorte Eigenbau, die an
-# genau dieser Stelle teuer wird: ein Vergleich, der beim ersten falschen
-# Byte zurueckkehrt, verraet das Geheimnis Byte fuer Byte.
+# genau dieser Stelle teuer wird: ein Vergleich, der beim ersten falschen Byte
+# zurueckkehrt, verraet das Geheimnis Byte fuer Byte.
+#
+# Die Zeile stand hier, BEVOR sie vorgelegt war, und das war falsch. Regel 4
+# gilt der AUFNAHME, nicht dem Baumwachstum: die gemessene Null ist das
+# Argument fuer das Ja, nicht sein Ersatz. Steht bis zum Wort, sichtbar als
+# offen; kommt ein Nein, faellt sie samt `ct_eq` wieder heraus.
 subtle = "=2.6.1"
