@@ -683,3 +683,7 @@ stop it testing the thing that matters.
 - The fallback cadence when the changes socket is down (the app polls every
   thirty seconds until it reopens) is chosen, not measured; the measurement
   belongs to the same device test.
+
+## About this project
+
+The Mär sync service was created with support from AI: Anthropic Claude (Opus, Sonnet and Fable), plus locally hosted open-weight models (qwen3, devstral and OpenAI's open gpt-oss weights) run via Ollama for tooling.
