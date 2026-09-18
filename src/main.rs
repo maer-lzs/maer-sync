@@ -29,12 +29,15 @@ use std::task::{Context, Poll};
 use hyper::body::{Body, Bytes, Frame, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Request, Response};
+use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Message, Role};
+use tokio_tungstenite::WebSocketStream;
 
-use maer_sync::horcher::Tat;
+use maer_sync::aufstieg::accept_key;
+use maer_sync::horcher::{Tat, Wort};
 use maer_sync::kennung::{key_path, open_identity};
 use maer_sync::store::{Store, DEFAULT_KEEP};
 use maer_sync::wege::{Anfrage, Ansage, App};
@@ -308,7 +311,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
               kopfzeilen: std::collections::BTreeMap<String, String>, _von: String)
     -> Response<Voll>
 {
-    let Some(_schluessel) = kopfzeilen.get("sec-websocket-key").cloned() else {
+    let Some(schluessel) = kopfzeilen.get("sec-websocket-key").cloned() else {
         return einfach(400, ("reason", "this upgrade names no key"));
     };
     let pfad = anfrage.uri().path().to_string();
@@ -324,28 +327,110 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
         return einfach(status_fuer(*code), ("reason", grund_fuer(*code)));
     }
 
-    // **Hier endet dieser Bau, und zwar benannt.** Um die Leitung zu
-    // bedienen, braucht es `SinkExt`/`StreamExt`, und die stehen in
-    // `futures-util`. Die Crate haengt laengst im Baum (ueber
-    // tokio-tungstenite), aber sie DIREKT zu nennen ist eine Aufnahme und
-    // damit eine Aufnahme, die vorgelegt werden muss: dass sie null zusaetzliche
-    // Crates kostet, ist das Argument fuer ein Ja, nicht sein Ersatz.
-    //
-    // Was schon richtig ist und bleibt: jede ABWEISUNG oben. Sie braucht
-    // keine Leitung, und ein Rufer, der nicht zuhoeren darf, bekommt seine
-    // Zahl heute genauso wie spaeter. Nur der Fall, in dem er zuhoeren
-    // DUERFTE, hat noch keinen Draht.
+    let (an_den_draht, mut vom_dienst) = unbounded_channel::<Tat>();
     {
-        let mut app = dienst.app.lock().unwrap();
-        app.horcher_austragen(&mut horcher);
+        let mut draehte = dienst.draehte.lock().unwrap();
+        draehte.insert(horcher.id.clone(), an_den_draht.clone());
     }
-    einfach(503, ("reason", "this build serves no changes socket yet"))
+
+    let id = horcher.id.clone();
+    let mitschrift = Arc::clone(&dienst);
+    tokio::spawn(async move {
+        let aufgestiegen = match hyper::upgrade::on(anfrage).await {
+            Ok(a) => a,
+            Err(_) => return aufraeumen(&mitschrift, &mut horcher, &id),
+        };
+        let leitung = WebSocketStream::from_raw_socket(
+            TokioIo::new(aufgestiegen), Role::Server, None).await;
+
+        // **Zwei Aufgaben statt `select!`.** Die eine haelt die Schreibseite
+        // und leert den Kanal, die andere liest und legt hinein, was daraus
+        // folgt. Damit gibt es genau einen Schreiber, die Reihenfolge der
+        // Worte auf der Leitung ist die des Kanals, und das Merkmal `macros`
+        // (eine Crate fuer eine Zeile) bleibt draussen.
+        use futures_util::StreamExt;
+        let (mut schreibt, mut liest) = leitung.split();
+        let schreiber = tokio::spawn(async move {
+            use futures_util::SinkExt;
+            while let Some(tat) = vom_dienst.recv().await {
+                let nachricht = match tat {
+                    // Das Annehmen geschah eine Schicht tiefer: die 101 ging
+                    // hinaus, bevor der Aufstieg ueberhaupt begann.
+                    Tat::Annehmen => continue,
+                    Tat::SendeText(t) => Message::Text(t.into()),
+                    Tat::SendeBytes(b) => Message::Binary(b.into()),
+                    Tat::Schliessen(code) => {
+                        let _ = schreibt.send(Message::Close(Some(CloseFrame {
+                            code: code.into(), reason: grund_fuer(code).into(),
+                        }))).await;
+                        break;
+                    }
+                };
+                if schreibt.send(nachricht).await.is_err() {
+                    break;
+                }
+            }
+            let _ = schreibt.close().await;
+        });
+
+        // Das Verbinden ist fuer die Maschine ein eigenes Wort: erst danach
+        // steht der Horcher auf der Ansageliste.
+        let taten = {
+            let mut app = mitschrift.app.lock().unwrap();
+            app.horcher_wort(&mut horcher, Wort::Verbunden)
+        };
+        for tat in taten {
+            let _ = an_den_draht.send(tat);
+        }
+
+        while let Some(herein) = liest.next().await {
+            let wort = match herein {
+                Err(_) => Wort::Getrennt,
+                Ok(Message::Binary(b)) => Wort::Bytes(b.to_vec()),
+                Ok(Message::Text(t)) => Wort::Text(t.to_string()),
+                Ok(Message::Close(_)) => Wort::Getrennt,
+                // Steuerworte beantwortet die Leitung selbst.
+                Ok(_) => continue,
+            };
+            let fertig = wort == Wort::Getrennt;
+            let taten = {
+                let mut app = mitschrift.app.lock().unwrap();
+                app.horcher_wort(&mut horcher, wort)
+            };
+            let schliesst = taten.iter().any(|t| matches!(t, Tat::Schliessen(_)));
+            for tat in taten {
+                let _ = an_den_draht.send(tat);
+            }
+            if fertig || schliesst {
+                break;
+            }
+        }
+        // Beide Haelften des Kanals fallen lassen, sonst wartet der Schreiber
+        // ewig auf ein Wort, das nicht mehr kommt.
+        drop(an_den_draht);
+        aufraeumen(&mitschrift, &mut horcher, &id);
+        let _ = schreiber.await;
+    });
+
+    Response::builder()
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .header("upgrade", "websocket")
+        .header("connection", "Upgrade")
+        .header("sec-websocket-accept", accept_key(&schluessel))
+        .body(Voll(None))
+        .expect("die Antwort ist wohlgeformt")
 }
 
+/// Einen Horcher von beiden Listen nehmen: von der Ansageliste der
+/// Entscheidung und von den Draehten des Transports.
+fn aufraeumen(dienst: &Dienst, horcher: &mut maer_sync::horcher::Horcher, id: &str) {
+    {
+        let mut app = dienst.app.lock().unwrap();
+        app.horcher_austragen(horcher);
+    }
+    dienst.draehte.lock().unwrap().remove(id);
+}
 
-
-/// Ein Schliesscode, übersetzt in die Sprache, die VOR dem Aufstieg gilt.
-/// Dieselbe Entscheidung, zwei Sprachen: die Maschine kennt nur die eine.
 fn status_fuer(code: u16) -> u16 {
     match code {
         maer_sync::horcher::NICHT_DER_WEG => 404,

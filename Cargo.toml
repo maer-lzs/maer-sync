@@ -55,3 +55,15 @@ hyper-util = { version = "=0.1.20", features = ["tokio", "server"] }
 # OHNE `macros`: das spart gemessen einen Crate (das Proc-Macro), und die
 # Laufzeit wird von Hand gebaut statt von einem Attribut.
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "net"] }
+
+# Nur fuer `SinkExt` und `StreamExt` am Socket. Gemessen NULL zusaetzliche
+# Crates, weil sie ueber
+# `tokio-tungstenite` samt `futures-core`, `-sink`, `-task` und `-channel`
+# ohnehin im Baum haengt. `sink` ist das einzige Merkmal, das der Socket
+# braucht; ohne `default-features` bleiben die Makros und der
+# `async-await`-Apparat draussen.
+#
+# Nicht genommen: `tokio` mit `macros`. Es kostet **+1** (`tokio-macros`) und
+# spart genau `select!`; stattdessen laufen zwei Aufgaben ueber denselben
+# Kanal, eine schreibt und eine liest.
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink"] }
