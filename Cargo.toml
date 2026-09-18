@@ -23,3 +23,8 @@ sha2 = "=0.11.0"
 x25519-dalek = { version = "=3.0.0", features = ["static_secrets"] }
 chacha20poly1305 = "=0.11.0"
 hkdf = "=0.13.0"
+# Echtes SQLite als C, statisch gelinkt, damit
+# die vorhandene Datei dieselbe bleibt (Invariante 4). Gemessen fuer das
+# Lieferstueck: neun Crates bauen fuer musl, die wasm-Anteile der Serie
+# fallen dort weg. Neueste stabile Serie.
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
