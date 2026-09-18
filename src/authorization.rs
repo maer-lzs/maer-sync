@@ -130,3 +130,72 @@ where
         _ => Caller::niemand(),
     }
 }
+
+// --------------------------------------------------- Die Ableitung selbst
+
+/// scrypt, mit Parametern, die gewaehlt und nicht geerbt sind: `n = 2^15` mit
+/// `r = 8` kostet 32 MiB und etwa ein Zehntel einer Sekunde je Pruefung. Genug,
+/// dass Raten keine Strategie ist, klein genug, dass ein Geraet, das alle paar
+/// Minuten abgleicht, es nie merkt.
+pub const SCRYPT_LOG_N: u8 = 15;
+pub const SCRYPT_R: u32 = 8;
+pub const SCRYPT_P: u32 = 1;
+pub const SALT_BYTES: usize = 16;
+pub const KEY_BYTES: usize = 32;
+
+fn bytes_zu_hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn ableiten(secret: &str, salt: &[u8], n: u64, r: u32, p: u32, laenge: usize)
+    -> Option<Vec<u8>>
+{
+    // Das Rahmenwerk nimmt den Logarithmus, die gespeicherte Form nennt die
+    // Zahl. Eine Zahl, die keine Zweierpotenz ist, kommt aus einer fremden
+    // oder kaputten Form und ist ein Nein, kein Fehler.
+    if n == 0 || !n.is_power_of_two() { return None; }
+    let log_n = n.trailing_zeros() as u8;
+    // Die Laenge kommt allein vom Ausgabepuffer: `new_with_output_len` haengt
+    // am Merkmal `phc`, und die Doku der Crate sagt ausdruecklich, dass eine
+    // dort gesetzte Laenge ohnehin ignoriert wird. Also drei Argumente und
+    // ein Puffer der gewuenschten Groesse, ohne ein Merkmal dafuer zu holen.
+    let params = scrypt::Params::new(log_n, r, p).ok()?;
+    let mut aus = vec![0u8; laenge];
+    scrypt::scrypt(secret.as_bytes(), salt, &params, &mut aus).ok()?;
+    Some(aus)
+}
+
+/// Die gespeicherte Form eines Geheimnisses: Verfahren, Parameter, Salz und
+/// Schluessel, damit die Parameter spaeter steigen koennen, ohne das
+/// Gespeicherte ungueltig zu machen.
+pub fn hash_secret(secret: &str, salt: &[u8]) -> Result<String, String> {
+    if secret.is_empty() { return Err("an empty secret is not a secret".into()); }
+    let n: u64 = 1 << SCRYPT_LOG_N;
+    let key = ableiten(secret, salt, n, SCRYPT_R, SCRYPT_P, KEY_BYTES)
+        .ok_or_else(|| "the derivation refused these parameters".to_string())?;
+    Ok(format!("scrypt${n}${SCRYPT_R}${SCRYPT_P}${}${}", bytes_zu_hex(salt), bytes_zu_hex(&key)))
+}
+
+/// Ob `offered` das Geheimnis hinter `stored` ist, mit der echten Ableitung.
+pub fn secret_matches(stored: &str, offered: &str) -> bool {
+    secret_matches_with(stored, offered, ableiten)
+}
+
+/// Ein frisches Geraete-Zeichen.
+///
+/// **Keine neue Abhaengigkeit dafuer**: die Quelle ist `/dev/urandom`, also
+/// genau das, was auch Pythons `secrets` darunter benutzt, und auf dem einzigen
+/// Ziel dieses Baus (Linux) immer da. Eine Crate fuer 32 Byte Zufall waere
+/// mehr, als die Frage wert ist.
+///
+/// **Fail-closed:** laesst die Quelle sich nicht lesen, gibt es einen Fehler
+/// und NIE ein schwaecheres Zeichen. Ein Zeichen aus einer Ersatzquelle waere
+/// genau der stille Fehler, den niemand bemerkt.
+pub fn new_token() -> Result<String, String> {
+    use std::io::Read;
+    let mut f = std::fs::File::open("/dev/urandom")
+        .map_err(|e| format!("no source of randomness: {e}"))?;
+    let mut roh = [0u8; 32];
+    f.read_exact(&mut roh).map_err(|e| format!("the source of randomness fell short: {e}"))?;
+    Ok(bytes_zu_hex(&roh))
+}

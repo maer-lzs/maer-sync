@@ -126,3 +126,54 @@ fn der_vergleich_sagt_ja_nur_beim_richtigen_schluessel() {
     let scheitert = |_: &str, _: &[u8], _: u64, _: u32, _: u32, _: usize| None;
     assert!(!az::secret_matches_with(stored, "hallo", scheitert));
 }
+
+// --------------------------------------------- Die echte Ableitung
+
+#[test]
+fn ein_von_python_erzeugter_hash_wird_von_rust_bestaetigt() {
+    // DIE Probe dieser Scheibe. Die gespeicherten Formen in der Vektordatei
+    // hat die Python-Seite mit ihrem scrypt erzeugt. Wenn Rust sie bestaetigt,
+    // rechnen beide Seiten dieselbe Ableitung, und zwar an echten Zahlen und
+    // nicht an einer eingesetzten Attrappe.
+    let v = lese();
+    let faelle = v["gespeicherte_formen"].as_array().unwrap();
+    assert_eq!(faelle.len(), 2, "zwei echte Formen, sonst messe ich zu wenig");
+    for f in faelle {
+        let stored = f["stored"].as_str().unwrap();
+        let secret = f["secret"].as_str().unwrap();
+        assert!(az::secret_matches(stored, secret),
+                "Rust bestaetigt Pythons Hash nicht: {secret}");
+        assert!(!az::secret_matches(stored, &format!("{secret}x")),
+                "ein falsches Geheimnis darf nicht passen");
+        assert_eq!(f["passt"].as_bool().unwrap(), true);
+        assert_eq!(f["passt_nicht"].as_bool().unwrap(), false);
+    }
+}
+
+#[test]
+fn rust_erzeugt_dieselbe_gespeicherte_form_wie_python() {
+    // Die andere Richtung: nicht nur pruefen, sondern mit demselben Salz
+    // dieselbe Zeichenkette erzeugen. Byte-gleich, Parameter eingeschlossen.
+    let v = lese();
+    for f in v["gespeicherte_formen"].as_array().unwrap() {
+        let stored = f["stored"].as_str().unwrap();
+        let secret = f["secret"].as_str().unwrap();
+        let salz = az::parse_stored(stored).expect("lesbar").salt;
+        let unsere = az::hash_secret(secret, &salz).expect("ableitbar");
+        assert_eq!(unsere, stored, "dieselbe Form, dieselben Bytes");
+    }
+}
+
+#[test]
+fn ein_leeres_geheimnis_ist_keins() {
+    assert!(az::hash_secret("", &[0u8; 16]).is_err());
+}
+
+#[test]
+fn ein_frisches_zeichen_ist_lang_genug_und_nie_zweimal_dasselbe() {
+    let a = az::new_token().expect("Zufallsquelle");
+    let b = az::new_token().expect("Zufallsquelle");
+    assert_eq!(a.len(), 64, "32 Byte als Hex");
+    assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(a, b, "zwei Zeichen hintereinander duerfen nicht gleich sein");
+}
