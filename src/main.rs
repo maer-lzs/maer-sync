@@ -323,8 +323,8 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
     // Eine Abweisung reist als Schliesscode, und ohne Aufstieg gibt es keine
     // Leitung, auf der er reisen könnte. Also sagt es der Status: dieselbe
     // Entscheidung, nur in der Sprache, die vor dem Aufstieg gilt.
-    if let Some(Tat::Schliessen(code)) = taten.first() {
-        return einfach(status_fuer(*code), ("reason", grund_fuer(*code)));
+    if let Some(Tat::Schliessen(_)) = taten.first() {
+        return abgewiesener_aufstieg();
     }
 
     let (an_den_draht, mut vom_dienst) = unbounded_channel::<Tat>();
@@ -431,14 +431,38 @@ fn aufraeumen(dienst: &Dienst, horcher: &mut maer_sync::horcher::Horcher, id: &s
     dienst.draehte.lock().unwrap().remove(id);
 }
 
-fn status_fuer(code: u16) -> u16 {
-    match code {
-        maer_sync::horcher::NICHT_DER_WEG => 404,
-        maer_sync::horcher::NICHT_BERECHTIGT => 401,
-        maer_sync::horcher::NUR_INNEN => 426,
-        maer_sync::horcher::SITZUNG_ZU_ENDE => 410,
-        _ => 400,
-    }
+/// Ein abgewiesener Aufstieg, GENAU wie die Python-Aufstellung ihn abweist.
+///
+/// **Gemessen, nicht angenommen** (18.09.2026, Fassung 5 aus `main` unter
+/// uvicorn 0.53.0 in eigener venv): ein `websocket.close` VOR dem `accept`
+/// wird zu `403` mit LEEREM Koerper, bei jedem Grund gleich, ob falscher Weg,
+/// fehlendes Zeichen, unbekanntes Zeichen oder erfundene Sitzung. Der
+/// Schliesscode, den unser Python-Code sehr wohl setzt, geht also im SERVER
+/// verloren, nicht bei uns.
+///
+/// **Was NICHT nachgebildet wird, und warum.** Die zwei gemessenen
+/// uvicorn-Fassungen antworten verschieden: 0.52.4 schickt `Connection:
+/// close`, `Content-Type: text/plain` und eine Grundphrase, 0.53.0 nur
+/// `content-length: 0`. Stabil ist allein **Status und leerer Koerper**; der
+/// Rest ist Zierrat dessen, der serviert, und ihn nachzubauen hiesse, sich an
+/// eine Fassung eines fremden Servers zu binden.
+///
+/// **Warum ueberhaupt nachgebildet statt verbessert.** Eine feiner
+/// unterscheidende Antwort (404, 401, 426, 410) waere nuetzlicher und stand
+/// hier auch kurz. Sie macht die zwei Umsetzungen aber von aussen
+/// UNTERSCHEIDBAR, und genau das soll dieser Bau nicht; ausserdem liest die
+/// App den Status heute gar nicht. Die bessere Auskunft ist nicht verworfen,
+/// sondern an die richtige Stelle verschoben: sie gehoert in den VERTRAG,
+/// dann machen es beide Seiten (Entscheid 18.09.2026).
+fn abgewiesener_aufstieg() -> Response<Voll> {
+    // `content-length: 0` ist nicht Zierrat, sondern noetig: ohne sie waehlt
+    // hyper `chunked` und schickt die Abschlussmarke, also fuenf Byte auf der
+    // Leitung, wo uvicorn null schickt. Gemessen, nicht vermutet.
+    Response::builder()
+        .status(403)
+        .header("content-length", "0")
+        .body(Voll(None))
+        .expect("die Antwort ist wohlgeformt")
 }
 
 fn grund_fuer(code: u16) -> &'static str {

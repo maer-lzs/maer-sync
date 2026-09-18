@@ -42,6 +42,21 @@ ERZEUGER = [
 ]
 
 
+#: Erzeuger, die einen SERVER brauchen, also eine venv mit uvicorn. Sie stehen
+#: getrennt, weil ihre Bedingung eine andere ist: ohne venv kann diese Kopie die
+#: Frage nicht stellen, und dann wird ausgewiesen uebersprungen (Regel 7), nie
+#: bestanden.
+MIT_SERVER = [
+    ("vektoren/erzeuge_abweisung.py", "vektoren/abweisung.json", {"faelle": 4}),
+]
+
+
+def venv_python():
+    """Das Python der venv aus der README, oder nichts."""
+    weg = os.path.join(REPO, ".venv", "bin", "python")
+    return weg if os.access(weg, os.X_OK) else None
+
+
 class JederErzeugerZiehtSeineDatei(unittest.TestCase):
     def test_die_datei_kommt_byte_gleich_wieder_heraus(self):
         for skript, datei, _ in ERZEUGER:
@@ -83,6 +98,57 @@ class JederErzeugerZiehtSeineDatei(unittest.TestCase):
                     text = f.read()
                 self.assertEqual([], re.findall(r"[0-9a-f]{32}", text),
                                  f"{datei} trägt eine Kette, die wie ein Zeichen aussieht")
+
+
+class DieErzeugerMitServer(unittest.TestCase):
+    """Dieselbe Frage, aber sie braucht eine venv mit uvicorn.
+
+    **Ohne venv wird UEBERSPRUNGEN, nicht bestanden.** Eine leere Antwort
+    behauptet eine Messung, die niemand gemacht hat; genau dafuer steht Regel 7.
+    Wer sie fahren will: `python3 -m venv .venv` und die Anleitung in der README.
+    """
+
+    def test_die_datei_kommt_byte_gleich_wieder_heraus(self):
+        py = venv_python()
+        if py is None:
+            self.skipTest("keine .venv im Repo, also kein Server, also keine Messung "
+                          "moeglich; siehe README")
+        for skript, datei, _ in MIT_SERVER:
+            with self.subTest(erzeuger=skript):
+                gezogen = subprocess.run(
+                    [sys.executable, os.path.join(REPO, skript), "--python", py],
+                    cwd=REPO, capture_output=True, timeout=300)
+                self.assertEqual(0, gezogen.returncode,
+                                 f"{skript} lief nicht durch: "
+                                 f"{gezogen.stderr.decode('utf-8', 'replace')[-500:]}")
+                with open(os.path.join(REPO, datei), "rb") as f:
+                    eingecheckt = f.read()
+                self.assertEqual(eingecheckt, gezogen.stdout,
+                                 f"{datei} ist nicht mehr das, was {skript} zieht")
+
+    def test_kein_erzeuger_zieht_stillschweigend_weniger_faelle(self):
+        """Diese Haelfte braucht KEINEN Server: sie liest die eingecheckte Datei."""
+        for skript, datei, mindestens in MIT_SERVER:
+            with self.subTest(erzeuger=skript):
+                with open(os.path.join(REPO, datei), encoding="utf-8") as f:
+                    gelesen = json.load(f)
+                for abschnitt, zahl in mindestens.items():
+                    self.assertGreaterEqual(
+                        len(gelesen[abschnitt]), zahl,
+                        f"{datei}: {abschnitt} ist von {zahl} auf "
+                        f"{len(gelesen[abschnitt])} geschrumpft")
+
+    def test_der_erzeuger_haelt_an_statt_leer_zu_messen(self):
+        """Fail-closed: ohne brauchbares Python bricht er ab, statt eine Datei zu
+        schreiben, die zu sich selbst passt und nichts sagt."""
+        for skript, _, _ in MIT_SERVER:
+            with self.subTest(erzeuger=skript):
+                gab = subprocess.run(
+                    [sys.executable, os.path.join(REPO, skript),
+                     "--python", "/gibt/es/nicht"],
+                    cwd=REPO, capture_output=True, timeout=60)
+                self.assertNotEqual(0, gab.returncode, "er haette anhalten muessen")
+                self.assertEqual(b"", gab.stdout, "er hat trotzdem etwas geschrieben")
 
 
 if __name__ == "__main__":

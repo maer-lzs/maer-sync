@@ -1,0 +1,53 @@
+{
+  "was": "Was aus einem Schliesscode wird, wenn er VOR dem Annehmen faellt.",
+  "wie": "Die Python-Fassung unter uvicorn 0.53.0 gefahren und der Aufstieg versucht; gemessen, nicht abgeschrieben.",
+  "hinweis_kopfzeilen": "Nur Status und Koerperlaenge stehen hier. Die Kopfzeilen sind Zierrat dessen, der serviert, und wechseln zwischen zwei Fassungen desselben Servers.",
+  "faelle": [
+    {
+      "name": "ein anderer Weg",
+      "anfrage": {
+        "path": "/v1/nirgendwo"
+      },
+      "erwartet": {
+        "status": 403,
+        "koerper_bytes": 0
+      }
+    },
+    {
+      "name": "der Horchweg ohne Zeichen",
+      "anfrage": {
+        "path": "/v1/changes"
+      },
+      "erwartet": {
+        "status": 403,
+        "koerper_bytes": 0
+      }
+    },
+    {
+      "name": "der Horchweg mit unbekanntem Zeichen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "Authorization": "Bearer nichtvergeben"
+        }
+      },
+      "erwartet": {
+        "status": 403,
+        "koerper_bytes": 0
+      }
+    },
+    {
+      "name": "der Horchweg mit erfundener Sitzung",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "X-Maer-Session": "gibtsnicht"
+        }
+      },
+      "erwartet": {
+        "status": 403,
+        "koerper_bytes": 0
+      }
+    }
+  ]
+}

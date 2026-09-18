@@ -77,6 +77,10 @@ EXEMPT = {
                                "where they come from is stated in the README beside them",
     "vektoren/kopf-und-schluessel.json": "numbers, and JSON has no comment to put a header in; "
                                           "where they come from is stated in the README beside them",
+    "vektoren/abweisung.json": "what a close code becomes on the wire, measured off a "
+                              "running uvicorn, and JSON has no comment to put a header "
+                              "in; its generator and its one condition are stated in the "
+                              "README beside it",
     "vektoren/horcher.json": "close codes and deliveries measured off the running socket, "
                              "and JSON has no comment to put a header in; how it was "
                              "produced is stated in the README beside it",

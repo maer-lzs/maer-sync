@@ -7,6 +7,14 @@ Jede Datei mit einem Erzeuger wird so neu gezogen:
     python3 vektoren/erzeuge_wege.py    > vektoren/wege.json
     python3 vektoren/erzeuge_horcher.py > vektoren/horcher.json
 
+Eine Datei braucht zusaetzlich einen SERVER, also eine venv mit uvicorn (die
+Anleitung steht in der README des Repos):
+
+    python3 vektoren/erzeuge_abweisung.py --python .venv/bin/python \
+        > vektoren/abweisung.json
+
+Ohne venv wird ihr Zeuge **ausgewiesen uebersprungen**, nie bestanden.
+
 `tests/test_erzeuger.py` faehrt jeden Erzeuger und haelt das Ergebnis
 **byte-gleich** gegen die eingecheckte Datei. Faellt der Zeuge, ist entweder
 der Dienst geaendert worden, dann ist die Datei neu zu ziehen und der
@@ -32,6 +40,7 @@ Implementierung.
 | `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
+| `abweisung.json` | **an der Python-Fassung unter uvicorn gemessen**, Aufstieg versucht und die Antwort gelesen | mittel: es misst, was ein fremder Server aus unserem Schliesscode macht, und genau das ist die Frage |
 | `horcher.json` | **am laufenden Socket gemessen**, jeder Fall als echter ASGI-Socket gefahren | mittel: die Schliesscodes sind unsere eigene Tafel, aber nichts darin ist behauptet |
 | `wege.json` | **an der laufenden `service/app.py` gemessen**, Fall fuer Fall gerufen | mittel: nichts darin ist behauptet, aber es misst unsere eigene Anwendung, also beweist es Gleichheit der zwei Fassungen und nicht Richtigkeit |
 
@@ -123,3 +132,24 @@ nicht der Name der Kopfzeile: `Bearer nichtvergeben` und `Basic irgendwas`
 tragen kein Geheimnis und stehen im Klartext. Der erste Versuch maskierte jede
 `authorization`-Zeile, und damit wurden drei verschiedene Faelle zu einem; der
 Zeuge fiel darueber, weil ein unbekanntes Zeichen dann als gueltiges einsetzte.
+
+
+## `abweisung.json`: was aus einem Schliesscode vor dem Annehmen wird
+
+Ein `websocket.close` VOR dem `accept` traegt einen Code. Auf der Leitung gibt
+es ihn nicht, weil es noch keine Leitung gibt: der Server macht daraus einen
+HTTP-Status. **Gemessen** (Fassung 5 aus `main`, uvicorn 0.53.0): alle vier
+Faelle werden `403` mit leerem Koerper, ob falscher Weg, fehlendes Zeichen,
+unbekanntes Zeichen oder erfundene Sitzung. Der Code geht also im SERVER
+verloren, nicht bei uns.
+
+**Nur Status und Koerperlaenge stehen in der Datei, und das ist der Befund.**
+Die zwei uvicorn-Fassungen, die hier lagen, schicken verschiedene Kopfzeilen:
+0.52.4 mit `Connection: close`, `Content-Type: text/plain` und Grundphrase,
+0.53.0 nur `content-length`. Wer die Kopfzeilen nachbaute, band sich an eine
+Fassung eines fremden Servers.
+
+**Die Koerperlaenge steht mit dabei, weil sie einen echten Unterschied
+gefangen hat:** ohne `content-length: 0` waehlt hyper `chunked` und schickt
+fuenf Byte Abschlussmarke, wo uvicorn null schickt. An der Schnittstelle ist
+das unsichtbar, auf der Leitung nicht.

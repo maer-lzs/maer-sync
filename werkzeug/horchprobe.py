@@ -158,19 +158,27 @@ def main():
             schlecht.append((name, was))
             print(f"    ABWEICHUNG    {name}: {was}")
 
-    print("\n  -- die Abweisungen, vor dem Annehmen (als HTTP-Status) --")
-    l = Leitung(wirt, port, "/v1/nirgendwo", {})
-    pruefe("ein anderer Weg (4004)", l.status == 404, f"Status {l.status} statt 404")
-    l.zu()
-    l = Leitung(wirt, port, "/v1/changes", {})
-    erwartet = 426 if a.geschlossen else 401
-    pruefe(f"ohne Zeichen ({'4426' if a.geschlossen else '4401'})",
-           l.status == erwartet, f"Status {l.status} statt {erwartet}")
-    l.zu()
-    l = Leitung(wirt, port, "/v1/changes", {"X-Maer-Session": "gibtsnicht"})
-    pruefe("eine Sitzung, die es nicht gibt (4410)", l.status == 410,
-           f"Status {l.status} statt 410")
-    l.zu()
+    # Die Abweisungen vor dem Annehmen kommen aus `vektoren/abweisung.json`,
+    # und die Datei ist an der Python-Fassung unter uvicorn GEMESSEN. Der
+    # Schliesscode existiert hier nicht: es gibt noch keine Leitung, auf der
+    # er reisen koennte.
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "vektoren", "abweisung.json"), encoding="utf-8") as f:
+        tafel = json.load(f)
+    print(f"\n  -- die Abweisungen vor dem Annehmen ({len(tafel['faelle'])} gemessene Faelle) --")
+    for fall in tafel["faelle"]:
+        an = fall["anfrage"]
+        l = Leitung(wirt, port, an["path"], an.get("headers") or {})
+        will = fall["erwartet"]
+        pruefe(f"{fall['name']}: Status", l.status == will["status"],
+               f"{l.status} statt {will['status']}")
+        # Der Koerper zaehlt mit: ohne content-length schickt hyper `chunked`
+        # und damit fuenf Byte, wo uvicorn null schickt. Das ist genau die
+        # Sorte Unterschied, die an der Schnittstelle unsichtbar ist.
+        rest = l.puffer
+        pruefe(f"{fall['name']}: Koerper", len(rest) == will["koerper_bytes"],
+               f"{len(rest)} Byte statt {will['koerper_bytes']}")
+        l.zu()
 
     if not a.geschlossen:
         print("\n  -- der offene Horcher hoert seine Ansage --")
