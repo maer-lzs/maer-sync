@@ -13,6 +13,7 @@ Implementierung.
 | `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
+| `wege.json` | **an der laufenden `service/app.py` gemessen**, Fall fuer Fall gerufen | mittel: nichts darin ist behauptet, aber es misst unsere eigene Anwendung, also beweist es Gleichheit der zwei Fassungen und nicht Richtigkeit |
 
 **Diese Abstufung ist der Punkt.** Ein Vektor, den unsere Python-Fassung erzeugt
 und unsere Rust-Fassung bestaetigt, beweist Gleichheit der beiden, nicht
@@ -68,3 +69,37 @@ auf Pi und Tiny geprueft). Solange sie fehlt, kann niemand hier eine Rust-Zeile
 gruen sehen, und deshalb liegt hier auch keine. Nach Regel 7 ist das eine
 Abstinenz mit Grund und kein gruener Haken: die Werkzeugkette und die Crates
 sind Entscheide und liegen zur Vorlage.
+
+
+## `wege.json`: die Reihenfolge der Tore
+
+Diese Datei ist nicht von Hand geschrieben. Ein Erzeuger hat die ASGI-Anwendung
+gebaut und **jeden Fall gerufen**, und was hier steht, ist die Antwort. Der
+Unterschied ist nicht akademisch: beim Schreiben der Faelle hielt ich den
+Rahmenkopf fuer `{method, path, query}`, er ist aber `{method, target}` mit dem
+Fragezeichen darin, und sieben Tunnelfaelle kamen als "this is not a request"
+zurueck, bis der Erzeuger es zeigte.
+
+**Was die Datei festhaelt, ist die ORDNUNG, nicht die einzelne Antwort.** Drei
+Stellen, an denen eine zweite Umsetzung aus Gewohnheit anders liegt:
+
+- `/v1/health` antwortet **vor der Methodenpruefung**, also auch auf `POST`,
+  und auch bei geschlossenen Wegen.
+- Das Tor der alten Wege steht **vor** der Zeichenpruefung. Ohne sie ist eine
+  Anfrage mit gueltigem Zeichen 426 und nicht 401, ein unbekannter Weg 426 und
+  nicht 404, und die Anmeldung selbst liegt hinter dem Tor.
+- Die Bereichspruefung steht **nach** der Wegerkennung. Ein unbekannter Weg mit
+  kaputtem Bereich ist 404, nicht 400.
+
+Der Abschnitt `tunnel` faehrt eine echte Sitzung von der Client-Seite. Der
+Handschlag ist zufaellig, also stehen dort Status und Satz und nicht die Bytes;
+die Bytes stehen in `noise-nk.json`. Zwei Dinge sind dort gemessen und nicht
+vermutet: die Weigerung "this path is not answered inside a session" reist
+**unversiegelt**, und eine **gelogene Laenge im Rahmenkopf zaehlt nicht**, weil
+der wahre Koerper schon da ist.
+
+**Das echte Zeichen steht nirgends in der Datei.** Maskiert ist der WERT und
+nicht der Name der Kopfzeile: `Bearer nichtvergeben` und `Basic irgendwas`
+tragen kein Geheimnis und stehen im Klartext. Der erste Versuch maskierte jede
+`authorization`-Zeile, und damit wurden drei verschiedene Faelle zu einem; der
+Zeuge fiel darueber, weil ein unbekanntes Zeichen dann als gueltiges einsetzte.

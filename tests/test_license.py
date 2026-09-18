@@ -73,6 +73,9 @@ EXEMPT = {
                                "where they come from is stated in the README beside them",
     "vektoren/kopf-und-schluessel.json": "numbers, and JSON has no comment to put a header in; "
                                           "where they come from is stated in the README beside them",
+    "vektoren/wege.json": "answers measured off the running application, and JSON has no "
+                          "comment to put a header in; how it was produced, and what it "
+                          "pins, is stated in the README beside it",
     "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim from "
                               "tests/vectors so the Rust side reads the same file; a header "
                               "would alter the bytes whose whole value is that nobody touched them",

@@ -192,10 +192,22 @@ pub fn secret_matches(stored: &str, offered: &str) -> bool {
 /// und NIE ein schwaecheres Zeichen. Ein Zeichen aus einer Ersatzquelle waere
 /// genau der stille Fehler, den niemand bemerkt.
 pub fn new_token() -> Result<String, String> {
+    Ok(hex(&zufall(32)?))
+}
+
+/// `n` Byte aus `/dev/urandom`, oder ein Fehler. EINE Quelle fuer alles, was
+/// hier zufaellig sein muss: das Zeichen, das Salz einer Ableitung und der
+/// Name einer Sitzung. Drei Stellen mit drei Quellen waeren drei Gelegenheiten,
+/// eine davon schwach zu machen.
+pub fn zufall(n: usize) -> Result<Vec<u8>, String> {
     use std::io::Read;
     let mut f = std::fs::File::open("/dev/urandom")
         .map_err(|e| format!("no source of randomness: {e}"))?;
-    let mut roh = [0u8; 32];
+    let mut roh = vec![0u8; n];
     f.read_exact(&mut roh).map_err(|e| format!("the source of randomness fell short: {e}"))?;
-    Ok(bytes_zu_hex(&roh))
+    Ok(roh)
 }
+
+/// Bytes als Hex. Oeffentlich, weil der Sitzungsname dieselbe Schreibweise
+/// braucht wie Pythons `secrets.token_hex`.
+pub fn hex(b: &[u8]) -> String { bytes_zu_hex(b) }

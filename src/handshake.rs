@@ -198,9 +198,22 @@ impl HandshakeState {
     }
 
     pub fn write_message(&mut self, payload: &[u8]) -> Result<Vec<u8>, HandshakeError> {
-        let eph = self
-            .ephemeral_private
-            .ok_or_else(|| HandshakeError("no ephemeral key was provided".into()))?;
+        // Ist keiner eingespeist, entsteht hier einer. Woertlich Pythons
+        // Verhalten, und die einzige Stelle, an der einer entstehen darf:
+        // wer einen fluechtigen Schluessel wiederverwendet, fuehrt keinen
+        // Handschlag. Scheibe 1 hat das Einspeisen gebaut, weil sie nur
+        // Vektoren nachfahren musste; ein Dienst, der selbst antwortet,
+        // braucht die andere Haelfte.
+        let eph = match self.ephemeral_private {
+            Some(e) => e,
+            None => {
+                let roh = crate::authorization::zufall(32).map_err(HandshakeError)?;
+                let mut e = [0u8; 32];
+                e.copy_from_slice(&roh);
+                self.ephemeral_private = Some(e);
+                e
+            }
+        };
         let e_public = PublicKey::from(&StaticSecret::from(eph));
         self.symmetric.mix_hash(e_public.as_bytes());
         let peer = if self.initiator {

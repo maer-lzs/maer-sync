@@ -19,6 +19,13 @@ const GROUP: usize = 4;
 /// Rufer hat einen 32-Byte-X25519-Schluessel, und ein kuerzerer heisst, dass
 /// unterwegs etwas abgeschnitten wurde. Genau dann darf ein Abdruck nicht
 /// in Ordnung aussehen.
+/// Der oeffentliche Schluessel zu einem privaten. Woertlich Pythons
+/// `public_of`: X25519, nichts dazwischen.
+pub fn public_of(private: &[u8; 32]) -> [u8; 32] {
+    use x25519_dalek::{PublicKey, StaticSecret};
+    *PublicKey::from(&StaticSecret::from(*private)).as_bytes()
+}
+
 pub fn fingerprint(public_key: &[u8]) -> Result<String, String> {
     if public_key.len() != 32 {
         return Err(format!(

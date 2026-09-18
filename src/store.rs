@@ -41,6 +41,9 @@ pub enum StoreError {
     AheadOfService(String),
     Sql(rusqlite::Error),
     Gate(String),
+    /// Der Laden weigert sich, und sagt warum. Kein Fehler des Aufrufers im
+    /// Sinne eines Absturzes: eine Antwort.
+    Refused(String),
 }
 
 impl From<rusqlite::Error> for StoreError {
@@ -51,6 +54,8 @@ pub struct Store {
     pub db: Connection,
     pub keep: i64,
     pub shrink_floor: Option<f64>,
+    /// Die Attrappe, einmal gemacht und behalten. Siehe `decoy`.
+    attrappe: Option<String>,
 }
 
 /// Der neueste Stand eines Dokuments: Koerper, Format, Etikett.
@@ -65,7 +70,7 @@ impl Store {
         let db = Connection::open(path)?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         db.pragma_update(None, "foreign_keys", "ON")?;
-        let s = Self { db, keep, shrink_floor };
+        let s = Self { db, keep, shrink_floor, attrappe: None };
         s.lay_out()?;
         Ok(s)
     }
@@ -243,4 +248,108 @@ impl Store {
         tx.commit()?;
         Ok((decision, Some(version.to_string())))
     }
+
+    // ------------------------------------------------ Konten und Zeichen
+
+    /// Ein Konto anlegen. Ueberschreibt nie eines: ein Geheimnis zu aendern
+    /// ist ein eigener Akt mit eigener Sorgfalt, und ein versehentliches
+    /// Neuanlegen darf niemanden still von seinen Daten aussperren.
+    pub fn create_account(&mut self, owner: &str, secret: &str) -> Result<(), StoreError> {
+        if owner.is_empty() {
+            return Err(StoreError::Refused("an account has an owner".into()));
+        }
+        let da: Option<i64> = self.db
+            .query_row("SELECT 1 FROM accounts WHERE owner=?1", params![owner], |r| r.get(0))
+            .optional()?;
+        if da.is_some() {
+            return Err(StoreError::Refused(format!("an account named '{owner}' is already here")));
+        }
+        let salz = crate::authorization::zufall(crate::authorization::SALT_BYTES)
+            .map_err(StoreError::Refused)?;
+        let form = crate::authorization::hash_secret(secret, &salz).map_err(StoreError::Refused)?;
+        self.db.execute("INSERT INTO accounts (owner, secret, made_at) VALUES (?1, ?2, ?3)",
+                        params![owner, form, jetzt()])?;
+        Ok(())
+    }
+
+    /// Ein Konto und alles darunter nehmen: erst die Dokumente, dann das Konto
+    /// selbst (die Zeichen fallen ueber den Fremdschluessel). Die Dokumente
+    /// gehen mit Absicht mit: wer kein Konto hat, kann kein Zeichen halten,
+    /// also waere das unerreichbarer Speicher, und ein spaeteres Konto
+    /// desselben Namens muss leer anfangen statt zu erben.
+    pub fn remove_account(&mut self, owner: &str) -> Result<(usize, usize), StoreError> {
+        if owner.is_empty() {
+            return Err(StoreError::Refused("an account has an owner".into()));
+        }
+        // EIN Schritt: eine Unterbrechung dazwischen darf kein Konto ohne
+        // seine Dokumente hinterlassen.
+        let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let dokumente = tx.execute("DELETE FROM documents WHERE owner=?1", params![owner])?;
+        let konten = tx.execute("DELETE FROM accounts WHERE owner=?1", params![owner])?;
+        tx.commit()?;
+        Ok((konten, dokumente))
+    }
+
+    /// Ein Geraetezeichen gegen das Geheimnis des Kontos, oder nichts.
+    ///
+    /// Nichts bei falschem Geheimnis UND bei einem Konto, das es nicht gibt:
+    /// eine Antwort fuer beides, sonst wird das hier eine Liste, wer ein Konto
+    /// hat. Die Arbeit wird in beiden Faellen getan, damit die beiden sich
+    /// auch in der DAUER nicht unterscheiden.
+    pub fn issue_token(&mut self, owner: &str, secret: &str, device: &str)
+        -> Result<Option<String>, StoreError>
+    {
+        let zeile: Option<String> = self.db
+            .query_row("SELECT secret FROM accounts WHERE owner=?1", params![owner], |r| r.get(0))
+            .optional()?;
+        let gab_es = zeile.is_some();
+        let gespeichert = match zeile {
+            Some(f) => f,
+            None => self.decoy()?,
+        };
+        // Beide Bedingungen, und die teure ZUERST: ein `if !gab_es` davor
+        // waere genau der Zeitunterschied, den die Attrappe verhindern soll.
+        let passt = crate::authorization::secret_matches(&gespeichert, secret);
+        if !passt || !gab_es {
+            return Ok(None);
+        }
+        let zeichen = crate::authorization::new_token().map_err(StoreError::Refused)?;
+        self.db.execute(
+            "INSERT INTO tokens (digest, owner, device, made_at) VALUES (?1, ?2, ?3, ?4)",
+            params![crate::authorization::token_digest(&zeichen), owner, device, jetzt()])?;
+        Ok(Some(zeichen))
+    }
+
+    pub fn owner_of_token(&self, digest: &str) -> Result<Option<String>, StoreError> {
+        Ok(self.db
+            .query_row("SELECT owner FROM tokens WHERE digest=?1", params![digest], |r| r.get(0))
+            .optional()?)
+    }
+
+    pub fn revoke_token(&mut self, digest: &str) -> Result<(), StoreError> {
+        self.db.execute("DELETE FROM tokens WHERE digest=?1", params![digest])?;
+        Ok(())
+    }
+
+    /// Eine gespeicherte Form, auf die nichts passt, einmal gemacht und
+    /// behalten, damit eine Anfrage nach einem unbekannten Konto dasselbe
+    /// kostet wie eine nach einem echten.
+    fn decoy(&mut self) -> Result<String, StoreError> {
+        if self.attrappe.is_none() {
+            let z = crate::authorization::new_token().map_err(StoreError::Refused)?;
+            let salz = crate::authorization::zufall(crate::authorization::SALT_BYTES)
+                .map_err(StoreError::Refused)?;
+            self.attrappe = Some(
+                crate::authorization::hash_secret(&z, &salz).map_err(StoreError::Refused)?);
+        }
+        Ok(self.attrappe.clone().unwrap())
+    }
+}
+
+/// Die Wanduhr als Sekunden seit 1970, wie Pythons `time.time()`.
+fn jetzt() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
 }

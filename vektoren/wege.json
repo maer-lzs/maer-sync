@@ -1,0 +1,896 @@
+{
+  "was": "Die Reihenfolge der Tore in service/app.py, gemessen an der Anwendung selbst.",
+  "wie": "Jeder Fall wurde gegen die echte ASGI-Anwendung gerufen; nichts ist behauptet.",
+  "anwendungen": {
+    "ohne_kennung": "App(store) ohne statischen Schluessel",
+    "mit_kennung": "App(store, identity=...) mit Schluessel, alte Wege offen",
+    "geschlossen": "App(store, identity=..., plain_ways=False)"
+  },
+  "hinweis_zeichen": "<zeichen> steht fuer ein gueltiges Bearer-Zeichen; Werte stehen nie in dieser Datei.",
+  "hinweis_tunnel": "Der Handschlag ist zufaellig; festgehalten sind Status und Satz, nicht die Bytes. Die Bytes stehen in noise-nk.json.",
+  "faelle": [
+    {
+      "name": "gesundheit GET",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/health"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "koerper": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "gesundheit POST antwortet genauso",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/health"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "koerper": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "gesundheit auch bei geschlossenen Wegen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/health"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "koerper": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "Schluessel ohne Kennung",
+      "anwendung": "ohne_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/key"
+      },
+      "erwartet": {
+        "status": 503,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service has no static key"
+      }
+    },
+    {
+      "name": "Schluessel mit Kennung",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/key"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "felder": [
+          "fingerprint",
+          "key"
+        ]
+      }
+    },
+    {
+      "name": "Schluessel mit falscher Methode",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/key"
+      },
+      "erwartet": {
+        "status": 405,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "POST is not what this path is for"
+      }
+    },
+    {
+      "name": "Schluessel auch bei geschlossenen Wegen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/key"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "felder": [
+          "fingerprint",
+          "key"
+        ]
+      }
+    },
+    {
+      "name": "Sitzung ohne Kennung",
+      "anwendung": "ohne_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/session"
+      },
+      "erwartet": {
+        "status": 503,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service has no static key"
+      }
+    },
+    {
+      "name": "Sitzung mit falscher Methode",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/session"
+      },
+      "erwartet": {
+        "status": 405,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "GET is not what this path is for"
+      }
+    },
+    {
+      "name": "Sitzung, kein Handschlag",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/session",
+        "koerper_b64": "a2VpbiBoYW5kc2NobGFn"
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this is not a handshake"
+      }
+    },
+    {
+      "name": "Zeichen mit falscher Methode",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/token"
+      },
+      "erwartet": {
+        "status": 405,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "GET is not what this path is for"
+      }
+    },
+    {
+      "name": "Zeichen ohne JSON",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "ew=="
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this path wants an owner and a secret"
+      }
+    },
+    {
+      "name": "Zeichen ohne Geheimnis",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hIn0="
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this path wants an owner and a secret"
+      }
+    },
+    {
+      "name": "Zeichen, falsches Geheimnis",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hIiwgInNlY3JldCI6ICJmYWxzY2gifQ=="
+      },
+      "erwartet": {
+        "status": 401,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "Zeichen, Konto gibt es nicht",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJuaWVtYW5kIiwgInNlY3JldCI6ICJmYWxzY2gifQ=="
+      },
+      "erwartet": {
+        "status": 401,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "Zeichen, richtig",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hIiwgInNlY3JldCI6ICJlaW4gaGlucmVpY2hlbmQgbGFuZ2VzIGdlaGVpbW5pcyJ9"
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "felder": [
+          "token"
+        ]
+      }
+    },
+    {
+      "name": "Schriftstueck ohne Zeichen",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback"
+      },
+      "erwartet": {
+        "status": 401,
+        "kopfzeilen": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "Schriftstueck mit unbekanntem Zeichen",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "headers": {
+          "authorization": "Bearer nichtvergeben"
+        }
+      },
+      "erwartet": {
+        "status": 401,
+        "kopfzeilen": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "Schriftstueck mit kaputter Kopfzeile",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "headers": {
+          "authorization": "Basic irgendwas"
+        }
+      },
+      "erwartet": {
+        "status": 401,
+        "kopfzeilen": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "unbekannter Weg",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/nirgendwo",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 404,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "no such path"
+      }
+    },
+    {
+      "name": "unbekannter Weg mit kaputtem Bereich bleibt 404",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/nirgendwo",
+        "query": "scope=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 404,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "no such path"
+      }
+    },
+    {
+      "name": "Art mit Grossbuchstaben ist kein Weg",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/Playback",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 404,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "no such path"
+      }
+    },
+    {
+      "name": "kaputter Bereich",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "the scope is not a scope"
+      }
+    },
+    {
+      "name": "Schriftstueck mit falscher Methode",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "DELETE",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 405,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "DELETE is not what this path is for"
+      }
+    },
+    {
+      "name": "Liste mit falscher Methode",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/docs/playback",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 405,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "POST is not what this path is for"
+      }
+    },
+    {
+      "name": "Schriftstueck lesen",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/octet-stream",
+          "etag": "1",
+          "x-maer-format": "1"
+        },
+        "koerper": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "name": "Schriftstueck gibt es nicht",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-9",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 404,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "no such document"
+      }
+    },
+    {
+      "name": "Liste",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/docs/playback",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "koerper": {
+          "kind": "playback",
+          "documents": [
+            {
+              "scope": "geraet-1",
+              "version": "1",
+              "format": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Liste einer leeren Art",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/docs/queue",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "koerper": {
+          "kind": "queue",
+          "documents": []
+        }
+      }
+    },
+    {
+      "name": "Schrieb ohne Formatangabe",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "PUT",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-2",
+        "headers": {
+          "authorization": "<zeichen>"
+        },
+        "koerper_b64": "e30="
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "the write named no format"
+      }
+    },
+    {
+      "name": "Schrieb mit unlesbarem Koerper",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "PUT",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-2",
+        "headers": {
+          "authorization": "<zeichen>",
+          "x-maer-format": "1"
+        },
+        "koerper_b64": "bmljaHQganNvbg=="
+      },
+      "erwartet": {
+        "status": 400,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "the write is not readable as a document"
+      }
+    },
+    {
+      "name": "Schrieb mit leerem Koerper geht an den Laden",
+      "anwendung": "mit_kennung",
+      "anfrage": {
+        "method": "PUT",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-2",
+        "headers": {
+          "authorization": "<zeichen>",
+          "x-maer-format": "1"
+        }
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json",
+          "etag": "1"
+        },
+        "koerper": {
+          "reason": "first state, 0 bytes, nothing to lose",
+          "version": "1"
+        }
+      },
+      "ansage": [
+        {
+          "kind": "playback",
+          "scope": "geraet-2",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "name": "geschlossen: Schriftstueck mit gueltigem Zeichen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 426,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service speaks only inside a session"
+      }
+    },
+    {
+      "name": "geschlossen: Schriftstueck ohne Zeichen ist 426, nicht 401",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-1"
+      },
+      "erwartet": {
+        "status": 426,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service speaks only inside a session"
+      }
+    },
+    {
+      "name": "geschlossen: das Zeichen selbst ist hinter dem Tor",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hIiwgInNlY3JldCI6ICJlaW4gaGlucmVpY2hlbmQgbGFuZ2VzIGdlaGVpbW5pcyJ9"
+      },
+      "erwartet": {
+        "status": 426,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service speaks only inside a session"
+      }
+    },
+    {
+      "name": "geschlossen: unbekannter Weg ist 426, nicht 404",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/nirgendwo",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "status": 426,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "grund": "this service speaks only inside a session"
+      }
+    },
+    {
+      "name": "geschlossen aber INNEN: Schriftstueck lesen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/doc/playback",
+        "query": "scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>"
+        },
+        "innen": true
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/octet-stream",
+          "etag": "1",
+          "x-maer-format": "1"
+        },
+        "koerper": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "name": "geschlossen aber INNEN: Zeichen antwortet",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/token",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hIiwgInNlY3JldCI6ICJlaW4gaGlucmVpY2hlbmQgbGFuZ2VzIGdlaGVpbW5pcyJ9",
+        "innen": true
+      },
+      "erwartet": {
+        "status": 200,
+        "kopfzeilen": {
+          "content-type": "application/json"
+        },
+        "felder": [
+          "token"
+        ]
+      }
+    }
+  ],
+  "tunnel": [
+    {
+      "name": "innen: Gesundheit",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "GET",
+        "target": "/v1/health"
+      },
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 200,
+        "koerper": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "innen: Schriftstueck mit Zeichen",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "GET",
+        "target": "/v1/doc/playback?scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 200,
+        "koerper": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "name": "innen: Schriftstueck ohne Zeichen bleibt 401",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "GET",
+        "target": "/v1/doc/playback?scope=geraet-1"
+      },
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 401,
+        "grund": "not authorized"
+      }
+    },
+    {
+      "name": "innen: die Sitzung schachtelt nicht",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "POST",
+        "target": "/v1/session"
+      },
+      "aussen": {
+        "status": 400,
+        "grund": "this path is not answered inside a session"
+      }
+    },
+    {
+      "name": "innen: der Schluessel wird innen nicht beantwortet",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "GET",
+        "target": "/v1/key"
+      },
+      "aussen": {
+        "status": 400,
+        "grund": "this path is not answered inside a session"
+      }
+    },
+    {
+      "name": "innen: Anmeldung",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "POST",
+        "target": "/v1/token"
+      },
+      "rahmen_koerper_b64": "eyJvd25lciI6ICJhbm5hIiwgInNlY3JldCI6ICJlaW4gaGlucmVpY2hlbmQgbGFuZ2VzIGdlaGVpbW5pcyJ9",
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 200,
+        "felder": [
+          "token"
+        ]
+      }
+    },
+    {
+      "name": "innen: ein Schrieb sagt an",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "PUT",
+        "target": "/v1/doc/playback?scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>",
+          "x-maer-format": "1",
+          "if-match": "1"
+        }
+      },
+      "rahmen_koerper_b64": "eyJhIjogMn0=",
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 200,
+        "koerper": {
+          "reason": "8 bytes, 100% of the stored state",
+          "version": "2"
+        }
+      },
+      "ansage": [
+        {
+          "kind": "playback",
+          "scope": "geraet-1",
+          "version": "2"
+        }
+      ]
+    },
+    {
+      "name": "innen: eine gelogene Laenge im Rahmenkopf zaehlt nicht",
+      "gestalt": "rahmen",
+      "rahmen": {
+        "method": "PUT",
+        "target": "/v1/doc/playback?scope=geraet-1",
+        "headers": {
+          "authorization": "<zeichen>",
+          "x-maer-format": "1",
+          "if-match": "2",
+          "content-length": "999"
+        }
+      },
+      "rahmen_koerper_b64": "eyJhIjogM30=",
+      "aussen": {
+        "status": 200
+      },
+      "innen": {
+        "status": 200,
+        "koerper": {
+          "reason": "8 bytes, 100% of the stored state",
+          "version": "3"
+        }
+      },
+      "ansage": [
+        {
+          "kind": "playback",
+          "scope": "geraet-1",
+          "version": "3"
+        }
+      ]
+    },
+    {
+      "name": "innen: kein Rahmen",
+      "gestalt": "versiegelter_unsinn",
+      "aussen": {
+        "status": 400,
+        "grund": "this is not a request"
+      }
+    },
+    {
+      "name": "kein versiegelter Brief",
+      "gestalt": "kein_siegel",
+      "aussen": {
+        "status": 400,
+        "grund": "this is not a sealed message"
+      }
+    },
+    {
+      "name": "eine Sitzung, die es nicht gibt",
+      "gestalt": "fremde_sitzung",
+      "fremder_name": "gibtsnicht",
+      "aussen": {
+        "status": 410,
+        "grund": "this session has ended"
+      }
+    }
+  ]
+}
