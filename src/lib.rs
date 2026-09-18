@@ -17,6 +17,7 @@ pub mod contract;
 pub mod formats;
 pub mod frames;
 pub mod handshake;
+pub mod horcher;
 pub mod identity;
 pub mod listeners;
 pub mod paths;

@@ -4,7 +4,8 @@
 
 Jede Datei mit einem Erzeuger wird so neu gezogen:
 
-    python3 vektoren/erzeuge_wege.py > vektoren/wege.json
+    python3 vektoren/erzeuge_wege.py    > vektoren/wege.json
+    python3 vektoren/erzeuge_horcher.py > vektoren/horcher.json
 
 `tests/test_erzeuger.py` faehrt jeden Erzeuger und haelt das Ergebnis
 **byte-gleich** gegen die eingecheckte Datei. Faellt der Zeuge, ist entweder
@@ -31,6 +32,7 @@ Implementierung.
 | `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
+| `horcher.json` | **am laufenden Socket gemessen**, jeder Fall als echter ASGI-Socket gefahren | mittel: die Schliesscodes sind unsere eigene Tafel, aber nichts darin ist behauptet |
 | `wege.json` | **an der laufenden `service/app.py` gemessen**, Fall fuer Fall gerufen | mittel: nichts darin ist behauptet, aber es misst unsere eigene Anwendung, also beweist es Gleichheit der zwei Fassungen und nicht Richtigkeit |
 
 **Diese Abstufung ist der Punkt.** Ein Vektor, den unsere Python-Fassung erzeugt

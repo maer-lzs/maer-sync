@@ -38,6 +38,7 @@ REPO = os.path.dirname(HIER)
 #: Die Zahlen sind der Stand bei der Aufnahme; sie dürfen wachsen, nie fallen.
 ERZEUGER = [
     ("vektoren/erzeuge_wege.py", "vektoren/wege.json", {"faelle": 38, "tunnel": 11}),
+    ("vektoren/erzeuge_horcher.py", "vektoren/horcher.json", {"faelle": 12}),
 ]
 
 

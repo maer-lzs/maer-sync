@@ -134,6 +134,11 @@ fn als_bytes(status: u16, body: Vec<u8>, extra: Vec<(String, String)>) -> Antwor
 
 pub struct App {
     pub store: Store,
+    /// Wie jeder eingetragene Horcher seine Ansage bekommen will. Getrennt von
+    /// `listeners`, weil dort die reine Buchfuehrung steht (wer hoert fuer
+    /// wen) und hier die Gestalt der Zustellung, die einen Sitzungsschluessel
+    /// braucht.
+    pub zustellarten: BTreeMap<String, crate::horcher::Zustellart>,
     /// Der statische private Schlüssel und sein Abdruck. BEIDES freiwillig:
     /// eine Anwendung ohne Kennung ist ein echtes Ding (jeder Zeuge, der nur
     /// Dokumente will, baut eine), und ein Dienst, der einen Handschlag ohne
@@ -149,6 +154,7 @@ impl App {
     pub fn neu(store: Store) -> Self {
         Self {
             store,
+            zustellarten: BTreeMap::new(),
             identity: None,
             sessions: SessionStore::new(),
             listeners: Listeners::new(),

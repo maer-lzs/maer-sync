@@ -1,0 +1,250 @@
+{
+  "was": "Der Horcher in service/app.py, an der Anwendung selbst gemessen.",
+  "wie": "Jeder Fall wurde als echter ASGI-Socket gefahren; der offene Horcher laeuft als Aufgabe, damit eine Ansage ihn erreichen kann, solange er offen ist.",
+  "anwendungen": {
+    "offen": "App(store, identity=...) mit offenen alten Wegen",
+    "geschlossen": "App(store, identity=..., plain_ways=False)"
+  },
+  "hinweis_werte": "<zeichen>, <fremdes zeichen> und <sitzung> stehen fuer echte Werte; Werte stehen nie in dieser Datei.",
+  "faelle": [
+    {
+      "name": "ein anderer Weg ist kein Horcher",
+      "anwendung": "offen",
+      "anfrage": {
+        "path": "/v1/nirgendwo",
+        "headers": {}
+      },
+      "erwartet": {
+        "angenommen": false,
+        "schliesscode": 4004,
+        "gesendet": [
+          "websocket.close"
+        ]
+      }
+    },
+    {
+      "name": "ohne Zeichen wird vor dem Annehmen geschlossen",
+      "anwendung": "offen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {}
+      },
+      "erwartet": {
+        "angenommen": false,
+        "schliesscode": 4401,
+        "gesendet": [
+          "websocket.close"
+        ]
+      }
+    },
+    {
+      "name": "ein unbekanntes Zeichen ebenso",
+      "anwendung": "offen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "authorization": "Bearer nichtvergeben"
+        }
+      },
+      "erwartet": {
+        "angenommen": false,
+        "schliesscode": 4401,
+        "gesendet": [
+          "websocket.close"
+        ]
+      }
+    },
+    {
+      "name": "bei geschlossenen Wegen hilft auch ein gueltiges Zeichen nicht",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "angenommen": false,
+        "schliesscode": 4426,
+        "gesendet": [
+          "websocket.close"
+        ]
+      }
+    },
+    {
+      "name": "eine Sitzung, die es nicht gibt",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "gibtsnicht"
+        }
+      },
+      "erwartet": {
+        "angenommen": false,
+        "schliesscode": 4410,
+        "gesendet": [
+          "websocket.close"
+        ]
+      }
+    },
+    {
+      "name": "ein Horcher mit Zeichen hoert seine Ansage",
+      "anwendung": "offen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "authorization": "<zeichen>"
+        }
+      },
+      "erwartet": {
+        "angenommen": true,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.send"
+        ],
+        "ansagen": [
+          {
+            "kind": "playback",
+            "scope": "geraet-1",
+            "version": "1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "eine Ansage erreicht nur ihren eigenen Besitzer",
+      "anwendung": "offen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "authorization": "<fremdes zeichen>"
+        }
+      },
+      "erwartet": {
+        "angenommen": true,
+        "gesendet": [
+          "websocket.accept"
+        ],
+        "ansagen": []
+      }
+    },
+    {
+      "name": "versiegelt: erst der Rahmen mit Zeichen, dann die Ansage",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "<sitzung>"
+        },
+        "erste_gestalt": "rahmen",
+        "erster_rahmen": {
+          "method": "GET",
+          "target": "/v1/changes",
+          "headers": {
+            "authorization": "<zeichen>"
+          }
+        }
+      },
+      "erwartet": {
+        "angenommen": true,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.send"
+        ],
+        "ansagen": [
+          {
+            "kind": "playback",
+            "scope": "geraet-3",
+            "version": "1"
+          }
+        ],
+        "ansage_ist_versiegelt": true
+      }
+    },
+    {
+      "name": "versiegelt: der erste Rahmen ohne Zeichen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "<sitzung>"
+        },
+        "erste_gestalt": "rahmen",
+        "erster_rahmen": {
+          "method": "GET",
+          "target": "/v1/changes"
+        }
+      },
+      "erwartet": {
+        "angenommen": true,
+        "schliesscode": 4401,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.close"
+        ],
+        "ansage_ist_versiegelt": false
+      }
+    },
+    {
+      "name": "versiegelt: der erste Rahmen ist kein Rahmen",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "<sitzung>"
+        },
+        "erste_gestalt": "versiegelter_unsinn"
+      },
+      "erwartet": {
+        "angenommen": true,
+        "schliesscode": 4400,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.close"
+        ],
+        "ansage_ist_versiegelt": false
+      }
+    },
+    {
+      "name": "versiegelt: das erste Wort ist Text statt Bytes",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "<sitzung>"
+        },
+        "erste_gestalt": "text_statt_bytes"
+      },
+      "erwartet": {
+        "angenommen": true,
+        "schliesscode": 4400,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.close"
+        ],
+        "ansage_ist_versiegelt": false
+      }
+    },
+    {
+      "name": "versiegelt: das erste Wort ist nicht versiegelt",
+      "anwendung": "geschlossen",
+      "anfrage": {
+        "path": "/v1/changes",
+        "headers": {
+          "x-maer-session": "<sitzung>"
+        },
+        "erste_gestalt": "kein_siegel"
+      },
+      "erwartet": {
+        "angenommen": true,
+        "schliesscode": 4400,
+        "gesendet": [
+          "websocket.accept",
+          "websocket.close"
+        ],
+        "ansage_ist_versiegelt": false
+      }
+    }
+  ]
+}
