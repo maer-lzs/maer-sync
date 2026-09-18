@@ -349,6 +349,8 @@ class ContractTests(unittest.TestCase):
         # Both ways round on purpose. A name in the list with no tracked
         # source is the same hazard from the other end, because `rglob` on a
         # directory that is not there returns nothing without complaining.
+        # `abdeckung` kommt aus demselben Grund dazu: dort steht ein Urteil
+        # UEBER die Zeugen, kein Dienst.
         # `vektoren` und `werkzeug` sind genannt, aber ausdruecklich NICHT in
         # SERVICE_DIRS. Fuer `werkzeug` gilt derselbe Grund wie fuer die
         # Erzeuger, nur schaerfer: `gegenprobe.py` und `horchprobe.py`
@@ -360,7 +362,7 @@ class ContractTests(unittest.TestCase):
         # darueber laufen, waeren die Versprechen des Vertrags vom Erzeuger
         # erfuellt statt vom Dienst, und jede Pruefung hier bliebe gruen,
         # waehrend der Dienst den Weg gar nicht mehr hat.
-        known = set(SERVICE_DIRS) | {"tests", "vektoren", "werkzeug"}
+        known = set(SERVICE_DIRS) | {"tests", "vektoren", "werkzeug", "abdeckung"}
         tracked = tracked_python_roots()
         named_but_empty = sorted(known - tracked)
         tracked_but_unfenced = sorted(tracked - known)

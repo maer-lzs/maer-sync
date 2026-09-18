@@ -45,7 +45,8 @@ LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 # Quelltext, und eine Vektordatei ohne Erzeuger ist eine Behauptung. Die
 # JSON-Dateien daneben werden nicht eingesammelt (die Sammlung nimmt nur
 # .py, .rs, .sh und Dockerfile) und tragen ihre Ausnahme mit Grund.
-SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug", "vektoren")
+SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug", "vektoren",
+               "abdeckung")
 
 #: Files at the root that are source too, each named on purpose.
 ROOT_FILES = ("Dockerfile", "compose.yaml", "run-tests.sh", "Cargo.toml")
@@ -77,6 +78,10 @@ EXEMPT = {
                                "where they come from is stated in the README beside them",
     "vektoren/kopf-und-schluessel.json": "numbers, and JSON has no comment to put a header in; "
                                           "where they come from is stated in the README beside them",
+    "abdeckung/108-faelle.json": "a judgement per case, written by its generator beside "
+                                "it, and JSON has no comment to put a header in; the fence "
+                                "in tests/test_abdeckung.py holds every line of it against "
+                                "the repository",
     "vektoren/befehle.json": "exit codes and sentences of the operator commands, measured "
                             "off the real CLI, and JSON has no comment to put a header in; "
                             "its generator is stated in the README beside it",
