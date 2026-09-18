@@ -34,6 +34,21 @@ WURZEL=$(cd "$(dirname "$0")/.." && pwd)
 
 command -v docker >/dev/null 2>&1 || { echo "bau: docker fehlt" >&2; exit 1; }
 
+# ERREICHBARKEIT VOR VORHANDENSEIN. Ohne diesen Schritt sieht ein Zugriffs-
+# fehler genauso aus wie ein fehlendes Abbild: `docker image inspect` gibt in
+# beiden Faellen 1, und die Meldung, die den Unterschied traegt, faellt in
+# `2>/dev/null`.
+#
+# GENAU DAS IST PASSIERT (19.09.2026): das sudo-Fenster war abgelaufen, die
+# Schleuse bekam »permission denied«, und diese Vorrichtung meldete »das
+# gepinnte Grundabbild liegt nicht vor«. Das Abbild lag die ganze Zeit da. Der
+# Fehlschluss ging als Befund in einen Bericht und in den Kanal.
+if ! fehler=$(docker version --format '{{.Server.Version}}' 2>&1); then
+  echo "bau: docker antwortet nicht, es wurde NICHTS ueber die Abbilder gemessen:" >&2
+  echo "  $fehler" >&2
+  exit 1
+fi
+
 # Fail-closed: ohne das gepinnte Grundabbild wird NICHT auf ein Etikett
 # zurueckgefallen, sonst baut irgendwann eine andere Fassung unbemerkt.
 docker image inspect "$GRUND" >/dev/null 2>&1 || {
