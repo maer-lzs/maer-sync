@@ -6,6 +6,7 @@ Jede Datei mit einem Erzeuger wird so neu gezogen:
 
     python3 vektoren/erzeuge_wege.py    > vektoren/wege.json
     python3 vektoren/erzeuge_horcher.py > vektoren/horcher.json
+    python3 vektoren/erzeuge_befehle.py > vektoren/befehle.json
 
 Eine Datei braucht zusaetzlich einen SERVER, also eine venv mit uvicorn (die
 Anleitung steht in der README des Repos):
@@ -40,6 +41,7 @@ Implementierung.
 | `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
+| `befehle.json` | **an der echten Python-CLI gemessen**, jeder Befehl gefahren | mittel: Ausgang und Satz sind unsere eigenen, aber nichts darin ist behauptet |
 | `abweisung.json` | **an der Python-Fassung unter uvicorn gemessen**, Aufstieg versucht und die Antwort gelesen | mittel: es misst, was ein fremder Server aus unserem Schliesscode macht, und genau das ist die Frage |
 | `horcher.json` | **am laufenden Socket gemessen**, jeder Fall als echter ASGI-Socket gefahren | mittel: die Schliesscodes sind unsere eigene Tafel, aber nichts darin ist behauptet |
 | `wege.json` | **an der laufenden `service/app.py` gemessen**, Fall fuer Fall gerufen | mittel: nichts darin ist behauptet, aber es misst unsere eigene Anwendung, also beweist es Gleichheit der zwei Fassungen und nicht Richtigkeit |
@@ -153,3 +155,30 @@ Fassung eines fremden Servers.
 gefangen hat:** ohne `content-length: 0` waehlt hyper `chunked` und schickt
 fuenf Byte Abschlussmarke, wo uvicorn null schickt. An der Schnittstelle ist
 das unsichtbar, auf der Leitung nicht.
+
+
+## `befehle.json`: was der Betreiber sieht
+
+Vom Dienst sieht ein Betreiber zuerst diese Befehle, und was er sieht, ist ein
+**Ausgangscode und ein Satz**. Ein Ausgang, der sich um eins verschiebt, macht
+aus einer geglueckten Sicherung eine gescheiterte, und sein Zeitplan alarmiert
+auf die falsche.
+
+Die Faelle teilen sich Speicher: `account` zweimal ist nur dann ein Fall, wenn
+das erste `account` davor lief. Die Tafel nennt deshalb je Fall ihren `lauf`,
+und `werkzeug/befehlsprobe.py` stellt ihn nach.
+
+**Zwei Sorten Text gehoeren nicht uns, und beide sind benannt statt
+stillschweigend uebergangen.** Bei einem fehlenden Argument antwortet auf der
+Python-Seite `argparse` mit einem Wortlaut, der den Python-Aufruf nennt
+(`satz_von: argparse`, es wird nur der Ausgang verglichen). Und hinter
+`the copy did not get written:` schreibt der Datenbanktreiber
+(`satz_bis`, verglichen wird bis einschliesslich unseres Doppelpunkts): zwei
+Treiber schreiben `unable to open database file` und
+`unable to open database: <pfad>`, und das ist ein Unterschied in der Herkunft
+des Textes, nicht im Verhalten.
+
+**Der Gutfall faehrt die Tafel gegen die Fassung, aus der sie stammt.** Genau
+das hat einen Fehler in der Maskierung gefangen: ein LEERES Geheimnis stand
+als `<geheimnis>` da, und beim Abspielen wurde ein gueltiges eingesetzt, womit
+der Fall »leeres Geheimnis« das Gegenteil dessen prueft, wofuer er dasteht.

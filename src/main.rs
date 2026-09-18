@@ -37,6 +37,7 @@ use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Message, Role};
 use tokio_tungstenite::WebSocketStream;
 
 use maer_sync::aufstieg::accept_key;
+use maer_sync::befehle;
 use maer_sync::horcher::{Tat, Wort};
 use maer_sync::kennung::{key_path, open_identity};
 use maer_sync::store::{Store, DEFAULT_KEEP};
@@ -104,7 +105,42 @@ impl Dienst {
     }
 }
 
+/// Die Befehle des Betreibers, und `serve` als Vorgabe ohne Befehl.
+///
+/// Von Hand zerlegt statt mit einer Crate: es sind fuenf Befehle und zwei
+/// Schalter, und eine Abhaengigkeit dafuer waere mehr, als die Frage wert
+/// ist. Namen, Argumente und **Ausgaenge** sind die der Python-Fassung,
+/// gemessen in `vektoren/befehle.json`.
+///
+/// **Was NICHT nachgebaut wird und warum:** bei einem fehlenden Argument
+/// antwortet dort `argparse` mit einem Wortlaut, der den Python-Aufruf nennt.
+/// Diese Fassung nennt ihren eigenen Aufruf und trifft denselben Ausgang; die
+/// Tafel haelt diese zwei Faelle als `satz_von: argparse` fest, damit der
+/// Unterschied benannt ist und nicht stillschweigend uebergangen wird.
 fn main() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let wort = |i: usize| args.get(i).map(|s| s.as_str());
+    match wort(0) {
+        Some("backup") =>
+            return std::process::ExitCode::from(befehle::befehl_backup(wort(1)) as u8),
+        Some("account") =>
+            return std::process::ExitCode::from(befehle::befehl_account(wort(1)) as u8),
+        Some("account-remove") =>
+            return std::process::ExitCode::from(befehle::befehl_account_remove(wort(1)) as u8),
+        Some("key") => {
+            let hat = |f: &str| args.iter().any(|a| a == f);
+            return std::process::ExitCode::from(
+                befehle::befehl_key(hat("--adopt"), hat("--new")) as u8);
+        }
+        Some("serve") | None => {}
+        Some(anderes) => {
+            eprintln!("no such command: {anderes}");
+            eprintln!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
+account-remove <owner>|key [--adopt|--new]]");
+            return std::process::ExitCode::from(2);
+        }
+    }
+
     let wo = std::env::var("MAER_SYNC_DB").unwrap_or_else(|_| "maer-sync.sqlite".into());
     let adresse = std::env::var("MAER_SYNC_BIND").unwrap_or_else(|_| "127.0.0.1:8081".into());
 

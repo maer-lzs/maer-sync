@@ -13,6 +13,7 @@
 
 pub mod admission;
 pub mod aufstieg;
+pub mod befehle;
 pub mod authorization;
 pub mod contract;
 pub mod formats;

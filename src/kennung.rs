@@ -151,3 +151,104 @@ pub fn open_identity(laden: &mut Store, pfad: &Path)
     }
     Ok((privat, gefunden))
 }
+
+
+/// Sagen, dass der Schluessel, der hier liegt, jetzt der richtige ist.
+///
+/// Der Weg des Betreibers, eine Aenderung zu WOLLEN, nachdem ein Dienst
+/// umgezogen ist oder auf eine Maschine zurueckgeholt wurde, die ihren
+/// eigenen Schluessel hat. Es vermerkt; es macht nie einen, denn ein
+/// `adopt`, das still erzeugte, waere genau die stille Ersetzung, gegen die
+/// diese Datei geschrieben ist.
+pub fn adopt(laden: &mut Store, pfad: &Path) -> Result<(String, Option<String>), RefusedToServe> {
+    let Some(privat) = read_key(pfad)? else {
+        return Err(RefusedToServe(format!(
+            "there is no key file at {} to adopt. To make a new identity, which every \
+device will have to accept again, run `key --new`.", pfad.display())));
+    };
+    let gefunden = fingerprint(&public_of(&privat)).map_err(RefusedToServe)?;
+    let war = laden.remembered_key()
+        .map_err(|e| RefusedToServe(format!("the store cannot be read ({e:?})")))?;
+    laden.remember_key(&gefunden)
+        .map_err(|e| RefusedToServe(format!("the store cannot be written ({e:?})")))?;
+    Ok((gefunden, war))
+}
+
+/// Eine neue Kennung machen, mit Absicht, und sagen, was sie kostet.
+///
+/// **Die alte Schluesseldatei wird BEHALTEN, nicht ueberschrieben**, und ihr
+/// Name traegt ein Datum. Eine versehentliche Drehung ist sonst nicht
+/// rueckholbar, und das einzige, was schlimmer ist als ein Identitaetswechsel,
+/// ist einer, den man nicht rueckgaengig machen kann.
+///
+/// Innerhalb einer Sekunde traefe eine zweite Drehung denselben Namen, und
+/// diese Funktion ist dafuer da, keine Schluessel zu verlieren: dann wird
+/// hochgezaehlt.
+pub fn make_new(laden: &mut Store, pfad: &Path)
+    -> Result<(String, Option<String>, Option<String>), RefusedToServe>
+{
+    let war = laden.remembered_key()
+        .map_err(|e| RefusedToServe(format!("the store cannot be read ({e:?})")))?;
+    let mut behalten = None;
+    if pfad.exists() {
+        let marke = zeitmarke();
+        let name = pfad.file_name().and_then(|n| n.to_str()).unwrap_or("identity.key");
+        let mut ziel = pfad.with_file_name(format!("{name}.was-{marke}"));
+        let mut n = 2;
+        while ziel.exists() {
+            ziel = pfad.with_file_name(format!("{name}.was-{marke}-{n}"));
+            n += 1;
+        }
+        std::fs::rename(pfad, &ziel).map_err(|e| RefusedToServe(format!(
+            "the previous key at {} could not be kept ({e}); nothing was replaced",
+            pfad.display())))?;
+        behalten = Some(ziel.display().to_string());
+    }
+    let mut neu = [0u8; 32];
+    neu.copy_from_slice(&zufall(32).map_err(RefusedToServe)?);
+    write_key(pfad, &neu)?;
+    let gefunden = fingerprint(&public_of(&neu)).map_err(RefusedToServe)?;
+    laden.remember_key(&gefunden)
+        .map_err(|e| RefusedToServe(format!("the store cannot be written ({e:?})")))?;
+    Ok((gefunden, war, behalten))
+}
+
+/// `JJJJMMTT-HHMMSS` in Ortszeit, dieselbe Gestalt, die `account-remove`
+/// benutzt. Von Hand gerechnet, weil eine Crate fuer eine Zeitmarke mehr
+/// waere, als die Frage wert ist.
+pub fn zeitmarke() -> String {
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    // Ortszeit ueber die Umgebung zu holen hiesse, eine Zeitzonen-Datenbank
+    // zu lesen. Hier zaehlt nur, dass der Name EINDEUTIG und lesbar ist,
+    // nicht, dass er die Zone des Wirts trifft; bei Gleichstand zaehlt die
+    // Schleife oben hoch.
+    let tage = jetzt / 86400;
+    let rest = jetzt % 86400;
+    let (j, m, t) = aus_tagen(tage);
+    format!("{j:04}{m:02}{t:02}-{:02}{:02}{:02}", rest / 3600, (rest % 3600) / 60, rest % 60)
+}
+
+/// Tage seit 1970 in Jahr, Monat, Tag. Die buergerliche Rechnung, ohne Crate.
+fn aus_tagen(mut tage: i64) -> (i64, i64, i64) {
+    let mut jahr = 1970;
+    loop {
+        let laenge = if schaltjahr(jahr) { 366 } else { 365 };
+        if tage < laenge { break; }
+        tage -= laenge;
+        jahr += 1;
+    }
+    let monate = [31, if schaltjahr(jahr) { 29 } else { 28 }, 31, 30, 31, 30,
+                  31, 31, 30, 31, 30, 31];
+    let mut monat = 1;
+    for l in monate {
+        if tage < l { break; }
+        tage -= l;
+        monat += 1;
+    }
+    (jahr, monat, tage + 1)
+}
+
+fn schaltjahr(j: i64) -> bool { (j % 4 == 0 && j % 100 != 0) || j % 400 == 0 }

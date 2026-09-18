@@ -1,0 +1,210 @@
+{
+  "was": "Die Betreiber-Befehle: welcher Ausgang und welcher Satz.",
+  "wie": "Die echte Python-CLI gefahren (python3 -m service ...), je Fall ein eigener Speicher; gemessen, nicht nachgebaut.",
+  "hinweis_maskierung": "<abdruck>, <pfad>, <zeit> und <geheimnis> stehen fuer Werte, die je Lauf wechseln oder nicht in eine Datei gehoeren. Ausgang und Satz sind roh.",
+  "faelle": [
+    {
+      "name": "key auf leerem Speicher macht keinen",
+      "befehl": [
+        "key"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "key file: <pfad>/identity.key\nfingerprint: none here\nthis store expects: nothing yet\nno static key here and none remembered, so this service is new"
+      },
+      "lauf": 1,
+      "vorbedingung": "kein Speicher, kein Schluessel"
+    },
+    {
+      "name": "key --new legt einen an",
+      "befehl": [
+        "key",
+        "--new"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "a new identity was made: <abdruck>"
+      },
+      "lauf": 2,
+      "vorbedingung": "kein Speicher, kein Schluessel"
+    },
+    {
+      "name": "key zeigt ihn danach",
+      "befehl": [
+        "key"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "key file: <pfad>/identity.key\nfingerprint: <abdruck>\nthis store expects: <abdruck>\nthe key <abdruck> is the one this store expects"
+      },
+      "lauf": 2,
+      "vorbedingung": "der Schluessel aus dem Lauf davor liegt"
+    },
+    {
+      "name": "key --new UND --adopt zugleich",
+      "befehl": [
+        "key",
+        "--new",
+        "--adopt"
+      ],
+      "erwartet": {
+        "ausgang": 2,
+        "fehlerausgabe": "--adopt takes the key that is there, --new makes one. Not both."
+      },
+      "lauf": 2
+    },
+    {
+      "name": "account ohne Namen",
+      "befehl": [
+        "account"
+      ],
+      "erwartet": {
+        "ausgang": 2,
+        "fehlerausgabe": "usage: python3 -m service account [-h] owner\npython3 -m service account: error: the following arguments are required: owner",
+        "satz_von": "argparse"
+      },
+      "lauf": 3
+    },
+    {
+      "name": "account legt eines an",
+      "befehl": [
+        "account",
+        "anna"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "account anna laid down"
+      },
+      "auf_der_eingabe": "<geheimnis>",
+      "lauf": 3
+    },
+    {
+      "name": "account zweimal derselbe Name",
+      "befehl": [
+        "account",
+        "anna"
+      ],
+      "erwartet": {
+        "ausgang": 1,
+        "fehlerausgabe": "refused: an account named 'anna' is already here"
+      },
+      "auf_der_eingabe": "<geheimnis>",
+      "lauf": 3
+    },
+    {
+      "name": "account mit leerem Geheimnis",
+      "befehl": [
+        "account",
+        "bodo"
+      ],
+      "erwartet": {
+        "ausgang": 2,
+        "fehlerausgabe": "no secret given"
+      },
+      "auf_der_eingabe": "",
+      "lauf": 3
+    },
+    {
+      "name": "account-remove nimmt es weg",
+      "befehl": [
+        "account-remove",
+        "anna"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "account anna removed, documents dropped: 0 (its tokens fell with it); backup at <pfad>/a.sqlite.before-remove-anna-<zeitmarke>.sqlite"
+      },
+      "lauf": 3
+    },
+    {
+      "name": "account-remove auf eines, das es nicht gibt",
+      "befehl": [
+        "account-remove",
+        "niemand"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "no account named 'niemand' (backup at <pfad>/a.sqlite.before-remove-niemand-<zeitmarke>.sqlite kept)"
+      },
+      "lauf": 3
+    },
+    {
+      "name": "backup ohne Speicher",
+      "befehl": [
+        "backup",
+        "<pfad>/kopie.sqlite"
+      ],
+      "erwartet": {
+        "ausgang": 1,
+        "ausgabe": "not_measured: not measured, the backup held no documents"
+      },
+      "lauf": 4,
+      "vorbedingung": "kein Speicher"
+    },
+    {
+      "name": "ein Konto anlegen, damit es etwas zu sichern gibt",
+      "befehl": [
+        "account",
+        "anna"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "account anna laid down"
+      },
+      "auf_der_eingabe": "<geheimnis>",
+      "lauf": 4
+    },
+    {
+      "name": "backup mit Speicher",
+      "befehl": [
+        "backup",
+        "<pfad>/kopie.sqlite"
+      ],
+      "erwartet": {
+        "ausgang": 1,
+        "ausgabe": "not_measured: not measured, the backup held no documents"
+      },
+      "lauf": 4,
+      "vorbedingung": "ein Speicher mit einem Konto"
+    },
+    {
+      "name": "backup ohne Ziel",
+      "befehl": [
+        "backup"
+      ],
+      "erwartet": {
+        "ausgang": 2,
+        "fehlerausgabe": "usage: python3 -m service backup [-h] path\npython3 -m service backup: error: the following arguments are required: path",
+        "satz_von": "argparse"
+      },
+      "lauf": 4
+    },
+    {
+      "name": "backup mit einem Dokument, die Probe kann messen",
+      "befehl": [
+        "backup",
+        "<pfad>/kopie.sqlite"
+      ],
+      "erwartet": {
+        "ausgang": 0,
+        "ausgabe": "fits: 1 documents, 8 bytes, came back unchanged"
+      },
+      "lauf": 5,
+      "vorbereitung": "ein_dokument",
+      "vorbedingung": "ein Speicher mit einem Konto UND einem Schriftstueck"
+    },
+    {
+      "name": "backup in ein Verzeichnis, das es nicht gibt",
+      "befehl": [
+        "backup",
+        "<pfad>/gibtsnicht/k.sqlite"
+      ],
+      "erwartet": {
+        "ausgang": 1,
+        "ausgabe": "not_measured: not measured, the rehearsal stopped: the copy did not get written: unable to open database file",
+        "satz_bis": "the copy did not get written:"
+      },
+      "lauf": 6
+    }
+  ]
+}

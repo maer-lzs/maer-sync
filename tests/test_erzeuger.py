@@ -39,6 +39,7 @@ REPO = os.path.dirname(HIER)
 ERZEUGER = [
     ("vektoren/erzeuge_wege.py", "vektoren/wege.json", {"faelle": 38, "tunnel": 11}),
     ("vektoren/erzeuge_horcher.py", "vektoren/horcher.json", {"faelle": 12}),
+    ("vektoren/erzeuge_befehle.py", "vektoren/befehle.json", {"faelle": 16}),
 ]
 
 

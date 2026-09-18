@@ -252,6 +252,73 @@ impl Store {
         Ok((decision, Some(version.to_string())))
     }
 
+    // ------------------------------------------------ Fuer die Rueckkehr-Probe
+
+    /// Die Byte-Laenge jedes Dokuments, nach Kennung.
+    ///
+    /// Groessen, nicht Koerper: die Probe vergleicht das, wofuer ein
+    /// Byte-Laden ehrlich buergen kann, und jeden Koerper dafuer im Speicher
+    /// zu halten waere die eine Verrichtung, die mit dem Bestand waechst.
+    pub fn sizes(&self) -> Result<std::collections::BTreeMap<String, i64>, StoreError> {
+        let mut s = self.db.prepare(
+            "SELECT owner, kind, scope, version, length(body) FROM documents")?;
+        let zeilen = s.query_map([], |r| {
+            Ok((format!("{}/{}/{}/{}", r.get::<_, String>(0)?, r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?, r.get::<_, i64>(3)?),
+                r.get::<_, i64>(4)?))
+        })?;
+        let mut aus = std::collections::BTreeMap::new();
+        for z in zeilen {
+            let (k, v) = z?;
+            aus.insert(k, v);
+        }
+        Ok(aus)
+    }
+
+    /// Eine in sich stimmige Kopie des ganzen Ladens nach `pfad`.
+    ///
+    /// **`VACUUM INTO` statt der Sicherungs-Schnittstelle**, und der
+    /// Unterschied ist benannt: die Python-Fassung nimmt `sqlite3.backup`,
+    /// diese hier nimmt `VACUUM INTO`. Beide geben einen Schnappschuss und
+    /// keine zerrissene Datei; die Kopie ist hier zusaetzlich verdichtet, also
+    /// sind die BYTES der Datei andere. Fuer die Probe ist das gleichgueltig,
+    /// weil sie Groessen JE DOKUMENT vergleicht und nicht die Datei. Die
+    /// Alternative waere das Merkmal `backup` von rusqlite, und das ist eine
+    /// Aufnahme.
+    ///
+    /// `VACUUM INTO` weigert sich, wenn die Zieldatei schon da ist. Das ist
+    /// die richtige Richtung: eine Sicherung, die eine aeltere ueberschreibt,
+    /// ist der Verlust, den sie verhindern soll.
+    pub fn backup(&self, pfad: &str) -> Result<(), StoreError> {
+        // **Erst daneben schreiben, dann darueberlegen.** `VACUUM INTO`
+        // weigert sich, wenn das Ziel schon da ist, und das waere hier der
+        // falsche Schutz: ein Betreiber, der taeglich auf DENSELBEN Pfad
+        // sichert, bekaeme ab dem zweiten Tag einen Fehlschlag, waehrend die
+        // Python-Fassung ueberschreibt. Gemessen an `vektoren/befehle.json`.
+        //
+        // Das Umbenennen ist dabei strenger als Python: dort schreibt die
+        // Sicherungs-Schnittstelle in die Zieldatei selbst, ein Abbruch
+        // mitten darin laesst also eine halbe Sicherung zurueck, wo vorher
+        // eine ganze lag. Hier bleibt die alte unangetastet, bis die neue
+        // vollstaendig ist.
+        let daneben = format!("{pfad}.im-entstehen-{}", std::process::id());
+        let _ = std::fs::remove_file(&daneben);
+        self.db.execute("VACUUM INTO ?1", params![&daneben])
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&daneben);
+                // Der Betreiber hat nach dem ZIEL gefragt, nicht nach meinem
+                // Arbeitsnamen daneben. Der taucht sonst in der Meldung auf,
+                // samt Prozessnummer, und fuehrt ihn an eine Datei, die es
+                // gar nicht mehr gibt.
+                StoreError::Refused(e.to_string().replace(&daneben, pfad))
+            })?;
+        std::fs::rename(&daneben, pfad).map_err(|e| {
+            let _ = std::fs::remove_file(&daneben);
+            StoreError::Refused(format!("unable to put the copy in place: {e}"))
+        })?;
+        Ok(())
+    }
+
     // ------------------------------------------------ Der gemerkte Schluessel
 
     /// Der Abdruck, den dieser Speicher erwartet, oder nichts.
