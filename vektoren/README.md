@@ -1,5 +1,23 @@
 # Die Vektoren, bevor eine Zeile Rust entsteht
 
+## Neu ziehen
+
+Jede Datei mit einem Erzeuger wird so neu gezogen:
+
+    python3 vektoren/erzeuge_wege.py > vektoren/wege.json
+
+`tests/test_erzeuger.py` faehrt jeden Erzeuger und haelt das Ergebnis
+**byte-gleich** gegen die eingecheckte Datei. Faellt der Zeuge, ist entweder
+der Dienst geaendert worden, dann ist die Datei neu zu ziehen und der
+Unterschied vorher zu LESEN, weil er die Liste des geaenderten Verhaltens ist,
+oder der Erzeuger misst etwas anderes. Die Fallzahl wird eigens geprueft: ein
+Erzeuger, der stillschweigend weniger Faelle zieht, ergaebe sonst eine kleinere
+Datei, die weiter zu sich selbst passt.
+
+**Eine Vektordatei ohne Erzeuger ist eine Behauptung** (Entscheid 18.09.2026).
+Die Dateien der Scheiben 1 bis 3 haben noch keinen; sie bekommen ihn im
+Nachlauf, mit der Fallzahl vorher gleich nachher.
+
 Scheibe 1 von H3 ist nicht das Geruest, sondern **diese Zahlen**. Der Auftrag sagt
 es so: die Rahmen, die Abdruecke und der Noise-Handschlag muessen in Rust
 byte-gleich herauskommen, BEVOR ein Pfad gebaut wird. Damit das eine Messung

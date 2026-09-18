@@ -349,7 +349,13 @@ class ContractTests(unittest.TestCase):
         # Both ways round on purpose. A name in the list with no tracked
         # source is the same hazard from the other end, because `rglob` on a
         # directory that is not there returns nothing without complaining.
-        known = set(SERVICE_DIRS) | {"tests"}
+        # `vektoren` ist genannt, aber ausdruecklich NICHT in SERVICE_DIRS.
+        # Dort liegen die Erzeuger, und ein Erzeuger NENNT die Wege und die
+        # Saetze des Vertrags, weil er sie ruft. Liesse man den Vertrags-Leser
+        # darueber laufen, waeren die Versprechen des Vertrags vom Erzeuger
+        # erfuellt statt vom Dienst, und jede Pruefung hier bliebe gruen,
+        # waehrend der Dienst den Weg gar nicht mehr hat.
+        known = set(SERVICE_DIRS) | {"tests", "vektoren"}
         tracked = tracked_python_roots()
         named_but_empty = sorted(known - tracked)
         tracked_but_unfenced = sorted(tracked - known)

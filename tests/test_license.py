@@ -41,7 +41,11 @@ LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 #: negative list would quietly read `.venv` once somebody installs one.
 #: Seit dem Rust-Zweig liegt Quelltext auch in `src`, und der Zaun muss ihn
 #: sehen: sonst faellt genau das Neue durch, und zwar still.
-SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug")
+# `vektoren` ist dabei, seit die Erzeuger dort liegen: ein Erzeuger IST
+# Quelltext, und eine Vektordatei ohne Erzeuger ist eine Behauptung. Die
+# JSON-Dateien daneben werden nicht eingesammelt (die Sammlung nimmt nur
+# .py, .rs, .sh und Dockerfile) und tragen ihre Ausnahme mit Grund.
+SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug", "vektoren")
 
 #: Files at the root that are source too, each named on purpose.
 ROOT_FILES = ("Dockerfile", "compose.yaml", "run-tests.sh", "Cargo.toml")
