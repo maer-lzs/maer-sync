@@ -1,0 +1,222 @@
+{
+  "_was": "Die drei Stuecke, die bei der Zaehlung ohne Gegenpart dastanden, und rein sind.",
+  "request_of": [
+    {
+      "name": "gewoehnlich",
+      "head": {
+        "method": "GET",
+        "target": "/v1/doc/stands"
+      },
+      "method": "GET",
+      "path": "/v1/doc/stands",
+      "query": "",
+      "headers": {}
+    },
+    {
+      "name": "mit Frage",
+      "head": {
+        "method": "GET",
+        "target": "/v1/doc/stands?scope=a&x=1"
+      },
+      "method": "GET",
+      "path": "/v1/doc/stands",
+      "query": "scope=a&x=1",
+      "headers": {}
+    },
+    {
+      "name": "leere Frage",
+      "head": {
+        "method": "GET",
+        "target": "/v1/doc/stands?"
+      },
+      "method": "GET",
+      "path": "/v1/doc/stands",
+      "query": "",
+      "headers": {}
+    },
+    {
+      "name": "Kopfzeilen klein",
+      "head": {
+        "method": "PUT",
+        "target": "/v1/doc/x",
+        "headers": {
+          "If-Match": "3",
+          "X-MAER-FORMAT": "1"
+        }
+      },
+      "method": "PUT",
+      "path": "/v1/doc/x",
+      "query": "",
+      "headers": {
+        "if-match": "3",
+        "x-maer-format": "1"
+      }
+    },
+    {
+      "name": "POST",
+      "head": {
+        "method": "POST",
+        "target": "/v1/token"
+      },
+      "method": "POST",
+      "path": "/v1/token",
+      "query": "",
+      "headers": {}
+    }
+  ],
+  "request_of_fehler": [
+    {
+      "name": "keine Methode",
+      "head": {
+        "target": "/x"
+      }
+    },
+    {
+      "name": "fremde Methode",
+      "head": {
+        "method": "DELETE",
+        "target": "/x"
+      }
+    },
+    {
+      "name": "Ziel ohne Schraegstrich",
+      "head": {
+        "method": "GET",
+        "target": "x"
+      }
+    },
+    {
+      "name": "Ziel ist Zahl",
+      "head": {
+        "method": "GET",
+        "target": 1
+      }
+    },
+    {
+      "name": "Kopfzeilen keine Karte",
+      "head": {
+        "method": "GET",
+        "target": "/x",
+        "headers": []
+      }
+    },
+    {
+      "name": "Kopfzeile kein Paar",
+      "head": {
+        "method": "GET",
+        "target": "/x",
+        "headers": {
+          "a": 1
+        }
+      }
+    }
+  ],
+  "reply_of": [
+    {
+      "name": "einfach",
+      "head": {
+        "status": 200
+      },
+      "status": 200,
+      "headers": {}
+    },
+    {
+      "name": "mit Kopfzeilen",
+      "head": {
+        "status": 412,
+        "headers": {
+          "ETag": "3"
+        }
+      },
+      "status": 412,
+      "headers": {
+        "etag": "3"
+      }
+    },
+    {
+      "name": "Rand unten",
+      "head": {
+        "status": 100
+      },
+      "status": 100,
+      "headers": {}
+    },
+    {
+      "name": "Rand oben",
+      "head": {
+        "status": 599
+      },
+      "status": 599,
+      "headers": {}
+    }
+  ],
+  "reply_of_fehler": [
+    {
+      "name": "kein Status",
+      "head": {}
+    },
+    {
+      "name": "Status als Text",
+      "head": {
+        "status": "200"
+      }
+    },
+    {
+      "name": "Status als Wahrheitswert",
+      "head": {
+        "status": true
+      }
+    },
+    {
+      "name": "zu klein",
+      "head": {
+        "status": 99
+      }
+    },
+    {
+      "name": "zu gross",
+      "head": {
+        "status": 600
+      }
+    }
+  ],
+  "ADOPT": "python3 -m service key --adopt",
+  "MAKE_NEW": "python3 -m service key --new",
+  "decide": [
+    {
+      "found": null,
+      "remembered": null,
+      "name": "make_one",
+      "may_serve": true,
+      "reason": "no static key here and none remembered, so this service is new"
+    },
+    {
+      "found": "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF",
+      "remembered": null,
+      "name": "remember",
+      "may_serve": true,
+      "reason": "the key AAAA-BBBB-CCCC-DDDD-EEEE-FFFF is here and this store has never recorded one, so it is recorded now"
+    },
+    {
+      "found": "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF",
+      "remembered": "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF",
+      "name": "carry_on",
+      "may_serve": true,
+      "reason": "the key AAAA-BBBB-CCCC-DDDD-EEEE-FFFF is the one this store expects"
+    },
+    {
+      "found": null,
+      "remembered": "ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT",
+      "name": "gone",
+      "may_serve": false,
+      "reason": "this store expects the key ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT and there is no key file. Making a new one would silently break every device that pinned the old one. Put the key file back, or run `python3 -m service key --new` to say that a new identity is wanted and every device should ask again."
+    },
+    {
+      "found": "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF",
+      "remembered": "ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT",
+      "name": "changed",
+      "may_serve": false,
+      "reason": "this store expects the key ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT but the key file is AAAA-BBBB-CCCC-DDDD-EEEE-FFFF. Serving anyway would hand a different identity to devices that pinned the first. Put the expected key back, or run `python3 -m service key --adopt` to say that this key is the right one now."
+    }
+  ]
+}

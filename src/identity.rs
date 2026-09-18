@@ -44,3 +44,57 @@ pub fn fingerprint(public_key: &[u8]) -> Result<String, String> {
         .collect::<Vec<_>>()
         .join("-"))
 }
+
+/// Was der Betreiber tippt, um zu sagen, dass eine Aenderung gewollt ist.
+/// Einmal benannt, damit die Abweisungen und die Hilfe nicht auseinanderlaufen.
+pub const ADOPT: &str = "python3 -m service key --adopt";
+pub const MAKE_NEW: &str = "python3 -m service key --new";
+
+/// Was mit dem Schluessel zu tun ist, der hier liegt, und warum.
+///
+/// `may_serve` ist das Einzige, worauf der Rufer verzweigt, und `reason` ist
+/// der Satz, den der Betreiber liest. Sie reisen zusammen, damit eine
+/// Abweisung nie ein Terminal erreicht, ohne zu sagen, was zu tun ist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Standing {
+    pub name: String,
+    pub may_serve: bool,
+    pub reason: String,
+}
+
+/// Der Stand des Schluessels auf der Platte gegen den, den der Speicher sich
+/// gemerkt hat.
+///
+/// Fuenf Faelle, und die zwei, die abweisen, sind der Grund fuer dieses Stueck:
+/// **ein statischer Schluessel, der sich still aendert, ist keiner.** Jedes
+/// Geraet, das den alten festgehalten hat, wuerde seinen Handschlag
+/// scheitern sehen, ohne eine Drehung von einem Dazwischenstehenden
+/// unterscheiden zu koennen.
+///
+/// Der bewusst nachgiebige Fall ist `remember`: ein Schluessel liegt hier und
+/// der Speicher hat nie einen vermerkt. Das ist ein aus einer Sicherung
+/// zurueckgeholter Speicher auf der Maschine, die ihren Schluessel noch hat.
+pub fn decide(found: Option<&str>, remembered: Option<&str>) -> Standing {
+    match (found, remembered) {
+        (None, None) => Standing {
+            name: "make_one".into(), may_serve: true,
+            reason: "no static key here and none remembered, so this service is new".into() },
+        (Some(f), None) => Standing {
+            name: "remember".into(), may_serve: true,
+            reason: format!("the key {f} is here and this store has never recorded one, \
+so it is recorded now") },
+        (Some(f), Some(r)) if f == r => Standing {
+            name: "carry_on".into(), may_serve: true,
+            reason: format!("the key {f} is the one this store expects") },
+        (None, Some(r)) => Standing {
+            name: "gone".into(), may_serve: false,
+            reason: format!("this store expects the key {r} and there is no key file. \
+Making a new one would silently break every device that pinned the old one. Put the key file \
+back, or run `{MAKE_NEW}` to say that a new identity is wanted and every device should ask again.") },
+        (Some(f), Some(r)) => Standing {
+            name: "changed".into(), may_serve: false,
+            reason: format!("this store expects the key {r} but the key file is {f}. \
+Serving anyway would hand a different identity to devices that pinned the first. Put the \
+expected key back, or run `{ADOPT}` to say that this key is the right one now.") },
+    }
+}

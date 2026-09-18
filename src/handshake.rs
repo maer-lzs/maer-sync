@@ -38,7 +38,7 @@ fn hash(data: &[u8]) -> [u8; HASHLEN] {
 }
 
 /// Die Ableitung des Rahmenwerks, zwei oder drei Ausgaben.
-fn kdf(chaining_key: &[u8; HASHLEN], ikm: &[u8], outputs: usize) -> Vec<[u8; HASHLEN]> {
+pub fn hkdf(chaining_key: &[u8; HASHLEN], ikm: &[u8], outputs: usize) -> Vec<[u8; HASHLEN]> {
     let hk = Hkdf::<Sha256>::new(Some(chaining_key), ikm);
     let mut okm = vec![0u8; HASHLEN * outputs];
     hk.expand(&[], &mut okm).expect("HASHLEN mal drei ist erlaubt");
@@ -51,7 +51,7 @@ fn kdf(chaining_key: &[u8; HASHLEN], ikm: &[u8], outputs: usize) -> Vec<[u8; HAS
         .collect()
 }
 
-fn dh(private: &[u8; 32], public: &[u8; 32]) -> [u8; 32] {
+pub fn dh(private: &[u8; 32], public: &[u8; 32]) -> [u8; 32] {
     let secret = StaticSecret::from(*private);
     secret.diffie_hellman(&PublicKey::from(*public)).to_bytes()
 }
@@ -127,7 +127,7 @@ impl SymmetricState {
         Self { h, chaining_key: h, cipher: CipherState::new(None) }
     }
     pub fn mix_key(&mut self, ikm: &[u8]) {
-        let out = kdf(&self.chaining_key, ikm, 2);
+        let out = hkdf(&self.chaining_key, ikm, 2);
         self.chaining_key = out[0];
         self.cipher = CipherState::new(Some(out[1]));
     }
@@ -150,7 +150,7 @@ impl SymmetricState {
         Ok(plaintext)
     }
     pub fn split(&self) -> (CipherState, CipherState) {
-        let out = kdf(&self.chaining_key, b"", 2);
+        let out = hkdf(&self.chaining_key, b"", 2);
         (CipherState::new(Some(out[0])), CipherState::new(Some(out[1])))
     }
 }
