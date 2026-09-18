@@ -18,6 +18,7 @@ pub mod frames;
 pub mod handshake;
 pub mod identity;
 pub mod paths;
+pub mod sessions;
 pub mod store;
 pub mod versions;
 pub mod writes;
