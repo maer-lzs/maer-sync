@@ -41,6 +41,13 @@ Lader ohnehin), sondern **ein Lauf in einem Abbild ohne musl**: dort startet das
 Erzeugnis und rechnet die Vektoren nach, waehrend die Fassung ohne Schalter
 nicht einmal anlaeuft.
 
+**Die Suite laeuft NACH `git add`, nicht davor.** Der Lizenz-Zaun fragt git,
+was VERFOLGT ist; eine Datei, die nur angelegt wurde, sieht er nicht. Wer die
+Suite vor dem Hinzufuegen faehrt, bekommt gruen und committet die Luecke. Genau
+das ist hier zweimal passiert, beim zweiten Mal einen Schritt frueher als beim
+ersten. Reihenfolge also: `git add -A`, dann `run-tests.sh` und `bau.sh test`,
+dann committen.
+
 **Was hier NICHT liegt: eine Crate.** Der Auftrag haelt die Crate-Liste als
 eigenen Entscheid fest, und bis der vorliegt, traegt der Zweig kein
 `Cargo.toml` mit Abhaengigkeiten. Die gemessenen Baeume stehen im Bericht.
