@@ -1,0 +1,140 @@
+{
+  "_was": "Das Urteil ueber eine geprobte Rueckkehr. Drei Ausgaenge, und der dritte ist der Punkt: eine Probe, die nicht laufen konnte, ist KEINE bestandene Probe. Erzeugt mit der Python-Fassung.",
+  "ausgaenge": {
+    "FITS": "fits",
+    "DIFFERS": "differs",
+    "NOT_MEASURED": "not_measured"
+  },
+  "faelle": [
+    {
+      "name": "leerer Bestand ist nicht gruen",
+      "backed_up": {},
+      "read_back": {},
+      "error": null,
+      "outcome": "not_measured",
+      "reason": "not measured, the backup held no documents",
+      "passed": false
+    },
+    {
+      "name": "nichts uebergeben",
+      "backed_up": null,
+      "read_back": null,
+      "error": null,
+      "outcome": "not_measured",
+      "reason": "not measured, the rehearsal handed back nothing to compare",
+      "passed": false
+    },
+    {
+      "name": "read_back fehlt",
+      "backed_up": {
+        "a": 1
+      },
+      "read_back": null,
+      "error": null,
+      "outcome": "not_measured",
+      "reason": "not measured, the rehearsal handed back nothing to compare",
+      "passed": false
+    },
+    {
+      "name": "Probe gestoppt",
+      "backed_up": {
+        "a": 1
+      },
+      "read_back": {
+        "a": 1
+      },
+      "error": "die Datei war gesperrt",
+      "outcome": "not_measured",
+      "reason": "not measured, the rehearsal stopped: die Datei war gesperrt",
+      "passed": false
+    },
+    {
+      "name": "passt",
+      "backed_up": {
+        "a": 10,
+        "b": 20
+      },
+      "read_back": {
+        "a": 10,
+        "b": 20
+      },
+      "error": null,
+      "outcome": "fits",
+      "reason": "2 documents, 30 bytes, came back unchanged",
+      "passed": true
+    },
+    {
+      "name": "eins fehlt",
+      "backed_up": {
+        "a": 10,
+        "b": 20
+      },
+      "read_back": {
+        "a": 10
+      },
+      "error": null,
+      "outcome": "differs",
+      "reason": "1 of 2 documents did not come back: b",
+      "passed": false
+    },
+    {
+      "name": "zwei fehlen",
+      "backed_up": {
+        "a": 1,
+        "b": 2,
+        "c": 3
+      },
+      "read_back": {
+        "a": 1
+      },
+      "error": null,
+      "outcome": "differs",
+      "reason": "2 of 3 documents did not come back: b, c",
+      "passed": false
+    },
+    {
+      "name": "eins zuviel",
+      "backed_up": {
+        "a": 10
+      },
+      "read_back": {
+        "a": 10,
+        "z": 5
+      },
+      "error": null,
+      "outcome": "differs",
+      "reason": "1 documents came back that were not backed up: z",
+      "passed": false
+    },
+    {
+      "name": "falsche Groesse",
+      "backed_up": {
+        "a": 10,
+        "b": 20
+      },
+      "read_back": {
+        "a": 10,
+        "b": 21
+      },
+      "error": null,
+      "outcome": "differs",
+      "reason": "1 of 2 documents came back at a different size, first b: 20 bytes out, 21 bytes back",
+      "passed": false
+    },
+    {
+      "name": "alles falsch",
+      "backed_up": {
+        "a": 1,
+        "b": 2
+      },
+      "read_back": {
+        "a": 9,
+        "b": 8
+      },
+      "error": null,
+      "outcome": "differs",
+      "reason": "2 of 2 documents came back at a different size, first a: 1 bytes out, 9 bytes back",
+      "passed": false
+    }
+  ]
+}
