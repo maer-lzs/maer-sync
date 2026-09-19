@@ -4,10 +4,17 @@
 
 Jede Datei mit einem Erzeuger wird so neu gezogen:
 
-    python3 vektoren/erzeuge_wege.py    > vektoren/wege.json
-    python3 vektoren/erzeuge_horcher.py > vektoren/horcher.json
+    python3 vektoren/erzeuge_wege.py      > vektoren/wege.json
+    python3 vektoren/erzeuge_horcher.py   > vektoren/horcher.json
     python3 vektoren/erzeuge_befehle.py   > vektoren/befehle.json
     python3 vektoren/erzeuge_protokoll.py > vektoren/protokoll.json
+    python3 vektoren/erzeuge_abdruecke.py > vektoren/abdruecke.json
+    python3 vektoren/erzeuge_rahmen.py    > vektoren/rahmen.json
+    python3 vektoren/erzeuge_rueckkehr.py > vektoren/rueckkehr.json
+    python3 vektoren/erzeuge_sitzungen.py > vektoren/sitzungen.json
+    python3 vektoren/erzeuge_zeichen.py   > vektoren/zeichen.json
+    python3 vektoren/erzeuge_schreiben.py > vektoren/schreiben.json
+    python3 vektoren/erzeuge_kopf_und_schluessel.py > vektoren/kopf-und-schluessel.json
 
 Eine Datei braucht zusaetzlich einen SERVER, also eine venv mit uvicorn (die
 Anleitung steht in der README des Repos):
@@ -26,8 +33,16 @@ Erzeuger, der stillschweigend weniger Faelle zieht, ergaebe sonst eine kleinere
 Datei, die weiter zu sich selbst passt.
 
 **Eine Vektordatei ohne Erzeuger ist eine Behauptung** (Entscheid 18.09.2026).
-Die Dateien der Scheiben 1 bis 3 haben noch keinen; sie bekommen ihn im
-Nachlauf, mit der Fallzahl vorher gleich nachher.
+Die sieben Dateien der Scheiben 1 bis 3 haben ihren seit dem **19.09.2026**, und
+sie sind dabei **byte-gleich geblieben**: jeder Erzeuger zieht genau die Datei,
+die vorher von Hand danebenlag, mit derselben Fallzahl. Das ist das Ergebnis und
+nicht die Voraussetzung gewesen, denn eine Abweichung haette geheissen, dass eine
+der Zahlen falsch war.
+
+**Ohne Erzeuger bleibt genau eine Datei, und sie braucht keinen:**
+`noise-nk.json` kommt von aussen. Sie nachzuziehen hiesse, die
+veroeffentlichten Vektoren durch unsere eigene Rechnung zu ersetzen, und damit
+waere genau das weg, was sie wertvoll macht.
 
 Scheibe 1 von H3 ist nicht das Geruest, sondern **diese Zahlen**. Der Auftrag sagt
 es so: die Rahmen, die Abdruecke und der Noise-Handschlag muessen in Rust
@@ -47,6 +62,11 @@ Implementierung.
 | `abweisung.json` | **an der Python-Fassung unter uvicorn gemessen**, Aufstieg versucht und die Antwort gelesen | mittel: es misst, was ein fremder Server aus unserem Schliesscode macht, und genau das ist die Frage |
 | `horcher.json` | **am laufenden Socket gemessen**, jeder Fall als echter ASGI-Socket gefahren | mittel: die Schliesscodes sind unsere eigene Tafel, aber nichts darin ist behauptet |
 | `wege.json` | **an der laufenden `service/app.py` gemessen**, Fall fuer Fall gerufen | mittel: nichts darin ist behauptet, aber es misst unsere eigene Anwendung, also beweist es Gleichheit der zwei Fassungen und nicht Richtigkeit |
+| `schreiben.json` | aus `core/versions.py`, `admission.py`, `formats.py`, `writes.py`, `paths.py`, jedes Tor gerufen | mittel: Urteil UND Satz stehen drin, also faellt auch eine falsche Begruendung auf; es bleibt unsere eigene Regel |
+| `sitzungen.json` | aus `core/sessions.py`, jeder Rand gerufen | mittel: die Faelle sind Raender und Ordnungen, nicht Mitten; die Zahlen selbst sind unsere Wahl |
+| `zeichen.json` | aus `core/authorization.py`, Salz eingespeist statt gezogen | mittel: die Abdruecke sind SHA-256 und nachrechenbar, die gespeicherte Form ist unser Format |
+| `rueckkehr.json` | aus `core/restore.py`, jeder Ausgang gerufen | mittel: die drei Ausgaenge und ihre Saetze sind unsere eigenen, aber nichts darin ist behauptet |
+| `kopf-und-schluessel.json` | aus `core/frames.py` und `core/identity.py`, jeder Fehlerfall wirklich gerufen | mittel: dass eine Abweisung abweist, ist gemessen; was sie sagt, ist unsere Wahl |
 
 **Diese Abstufung ist der Punkt.** Ein Vektor, den unsere Python-Fassung erzeugt
 und unsere Rust-Fassung bestaetigt, beweist Gleichheit der beiden, nicht
@@ -95,13 +115,17 @@ gegen ihre eigene Konstante haelt. Die Vertragsfassung 6 mit diesem Satz ist
 ein eigener Schritt auf `main`, mit der App-Konstante im selben Zug. Hier
 beschreibt der Satz nur, was die Vektoren zeigen.
 
-## Was noch NICHT gemessen ist
+## Wie die Zeugen gefahren werden
 
-**Es gibt auf diesem Wirt keine Rust-Werkzeugkette** (weder `cargo` noch `rustc`,
-auf Pi und Tiny geprueft). Solange sie fehlt, kann niemand hier eine Rust-Zeile
-gruen sehen, und deshalb liegt hier auch keine. Nach Regel 7 ist das eine
-Abstinenz mit Grund und kein gruener Haken: die Werkzeugkette und die Crates
-sind Entscheide und liegen zur Vorlage.
+**Auf dem Wirt liegt weiterhin keine Rust-Werkzeugkette**, weder `cargo` noch
+`rustc`, auf Pi und Tiny geprueft. Das ist ein Entscheid und kein Mangel: gebaut
+wird im gepinnten Abbild ueber `werkzeug/bau.sh`, und auf dem Wirt bleibt
+nichts liegen.
+
+*(Bis zum 19.09.2026 stand hier, es koenne deshalb niemand eine Rust-Zeile gruen
+sehen. Das war einmal wahr und ist es seit der Bau-Vorrichtung nicht mehr; die
+Zeugen laufen, die Zahl steht im jeweiligen Bericht. Ein Satz ueber einen
+Zustand, den niemand misst, altert genau so.)*
 
 
 ## `wege.json`: die Reihenfolge der Tore
