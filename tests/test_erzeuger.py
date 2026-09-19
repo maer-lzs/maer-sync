@@ -88,6 +88,23 @@ ZIEHT_EIN_ZEICHEN = [
 #: Die Erzeuger, die keinen Speicher anfassen duerfen. Fuer sie gilt die
 #: staerkere Aussage: nicht „es ist kein Zeichen drin", sondern „es kann keines
 #: geben".
+#: Die Wege, auf denen ein Erzeuger trotzdem an den Dienst kaeme. Der erste
+#: allein war zu eng gemessen (Befund des Gegenlesers, 19.09.2026): ein
+#: Erzeuger koennte den Dienst auch ueber `importlib`, `__import__` oder einen
+#: Unterprozess rufen, und der Zaun saehe nichts.
+#:
+#: **Kein Muster auf das blosse Wort `service`.** Es steht als
+#: `service_schema` in `erzeuge_schreiben.py`, und ein Zaun, der auf harmlosen
+#: Text anschlaegt, wird abgeschaltet statt gelesen. Was er nicht treffen
+#: darf, steht in `test_das_muster_greift_nicht_weiter_als_die_frage`.
+WEGE_ZUM_DIENST = [
+    ("Import", r"^\s*(?:from|import)\s+service(?:[.\s]|$)"),
+    ("importlib", r"\bimportlib\b"),
+    ("__import__", r"__import__"),
+    ("subprocess", r"\bsubprocess\b"),
+    ("python -m service", r"-m['\"\s,\]]+.{0,12}service\b"),
+]
+
 OHNE_SPEICHER = [
     "vektoren/erzeuge_abdruecke.py",
     "vektoren/erzeuge_rahmen.py",
@@ -184,15 +201,52 @@ class JederErzeugerZiehtSeineDatei(unittest.TestCase):
         Gegenstand, die auf Schlüsselmaterial anschlägt.
         """
         import re
-        for skript in OHNE_SPEICHER:
-            with self.subTest(erzeuger=skript):
-                with open(os.path.join(REPO, skript), encoding="utf-8") as f:
-                    quelle = f.read()
-                treffer = re.findall(r"^\s*(?:from|import)\s+(service[.\w]*)",
-                                     quelle, re.M)
-                self.assertEqual([], treffer,
-                                 f"{skript} zieht aus dem Dienst ({treffer}); dann kann "
-                                 "ein Zeichen entstehen und die Zusicherung hier ist weg")
+        for name, muster in WEGE_ZUM_DIENST:
+            for skript in OHNE_SPEICHER:
+                with self.subTest(erzeuger=skript, weg=name):
+                    with open(os.path.join(REPO, skript), encoding="utf-8") as f:
+                        quelle = f.read()
+                    treffer = re.findall(muster, quelle, re.M)
+                    self.assertEqual([], treffer,
+                                     f"{skript} kann ueber {name} an den Dienst "
+                                     f"({treffer}); dann kann ein Zeichen entstehen und "
+                                     "die Zusicherung hier ist weg")
+
+    def test_das_muster_greift_nicht_weiter_als_die_frage(self):
+        """Die Gegenprobe zum Zaun darueber, und sie hat einen Anlass.
+
+        Ein Muster auf das blosse Wort `service` schluege auf
+        `service_schema` an, einen Argumentnamen von `serve_verdict`, der in
+        `erzeuge_schreiben.py` zweimal steht. Ein Zaun, der auf harmlosen
+        Text anschlaegt, wird abgeschaltet statt gelesen, und danach prueft
+        er gar nichts mehr. Deshalb steht hier, was er NICHT treffen darf.
+        """
+        import re
+        harmlos = [
+            "    u = serve_verdict(store_schema=laden, service_schema=dienst)",
+            '    ("service", "kein Import, nur ein Wort im Text"),',
+            "# der Dienst service/app.py steht hier nur im Kommentar",
+            "SERVICE = 'nichts'",
+        ]
+        for zeile in harmlos:
+            for name, muster in WEGE_ZUM_DIENST:
+                with self.subTest(weg=name, zeile=zeile[:40]):
+                    self.assertEqual([], re.findall(muster, zeile, re.M),
+                                     f"{name} schlaegt auf harmlosen Text an")
+
+        # Und die andere Richtung, sonst misst dieser Fall nur, dass das
+        # Muster nie etwas findet: jeder Weg muss seine eigene Form treffen.
+        echte = {
+            "Import": "from service.store import Store",
+            "importlib": "    m = importlib.import_module('service.store')",
+            "__import__": "    m = __import__('service.store')",
+            "subprocess": "    subprocess.run(['python3', '-m', 'service', 'account'])",
+            "python -m service": "    ruf = 'python3 -m service account lzs'",
+        }
+        for name, muster in WEGE_ZUM_DIENST:
+            with self.subTest(weg=name):
+                self.assertNotEqual([], re.findall(muster, echte[name], re.M),
+                                    f"{name} trifft seine eigene Form nicht")
 
 
 class JedeVektordateiIstErfasst(unittest.TestCase):
