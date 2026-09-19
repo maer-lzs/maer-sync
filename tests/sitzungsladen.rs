@@ -266,3 +266,37 @@ fn rauschen_haelt_die_sitzung_nicht_am_leben() {
     assert!(matches!(laden.unseal(&name, &brief, b""), Err(SitzungsFehler::Unbekannt(_))),
             "der Unsinn darf die Frist NICHT gestellt haben");
 }
+
+/// **Eine bewiesene Sitzung ueberlebt die kurze Frist.**
+///
+/// Die kurze Frist gilt einem Handschlag, der noch nichts bewiesen hat: er
+/// soll billig sein und schnell wieder weg. Sobald eine Anmeldung oder ein
+/// Zeichen gezeigt hat, WER fragt, gilt die lange. Ohne diesen Unterschied
+/// waere entweder jeder Handschlag teuer oder jede echte Sitzung kurzlebig.
+#[test]
+fn eine_bewiesene_sitzung_ueberlebt_die_kurze_frist() {
+    let privat = schluessel();
+    let grenzen = Limits { idle_seconds: 500.0, unproven_idle_seconds: 50.0,
+                           max_age_seconds: 10_000.0, capacity: 8 };
+    let (mut laden, uhr) = laden_mit_uhr(grenzen);
+
+    let (_, e1) = erste_nachricht(&public_of(&privat), b"");
+    let (ohne_beweis, _, _) = laden.open(&e1, &privat, b"").expect("Sitzung");
+    let (_, e2) = erste_nachricht(&public_of(&privat), b"");
+    let (mit_beweis, _, _) = laden.open(&e2, &privat, b"").expect("Sitzung");
+    laden.prove(&mit_beweis).expect("beweisen");
+
+    // GUTFALL ZUERST: innerhalb der kurzen Frist leben beide.
+    uhr.stellen(1040.0);
+    assert!(laden.is_live(&ohne_beweis), "vor der kurzen Frist lebt auch der Handschlag");
+    assert!(laden.is_live(&mit_beweis));
+
+    // Danach trennt sich das.
+    uhr.stellen(1100.0);
+    assert!(!laden.is_live(&ohne_beweis), "der Handschlag faellt nach der kurzen Frist");
+    assert!(laden.is_live(&mit_beweis), "die bewiesene Sitzung nicht");
+
+    // Und auch sie ist nicht ewig.
+    uhr.stellen(1600.0);
+    assert!(!laden.is_live(&mit_beweis), "nach der langen Frist faellt auch sie");
+}

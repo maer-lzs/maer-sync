@@ -53,6 +53,31 @@ pub const DEFAULT_MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 /// abgleichen, bis sie erneuert sind.
 pub const PLAIN_WAYS: &str = "MAER_SYNC_PLAIN_WAYS";
 
+/// Wie der Wirt seine Koerpergrenze nennt.
+pub const GRENZE: &str = "MAER_SYNC_MAX_BODY_BYTES";
+
+/// Ob die alten Wege offen sind, aus dem Wert der Umgebungsvariablen.
+///
+/// Als eigene Funktion, weil die ENTSCHEIDUNG bezeugt gehoert und nicht die
+/// Tatsache, dass irgendwo `std::env::var` steht. Ein unlesbarer Wert faellt
+/// auf die Vorgabe zurueck, und die Vorgabe ist AN: Geraete, die nur die
+/// einfachen Wege sprechen, gleichen weiter ab, bis sie erneuert sind.
+pub fn alte_wege_aus(wert: Option<String>) -> bool {
+    match wert {
+        None => true,
+        Some(v) => !matches!(v.to_ascii_lowercase().as_str(), "off" | "0" | "no" | "false"),
+    }
+}
+
+/// Die Koerpergrenze aus dem Wert der Umgebungsvariablen.
+///
+/// Ein Wert, der keine Zahl ist, faellt auf die Vorgabe zurueck statt auf
+/// null: eine Grenze von null wiese jeden Schrieb ab, und ein Tippfehler in
+/// einer Umgebungsvariablen darf keinen Dienst stilllegen.
+pub fn grenze_aus(wert: Option<String>) -> usize {
+    wert.and_then(|v| v.trim().parse().ok()).unwrap_or(DEFAULT_MAX_BODY_BYTES)
+}
+
 /// Eine Anfrage, von außen oder von innen. `innen` ist die einzige Stelle, an
 /// der die beiden sich unterscheiden, und sie wird nie von der Leitung
 /// gelesen: sie wird gesetzt, wenn eine Sitzung sie entsiegelt hat.
@@ -169,12 +194,8 @@ impl App {
             identity: None,
             sessions: SessionStore::new(),
             listeners: Listeners::new(),
-            plain_ways: std::env::var(PLAIN_WAYS)
-                .map(|v| !matches!(v.to_ascii_lowercase().as_str(), "off" | "0" | "no" | "false"))
-                .unwrap_or(true),
-            max_body_bytes: std::env::var("MAER_SYNC_MAX_BODY_BYTES").ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(DEFAULT_MAX_BODY_BYTES),
+            plain_ways: alte_wege_aus(std::env::var(PLAIN_WAYS).ok()),
+            max_body_bytes: grenze_aus(std::env::var(GRENZE).ok()),
             protokoll: Vec::new(),
         }
     }

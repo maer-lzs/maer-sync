@@ -132,6 +132,21 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(
                 befehle::befehl_key(hat("--adopt"), hat("--new")) as u8);
         }
+        Some("--help") | Some("-h") | Some("help") => {
+            // Wie drueben: die Form nennen und mit 0 gehen, nicht dienen.
+            // Der gefaehrliche Fall waere, dass `--help` versehentlich den
+            // Dienst startet.
+            println!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
+account-remove <owner>|key [--adopt|--new]]");
+            println!();
+            println!("The Mar sync service and its operator commands.");
+            println!("  serve            run the service (the default with no command)");
+            println!("  backup PATH      copy the store and rehearse the restore");
+            println!("  account OWNER    lay down an account (secret on stdin)");
+            println!("  account-remove OWNER");
+            println!("  key [--adopt|--new]");
+            return std::process::ExitCode::SUCCESS;
+        }
         Some("serve") | None => {}
         Some(anderes) => {
             eprintln!("no such command: {anderes}");

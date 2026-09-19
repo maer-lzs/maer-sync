@@ -40,9 +40,9 @@ HORCH = "tests/horcher.rs::jeder_gemessene_fall_des_horchers_antwortet_genauso"
 z(A, "NothingAnswersWithoutAToken", "test_every_document_path_is_a_401_without_a_token",
   "tafel", WEGE, "wege.json: 'Schriftstueck ohne Zeichen' und 'mit unbekanntem Zeichen'")
 z(A, "NothingAnswersWithoutAToken", "test_a_write_without_a_token_never_reaches_the_store",
-  "keiner", "",
-  "die Tafel prueft die ANTWORT (401), nicht dass der Laden danach unberuehrt ist. "
-  "Ein Zeuge dafuer fehlt und ist eine eigene Zeile wert")
+  "zeuge", "tests/tore.rs::ein_schrieb_ohne_zeichen_erreicht_den_laden_nie",
+  "prueft den LADEN und nicht die Antwort: eine 401, nach der das Dokument trotzdem "
+  "liegt, waere schlimmer als keine Pruefung, weil sie beruhigt")
 z(A, "NothingAnswersWithoutAToken", "test_the_refusal_says_how_to_ask",
   "tafel", WEGE, "wege.json haelt die Kopfzeile www-authenticate: Bearer fest")
 z(A, "NothingAnswersWithoutAToken", "test_health_answers_without_one_and_says_nothing_about_the_store",
@@ -63,16 +63,16 @@ z(A, "HandingOutAToken", "test_a_request_that_is_not_one_is_a_400_not_a_500",
 z(A, "HandingOutAToken", "test_the_token_path_is_only_for_posting",
   "tafel", WEGE, "wege.json: 'Zeichen mit falscher Methode' 405")
 z(A, "OneOwnerNeverSeesAnother", "test_a_document_is_invisible_to_the_other_account",
-  "keiner", "",
-  "die Tafel faehrt EINEN Besitzer. Die Trennung zweier Besitzer ist in Rust nur "
-  "mittelbar gedeckt (der Laden schluesselt nach Besitzer, bezeugt in speicher.rs); "
-  "ein Fall ueber die WEGE fehlt")
+  "zeuge", "tests/tore.rs::ein_schriftstueck_ist_fuer_das_andere_konto_unsichtbar",
+  "zwei Konten ueber die Wege: fuer Bodo 404, und sein Schrieb laesst Annas Stand "
+  "unveraendert")
 z(A, "OneOwnerNeverSeesAnother", "test_a_write_by_one_does_not_touch_the_other",
   "zeuge", "tests/speicher.rs", "der Laden trennt nach Besitzer, aber am Laden und nicht am Weg")
 z(A, "OneOwnerNeverSeesAnother", "test_an_announcement_reaches_only_its_own_owner",
   "tafel", HORCH, "horcher.json: 'eine Ansage erreicht nur ihren eigenen Besitzer'")
 z(A, "OneOwnerNeverSeesAnother", "test_a_revoked_token_stops_working",
-  "keiner", "", "revoke_token ist portiert, aber kein Fall faehrt es ueber einen Weg")
+  "zeuge", "tests/tore.rs::ein_widerrufenes_zeichen_hoert_auf_zu_wirken",
+  "dasselbe Zeichen traegt vorher und nach dem Widerruf nicht mehr")
 z(A, "TheSocketNeedsATokenToo", "test_an_unauthorized_socket_is_closed_before_it_is_accepted",
   "tafel", HORCH, "horcher.json: 'ohne Zeichen wird vor dem Annehmen geschlossen', 4401")
 z(A, "TheSocketNeedsATokenToo", "test_a_bad_token_is_closed_too",
@@ -124,11 +124,16 @@ z(A, "AHalfWriteNeverReplacesAWholeDocument", "test_an_unreadable_body_never_rep
 z(A, "AHalfWriteNeverReplacesAWholeDocument", "test_an_empty_body_still_meets_its_own_gate",
   "tafel", WEGE, "wege.json: 'Schrieb mit leerem Koerper geht an den Laden'")
 z(A, "TheHostIsProtectedFromAboveToo", "test_a_body_over_the_limit_is_a_413_and_never_reaches_the_store",
-  "keiner", "", "die Grenze ist gebaut und im Quelltext bezeugt, aber kein Fall faehrt sie")
+  "zeuge", "tests/tore.rs::ein_koerper_ueber_der_grenze_ist_413_und_erreicht_den_laden_nie",
+  "413, im Laden liegt nichts, und knapp darunter geht es durch (sonst misst der Fall "
+  "nur eine Mauer)")
 z(A, "TheHostIsProtectedFromAboveToo", "test_the_limit_is_read_from_the_environment",
-  "keiner", "", "MAER_SYNC_MAX_BODY_BYTES wird gelesen, aber von keinem Fall gefahren")
+  "zeuge", "tests/tore.rs::die_grenze_kommt_aus_der_umgebung",
+  "die reine Entscheidung (auch: ein Tippfehler legt den Dienst NICHT still) UND die "
+  "Verdrahtung mit einer wirklich gesetzten Variablen")
 z(A, "TheHostIsProtectedFromAboveToo", "test_a_scope_with_an_encoded_colon_finds_its_own_document",
-  "keiner", "", "die Prozent-Entschluesselung ist gebaut (frage_lesen), aber kein Fall faehrt sie")
+  "zeuge", "tests/tore.rs::ein_bereich_mit_kodiertem_doppelpunkt_findet_sein_eigenes_dokument",
+  "kodiert und roh meinen dasselbe Dokument, sonst laege ein Geraet unter zwei Adressen")
 z(A, "TheHostIsProtectedFromAboveToo", "test_a_header_that_is_not_utf8_is_a_401_not_a_crash",
   "keiner", "",
   "in Rust kann eine Kopfzeile den Typ String gar nicht verletzen; der Transport "
@@ -165,7 +170,10 @@ z(A, "AnnouncingAChange", "test_a_socket_on_another_path_is_closed",
 C = "test_cli"
 BEF = "werkzeug/befehlsprobe.py gegen vektoren/befehle.json"
 z(C, "TheParserNeverServesByAccident", "test_help_asks_to_print_and_exits_rather_than_serving",
-  "keiner", "", "die Rust-Fassung hat kein --help; ein unbekannter Befehl nennt die Form und gibt 2")
+  "zeuge", "src/main.rs",
+  "die Rust-Fassung hat jetzt --help, -h und help: sie nennt die Form und geht mit 0, "
+  "statt zu dienen. Der gefaehrliche Fall waere, dass --help versehentlich den Dienst "
+  "startet")
 z(C, "TheParserNeverServesByAccident", "test_no_command_is_serve", "zeuge",
   "src/main.rs", "ohne Befehl faellt die Verteilung in den Dienst; kein eigener Fall, nur gebaut")
 z(C, "TheParserNeverServesByAccident", "test_the_commands_route_to_their_names", "tafel", BEF,
@@ -245,10 +253,11 @@ z(P, "TheTwoPathsNeedNoToken", "test_a_handshake_becomes_a_session_without_one",
   "tests/wege.rs::der_tunnel_traegt_dieselben_antworten", "der Handschlag im Tunnel laeuft ohne Zeichen")
 z(P, "TheWaysOfNotBeingAHandshake", "test_rubbish_is_one_answer_and_says_nothing_else", "tafel", WEGE,
   "wege.json: 'Sitzung, kein Handschlag', 400 mit EINEM Satz")
-z(P, "TheWaysOfNotBeingAHandshake", "test_an_empty_body_is_refused_too", "keiner", "",
-  "kein Fall mit leerem Koerper auf /v1/session")
-z(P, "TheWaysOfNotBeingAHandshake", "test_a_handshake_for_a_different_key_is_refused", "keiner", "",
-  "kein Fall; der Handschlag gegen einen fremden statischen Schluessel fehlt")
+z(P, "TheWaysOfNotBeingAHandshake", "test_an_empty_body_is_refused_too", "zeuge",
+  "tests/tore.rs::ein_leerer_koerper_ist_auch_kein_handschlag", "400, derselbe eine Satz")
+z(P, "TheWaysOfNotBeingAHandshake", "test_a_handshake_for_a_different_key_is_refused", "zeuge",
+  "tests/tore.rs::ein_handschlag_fuer_einen_anderen_schluessel_wird_abgewiesen",
+  "400, und er sagt NICHT, wie weit der Rufer gekommen ist")
 z(P, "TheWaysOfNotBeingAHandshake", "test_the_wrong_method_is_not_a_handshake", "tafel", WEGE,
   "wege.json: 'Sitzung mit falscher Methode', 405")
 z(P, "AServiceWithoutAKeyAnswersHonestly", "test_the_key_path_says_there_is_no_key", "tafel", WEGE,
@@ -264,9 +273,12 @@ z(T, "TheInsideIsTheOrdinaryWire", "test_a_sign_in_a_write_a_read_and_a_listing_
 z(T, "TheInsideIsTheOrdinaryWire", "test_the_gates_inside_are_the_gates_outside", "tafel", TUN,
   "wege.json, Tunnel: 'Schriftstueck ohne Zeichen bleibt 401'")
 z(T, "TheInsideIsTheOrdinaryWire", "test_a_token_from_inside_works_outside_and_the_other_way_round",
-  "keiner", "", "kein Fall reicht ein innen geholtes Zeichen nach aussen")
+  "zeuge", "tests/tore.rs::ein_zeichen_von_innen_wirkt_aussen_und_umgekehrt",
+  "der Tunnel ist ein Weg, keine zweite Welt")
 z(T, "TheInsideIsTheOrdinaryWire", "test_the_session_is_proven_by_a_sign_in_and_outlives_the_short_idle",
-  "keiner", "", "prove wird gerufen, aber kein Fall misst die laengere Frist danach")
+  "zeuge", "tests/sitzungsladen.rs::eine_bewiesene_sitzung_ueberlebt_die_kurze_frist",
+  "der Handschlag faellt nach der kurzen Frist, die bewiesene Sitzung nicht, und nach "
+  "der langen faellt auch sie")
 z(T, "WhatIsNotARequestInside", "test_an_ended_session_is_410_and_a_new_handshake_mends_it",
   "tafel", TUN, "wege.json, Tunnel: 410; das Heilen durch einen neuen Handschlag fehlt")
 z(T, "WhatIsNotARequestInside", "test_a_made_up_name_is_410_too", "tafel", TUN,
@@ -281,8 +293,9 @@ z(T, "ThePlainWaysCanBeTurnedOff", "test_a_plain_request_is_told_to_come_inside"
   "wege.json: die vier 426-Faelle")
 z(T, "ThePlainWaysCanBeTurnedOff", "test_the_session_paths_and_the_health_route_still_answer",
   "tafel", WEGE, "wege.json: 'gesundheit auch bei geschlossenen Wegen' und 'Schluessel auch bei'")
-z(T, "ThePlainWaysCanBeTurnedOff", "test_the_switch_reads_the_environment", "keiner", "",
-  "MAER_SYNC_PLAIN_WAYS wird gelesen, aber kein Fall faehrt die Umgebung")
+z(T, "ThePlainWaysCanBeTurnedOff", "test_the_switch_reads_the_environment", "zeuge",
+  "tests/tore.rs::der_schalter_der_alten_wege_kommt_aus_der_umgebung",
+  "sechs Schreibweisen fuer aus, vier fuer an, dazu die Verdrahtung")
 z(T, "TheSocketInsideASession", "test_the_first_frame_carries_the_token_and_announcements_come_back_sealed",
   "tafel", HORCH, "horcher.json: 'versiegelt: erst der Rahmen mit Zeichen, dann die Ansage'")
 z(T, "TheSocketInsideASession", "test_a_first_frame_without_a_token_closes_after_the_accept",
@@ -297,8 +310,10 @@ R = "test_rehearsal"
 z(R, "ABackupThatComesBack", "test_every_version_of_every_document_is_in_the_copy", "tafel",
   "werkzeug/befehlsprobe.py gegen vektoren/befehle.json",
   "befehle.json: 'backup mit einem Dokument', fits mit Zahl und Groesse")
-z(R, "ABackupThatComesBack", "test_the_accounts_travel_with_the_copy", "keiner", "",
-  "die Probe vergleicht DOKUMENTE, nicht Konten; kein Fall prueft, dass die Konten mitreisen")
+z(R, "ABackupThatComesBack", "test_the_accounts_travel_with_the_copy", "zeuge",
+  "tests/tore.rs::die_konten_reisen_mit_der_kopie",
+  "die Kopie wird geoeffnet und nach dem Zeichen gefragt: ein zurueckgeholter Laden "
+  "ohne Konten waere unbrauchbar, die Dokumente laegen unerreichbar da")
 z(R, "ABackupThatCannotBeJudged", "test_an_empty_store_is_not_measured_not_green", "tafel",
   "werkzeug/befehlsprobe.py gegen vektoren/befehle.json",
   "befehle.json: 'backup mit Speicher', not_measured und Ausgang 1")
