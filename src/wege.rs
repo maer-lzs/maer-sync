@@ -36,7 +36,7 @@ use crate::identity::public_of;
 use crate::listeners::Listeners;
 use crate::paths::{parse_document_path, parse_listing_path, valid_scope};
 use crate::sessions::Limits;
-use crate::protokoll::{woher, Zeile};
+use crate::protokoll::{sitzung_kurz, woher, Zeile};
 use crate::sitzungsladen::{SessionStore, SitzungsFehler};
 use crate::store::Store;
 
@@ -90,6 +90,9 @@ pub struct Anfrage {
     pub body: Vec<u8>,
     pub innen: bool,
     pub client: Option<String>,
+    /// Der Name der Sitzung, aus der diese Anfrage entsiegelt wurde. Nur
+    /// fuer die Zugriffszeile; die Entscheidung liest ihn nicht.
+    pub sitzung: Option<String>,
 }
 
 impl Anfrage {
@@ -102,6 +105,7 @@ impl Anfrage {
     }
     pub fn mit_koerper(mut self, body: &[u8]) -> Self { self.body = body.to_vec(); self }
     pub fn von_innen(mut self) -> Self { self.innen = true; self }
+    pub fn in_sitzung(mut self, name: &str) -> Self { self.sitzung = Some(name.into()); self }
 }
 
 /// Was jemandem zu sagen ist, der zuhört. Die Antwort trägt sie; der Transport
@@ -212,10 +216,36 @@ impl App {
 
     // ----------------------------------------------------------------- HTTP
 
-    /// Eine Anfrage, eine Antwort. Die REIHENFOLGE der Tore hier ist die
-    /// Entscheidung, nicht die einzelne Zeile, und sie steht Fall für Fall in
-    /// `vektoren/wege.json`.
+    /// Eine Anfrage, eine Antwort, und eine Zugriffszeile.
+    ///
+    /// **Die Zeile entsteht HIER und fuer jede Anfrage**, innen wie aussen,
+    /// mit dem Status, den die Entscheidung gegeben hat. Die eine Ausnahme ist
+    /// der Umschlag: eine versiegelte Anfrage tritt hier ZWEIMAL ein, einmal
+    /// als `POST /v1/session` von aussen und einmal entsiegelt von innen. Die
+    /// innere Zeile nennt den Weg, der zaehlt; die aeussere wuerde nur
+    /// `POST /v1/session 200` sagen, und genau das ist die Blindheit, an der
+    /// die Python-Fassung gemessen wurde (178-mal dieselbe Zeile, kein Weg
+    /// darin). Ein Umschlag, der SELBST scheitert (400, 410, 413), bekommt
+    /// seine Zeile, weil dann keine innere entsteht.
     pub fn http(&mut self, a: &Anfrage) -> Antwort {
+        let gab = self.entscheiden(a);
+        if !(ist_getragener_umschlag(a) && gab.status == 200) {
+            let bereich = frage_lesen(&a.query).get("scope").cloned()
+                .filter(|b| !b.is_empty()).unwrap_or_else(|| "-".to_string());
+            let grund = if gab.status >= 400 {
+                gab.grund().map(|g| format!(" reason={g}")).unwrap_or_default()
+            } else { String::new() };
+            self.protokoll.push(Zeile::zugriff(format!(
+                "access from={} session={} inner={} method={} path={} scope={} status={}{}",
+                woher(a.client.as_deref()), sitzung_kurz(a.sitzung.as_deref()), a.innen,
+                a.method, a.path, bereich, gab.status, grund)));
+        }
+        gab
+    }
+
+    /// Die REIHENFOLGE der Tore hier ist die Entscheidung, nicht die einzelne
+    /// Zeile, und sie steht Fall für Fall in `vektoren/wege.json`.
+    fn entscheiden(&mut self, a: &Anfrage) -> Antwort {
         // Die Gesundheit antwortet vor allem anderen, auch vor der Methode und
         // auch bei geschlossenen Wegen. Sie sagt nichts über den Laden.
         if a.path == "/v1/health" {
@@ -370,7 +400,7 @@ impl App {
         let innen = Anfrage {
             method, path: pfad.clone(), query: frage,
             headers: innere_kopfzeilen, body: koerper,
-            innen: true, client: a.client.clone(),
+            innen: true, client: a.client.clone(), sitzung: Some(name.to_string()),
         };
         let gab = self.http(&innen);
 
@@ -535,6 +565,13 @@ announced={angekuendigt}", woher(a.client.as_deref()))));
         }];
         aus
     }
+}
+
+/// Ein `POST /v1/session` MIT Sitzungskopf ist ein Umschlag: er traegt eine
+/// innere Anfrage, und die schreibt ihre eigene Zeile. Ohne den Kopf ist
+/// es der Handschlag selbst, und der ist ein Vorgang mit eigener Zeile.
+fn ist_getragener_umschlag(a: &Anfrage) -> bool {
+    !a.innen && a.path == "/v1/session" && a.headers.contains_key("x-maer-session")
 }
 
 // ------------------------------------------- Das bisschen HTTP, das ein

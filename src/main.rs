@@ -40,6 +40,7 @@ use maer_sync::aufstieg::accept_key;
 use maer_sync::befehle;
 use maer_sync::horcher::{Tat, Wort};
 use maer_sync::kennung::{key_path, open_identity};
+use maer_sync::protokoll::{jetzt, Art};
 use maer_sync::store::{Store, DEFAULT_KEEP};
 use maer_sync::wege::{Anfrage, Ansage, App};
 
@@ -81,6 +82,27 @@ struct Dienst {
 }
 
 impl Dienst {
+    /// Die Zeilen wegtragen, die seit dem letzten Mal entschieden wurden:
+    /// stempeln, und bei einem Zugriff die Dauer anhaengen, dann auf stdout.
+    ///
+    /// **Hier, und nur hier, wird geschrieben.** `wege.rs` entscheidet, dass
+    /// eine Zeile zu schreiben ist, und kennt weder Uhr noch Strom; dieser
+    /// Transport kennt beides. Bis Scheibe 6 Teil 6 fehlte er ganz: die
+    /// Abweisungen entstanden und blieben im Speicher, und `protokoll.txt`
+    /// hatte nach acht Stunden Betrieb zwei Zeilen (gemessen am 19.09.2026).
+    fn protokoll_austeilen(&self, beginn: std::time::Instant) {
+        let zeilen: Vec<maer_sync::protokoll::Zeile> = {
+            let mut app = self.app.lock().unwrap();
+            app.protokoll.drain(..).collect()
+        };
+        for z in zeilen {
+            let dauer = if z.art == Art::Zugriff {
+                format!(" ms={}", beginn.elapsed().as_millis())
+            } else { String::new() };
+            zeile_schreiben(&format!("{} {} maer.sync {}{}", jetzt(), z.stufe.name(), z.satz, dauer));
+        }
+    }
+
     /// Eine Ansage an alle austeilen, die für ihren Besitzer zuhören.
     ///
     /// Ein Draht, der weg ist, wird fallen gelassen statt wiederholt: eine
@@ -103,6 +125,31 @@ impl Dienst {
             }
         }
     }
+}
+
+/// Eine Zeile auf stdout, sofort. Der Strom ist zeilenweise gepuffert, aber
+/// ein Betreiber, der `tail -f` liest, soll nicht darauf wetten muessen:
+/// das Leeren steht ausdruecklich da.
+fn zeile_schreiben(zeile: &str) {
+    use std::io::Write;
+    let aus = std::io::stdout();
+    let mut l = aus.lock();
+    let _ = writeln!(l, "{zeile}");
+    let _ = l.flush();
+}
+
+/// Eine Zugriffszeile, die der TRANSPORT selbst schreibt, weil die Anfrage
+/// die Entscheidung nie erreicht hat (Koerper abgebrochen oder zu gross) oder
+/// weil sie ein Aufstieg ist, den `wege.rs` gar nicht sieht. Dieselbe
+/// Gestalt wie die Zeilen aus `wege.rs`, damit ein Leser nicht zwei Formen
+/// lernen muss.
+fn zugriff_schreiben(von: &str, method: &str, pfad: &str, status: u16, grund: &str,
+                     beginn: std::time::Instant)
+{
+    let reason = if grund.is_empty() { String::new() } else { format!(" reason={grund}") };
+    zeile_schreiben(&format!(
+        "{} INFO maer.sync access from={von} session=- inner=false method={method} path={pfad} \
+scope=- status={status}{reason} ms={}", jetzt(), beginn.elapsed().as_millis()));
 }
 
 /// Die Befehle des Betreibers, und `serve` als Vorgabe ohne Befehl.
@@ -240,13 +287,14 @@ account-remove <owner>|key [--adopt|--new]]");
 async fn bedienen(dienst: Arc<Dienst>, anfrage: Request<Incoming>, von: String)
     -> Result<Response<Voll>, Infallible>
 {
+    let beginn = std::time::Instant::now();
     let kopfzeilen: std::collections::BTreeMap<String, String> = anfrage.headers().iter()
         .map(|(k, v)| (k.as_str().to_ascii_lowercase(),
                        v.to_str().unwrap_or("").to_string()))
         .collect();
 
     if ist_aufstieg(&kopfzeilen) {
-        return Ok(aufsteigen(dienst, anfrage, kopfzeilen, von));
+        return Ok(aufsteigen(dienst, anfrage, kopfzeilen, von, beginn));
     }
 
     let method = anfrage.method().as_str().to_string();
@@ -257,19 +305,26 @@ async fn bedienen(dienst: Arc<Dienst>, anfrage: Request<Incoming>, von: String)
 
     let koerper = match koerper_lesen(anfrage.into_body(), grenze, angekuendigt).await {
         Ok(k) => k,
-        Err(KoerperFehler::Unvollstaendig) =>
-            return Ok(einfach(400, satz_unvollstaendig(&pfad))),
-        Err(KoerperFehler::ZuGross) =>
-            return Ok(einfach(413, satz_zu_gross(&pfad))),
+        Err(KoerperFehler::Unvollstaendig) => {
+            let satz = satz_unvollstaendig(&pfad);
+            zugriff_schreiben(&von, &method, &pfad, 400, satz.1, beginn);
+            return Ok(einfach(400, satz));
+        }
+        Err(KoerperFehler::ZuGross) => {
+            let satz = satz_zu_gross(&pfad);
+            zugriff_schreiben(&von, &method, &pfad, 413, satz.1, beginn);
+            return Ok(einfach(413, satz));
+        }
     };
 
     let gab = {
         let mut app = dienst.app.lock().unwrap();
         app.http(&Anfrage {
             method, path: pfad, query: frage, headers: kopfzeilen,
-            body: koerper, innen: false, client: Some(von),
+            body: koerper, innen: false, client: Some(von), sitzung: None,
         })
     };
+    dienst.protokoll_austeilen(beginn);
     dienst.ansagen_austeilen(&gab.ansagen);
 
     let mut bau = Response::builder().status(gab.status);
@@ -359,13 +414,15 @@ fn ist_aufstieg(kopfzeilen: &std::collections::BTreeMap<String, String>) -> bool
 /// im Klaren vor dem Annehmen. Fällt sie gegen ihn, steigt hier gar nichts
 /// auf, und er bekommt seine Zahl statt einer offenen Leitung.
 fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
-              kopfzeilen: std::collections::BTreeMap<String, String>, _von: String)
+              kopfzeilen: std::collections::BTreeMap<String, String>, _von: String,
+              beginn: std::time::Instant)
     -> Response<Voll>
 {
+    let pfad = anfrage.uri().path().to_string();
     let Some(schluessel) = kopfzeilen.get("sec-websocket-key").cloned() else {
+        zugriff_schreiben(&_von, "GET", &pfad, 400, "this upgrade names no key", beginn);
         return einfach(400, ("reason", "this upgrade names no key"));
     };
-    let pfad = anfrage.uri().path().to_string();
 
     let (mut horcher, taten) = {
         let mut app = dienst.app.lock().unwrap();
@@ -374,9 +431,15 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
     // Eine Abweisung reist als Schliesscode, und ohne Aufstieg gibt es keine
     // Leitung, auf der er reisen könnte. Also sagt es der Status: dieselbe
     // Entscheidung, nur in der Sprache, die vor dem Aufstieg gilt.
-    if let Some(Tat::Schliessen(_)) = taten.first() {
+    dienst.protokoll_austeilen(beginn);
+    if let Some(Tat::Schliessen(code)) = taten.first() {
+        // Der Status ist die 403, die vor dem Aufstieg gilt; der Grund ist der
+        // Schliesscode, den der Rufer NICHT sieht (gemessen: uvicorn
+        // verschluckt ihn). Hier steht er, damit der Betreiber ihn hat.
+        zugriff_schreiben(&_von, "GET", &pfad, 403, &format!("{} code={code}", grund_fuer(*code)), beginn);
         return abgewiesener_aufstieg();
     }
+    zugriff_schreiben(&_von, "GET", &pfad, 101, "", beginn);
 
     let (an_den_draht, mut vom_dienst) = unbounded_channel::<Tat>();
     {
@@ -386,6 +449,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
 
     let id = horcher.id.clone();
     let mitschrift = Arc::clone(&dienst);
+    let von_h = _von.clone();
     tokio::spawn(async move {
         let aufgestiegen = match hyper::upgrade::on(anfrage).await {
             Ok(a) => a,
@@ -401,6 +465,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
         // (eine Crate fuer eine Zeile) bleibt draussen.
         use futures_util::StreamExt;
         let (mut schreibt, mut liest) = leitung.split();
+        let von_s = von_h.clone();
         let schreiber = tokio::spawn(async move {
             use futures_util::SinkExt;
             while let Some(tat) = vom_dienst.recv().await {
@@ -411,6 +476,9 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
                     Tat::SendeText(t) => Message::Text(t.into()),
                     Tat::SendeBytes(b) => Message::Binary(b.into()),
                     Tat::Schliessen(code) => {
+                        zeile_schreiben(&format!(
+                            "{} INFO maer.sync socket close from={von_s} code={code} reason={}",
+                            jetzt(), grund_fuer(code)));
                         let _ = schreibt.send(Message::Close(Some(CloseFrame {
                             code: code.into(), reason: grund_fuer(code).into(),
                         }))).await;
@@ -430,6 +498,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
             let mut app = mitschrift.app.lock().unwrap();
             app.horcher_wort(&mut horcher, Wort::Verbunden)
         };
+        mitschrift.protokoll_austeilen(beginn);
         for tat in taten {
             let _ = an_den_draht.send(tat);
         }
@@ -448,6 +517,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
                 let mut app = mitschrift.app.lock().unwrap();
                 app.horcher_wort(&mut horcher, wort)
             };
+            mitschrift.protokoll_austeilen(beginn);
             let schliesst = taten.iter().any(|t| matches!(t, Tat::Schliessen(_)));
             for tat in taten {
                 let _ = an_den_draht.send(tat);
@@ -460,6 +530,7 @@ fn aufsteigen(dienst: Arc<Dienst>, anfrage: Request<Incoming>,
         // ewig auf ein Wort, das nicht mehr kommt.
         drop(an_den_draht);
         aufraeumen(&mitschrift, &mut horcher, &id);
+        zeile_schreiben(&format!("{} INFO maer.sync socket closed from={von_h}", jetzt()));
         let _ = schreiber.await;
     });
 

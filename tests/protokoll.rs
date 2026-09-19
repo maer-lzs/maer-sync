@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 
 use maer_sync::authorization::zufall;
 use maer_sync::identity::{fingerprint, public_of};
+use maer_sync::protokoll::Art;
 use maer_sync::store::Store;
 use maer_sync::wege::{Anfrage, App};
 use serde_json::Value;
@@ -48,8 +49,12 @@ fn aufbauen() -> Stand {
 fn mit_quelle(mut a: Anfrage) -> Anfrage { a.client = Some(QUELLE.into()); a }
 
 /// Was die Rust-Fassung fuer einen Fall schreibt, als (Stufe, Satz).
+///
+/// Nur die MELDUNGEN: die Tafel ist an Python gemessen, und Python schreibt
+/// keine Zugriffszeilen. Die Zugriffe hat `tests/zugriff.rs`.
 fn zeilen(app: &mut App) -> Vec<(String, String)> {
     app.protokoll.drain(..)
+        .filter(|z| z.art == Art::Meldung)
         .map(|z| (z.stufe.name().to_string(), z.satz))
         .collect()
 }
