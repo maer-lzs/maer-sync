@@ -93,3 +93,38 @@ fn die_beiden_abweisenden_faelle_sagen_was_zu_tun_ist() {
     // und beide nennen BEIDE Abdruecke, damit man vergleichen kann
     assert!(anders.reason.contains("AAAA") && anders.reason.contains("ZZZZ"));
 }
+
+#[test]
+fn ein_kopf_laenger_als_das_laengenfeld_wird_nicht_gepackt() {
+    // Das Laengenfeld hat zwei Byte. Ein Kopf darueber laesst sich nicht
+    // ankuendigen, und ein Packer, der es trotzdem versucht, schreibt eine
+    // gelogene Laenge auf die Leitung: der Leser nimmt dann den Rest des
+    // Kopfs fuer den Koerper. Gepackt wird gar nicht, statt falsch.
+    let zu_lang = "y".repeat(1 << 16);
+    let kopf: Value = serde_json::json!({ "x": zu_lang });
+    assert!(frames::pack(&kopf, b"").is_err(), "ein zu langer Kopf wird nicht gepackt");
+
+    // GUTFALL DANEBEN, sonst misst der Fall nur, dass `pack` scheitern kann:
+    // knapp darunter geht derselbe Kopf durch.
+    let knapp: Value = serde_json::json!({ "x": "y".repeat(60_000) });
+    assert!(frames::pack(&knapp, b"").is_ok(), "knapp darunter wird gepackt");
+}
+
+#[test]
+fn derselbe_kopf_gibt_dieselben_bytes_egal_wie_er_geschrieben_wurde() {
+    // Auf der Python-Seite ist das eine echte Gefahr: ein `dict` hat eine
+    // Einfuegereihenfolge, und ohne `sort_keys` haengen die Bytes daran. Hier
+    // sortiert schon das Einlesen, also wird die Zusicherung dort gemessen,
+    // wo sie zaehlt: am Uebergang von TEXT zu Rahmen, in beiden Schreibweisen.
+    let eine: Value = serde_json::from_str(r#"{"b":"2","a":"1"}"#).expect("JSON");
+    let andere: Value = serde_json::from_str(r#"{"a":"1","b":"2"}"#).expect("JSON");
+    let links = frames::pack(&eine, b"").expect("packbar");
+    let rechts = frames::pack(&andere, b"").expect("packbar");
+    assert_eq!(links, rechts, "dieselbe Bedeutung, dieselben Bytes");
+
+    // Und die Gegenprobe, sonst vergleicht der Fall zwei gleiche Dinge: ein
+    // anderer Kopf gibt andere Bytes.
+    let dritte: Value = serde_json::from_str(r#"{"a":"1","b":"3"}"#).expect("JSON");
+    assert_ne!(links, frames::pack(&dritte, b"").expect("packbar"));
+}
+

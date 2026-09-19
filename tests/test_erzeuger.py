@@ -41,6 +41,13 @@ ERZEUGER = [
     ("vektoren/erzeuge_horcher.py", "vektoren/horcher.json", {"faelle": 12}),
     ("vektoren/erzeuge_befehle.py", "vektoren/befehle.json", {"faelle": 16}),
     ("vektoren/erzeuge_protokoll.py", "vektoren/protokoll.json", {"faelle": 11}),
+    # Die zwei Zuordnungen auf Fall-Ebene sind ebenfalls erzeugte Dateien, und
+    # sie standen bis Teil 5 ausserhalb dieses Zauns. Eine von Hand nachgezogene
+    # `108-faelle.json` haette dann von ihrem Erzeuger abweichen koennen, ohne
+    # dass etwas reisst: der Zaun in `test_abdeckung.py` haelt die Datei gegen
+    # den Quelltext, nie gegen das Skript, das sie schreibt.
+    ("abdeckung/zuordnung.py", "abdeckung/108-faelle.json", {"faelle": 108}),
+    ("abdeckung/zuordnung-126.py", "abdeckung/126-faelle.json", {"faelle": 126}),
 ]
 
 

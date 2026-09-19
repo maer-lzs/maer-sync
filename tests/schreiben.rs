@@ -170,3 +170,108 @@ fn pfade_werden_gelesen_wie_von_der_python_seite() {
                    fall["gueltig"].as_bool().unwrap(), "Bereich {fall}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Die Luecken, die die Zaehlung der 126 auf Fall-Ebene gefunden hat.
+//
+// Alle vier gehoeren derselben Klasse an: die Tafel faehrt jeden Fall mit der
+// VORGABE. Ein Parameter, den ein Betreiber wirklich verstellt, war damit
+// nirgends gefahren, und die zwei Fassungsnummern waren nie gegeneinander
+// gehalten. Die Sollwerte stehen nicht hier, sie sind an der Python-Fassung
+// gemessen.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn der_boden_ist_ein_wert_und_kein_naturgesetz() {
+    // Eine Aufstellung, deren Klienten hart aufraeumen, setzt ihn tiefer; eine,
+    // die nie aufraeumt, hoeher. Die Zahl ist nicht die Regel. Die Tafel oben
+    // faehrt ausschliesslich die Vorgabe, also war ein verstellter Boden bis
+    // hierher unbezeugt.
+    let tief = admission::admit(Some(1000), 400, false, 0.1).expect("gueltig");
+    assert!(tief.accepted, "unter einem tiefen Boden geht derselbe Schrieb durch");
+    assert_eq!(tief.reason, "400 bytes, 40% of the stored state");
+
+    let hoch = admission::admit(Some(1000), 900, false, 0.95).expect("gueltig");
+    assert!(!hoch.accepted, "unter einem hohen Boden faellt er");
+    assert_eq!(hoch.reason,
+               "state shrank to 90%, below the 95% floor (1000 to 900 bytes)",
+               "und der Satz nennt den GESETZTEN Boden, nicht die Vorgabe");
+
+    // Die Gegenprobe, ohne die der Fall nur zwei Zahlen vergleicht: mit der
+    // Vorgabe urteilt derselbe Schrieb andersherum.
+    let vorgabe = admission::admit(Some(1000), 400, false,
+                                   admission::DEFAULT_SHRINK_FLOOR).expect("gueltig");
+    assert!(!vorgabe.accepted, "sonst misst der Fall den Boden gar nicht");
+}
+
+#[test]
+fn der_boden_reicht_durch_die_tuer_des_schriebs() {
+    // Dass `admit` einen Boden kennt, heisst nicht, dass `decide` ihn
+    // weiterreicht. Genau so verliert eine Zusammensetzung still ein Tor.
+    let durch = writes::Write {
+        stored_bytes: Some(1000), stored_format: Some(2), stored_etag: Some("v7"),
+        incoming_bytes: 400, writer_format: Some(2), if_match: Some("v7"),
+        declared_shrink: false, shrink_floor: 0.1,
+    };
+    let u = writes::decide(&durch).expect("gueltig");
+    assert_eq!(u.status, writes::WRITTEN, "der gesetzte Boden erreicht das Tor");
+    assert_eq!(u.reason, "400 bytes, 40% of the stored state");
+
+    // GUTFALL DANEBEN: derselbe Schrieb mit der Vorgabe wird abgewiesen. Ohne
+    // ihn koennte `decide` den Boden verschlucken und dieser Fall waere
+    // trotzdem gruen.
+    let vorgabe = writes::Write { shrink_floor: admission::DEFAULT_SHRINK_FLOOR, ..durch.clone() };
+    let v = writes::decide(&vorgabe).expect("gueltig");
+    assert_eq!(v.status, writes::REFUSED);
+    assert_eq!(v.reason, "state shrank to 40%, below the 50% floor (1000 to 400 bytes)");
+}
+
+#[test]
+fn die_zwei_zahlen_sind_nicht_dieselbe_zahl() {
+    // Wuerden Dokumentfassung und Speichergestalt verwechselt, saehe ein
+    // Fassungssprung des Klienten aus wie eine Wanderung des Speichers, und
+    // ein App-Update sperrte jedes Geraet aus. Die Tafel prueft jede Zahl
+    // einzeln; dieser Fall haelt sie GEGENEINANDER.
+    assert!(formats::serve_verdict(Some(1), Some(1)).expect("gueltig").accepted,
+            "eine weit vorausliegende Dokumentfassung sagt nichts ueber das Bedienen");
+    assert!(!formats::write_verdict(Some(9), Some(1)).expect("gueltig").accepted);
+
+    assert!(!formats::serve_verdict(Some(9), Some(1)).expect("gueltig").accepted,
+            "eine weit vorausliegende Speichergestalt sagt nichts ueber das Schreiben");
+    assert!(formats::write_verdict(Some(1), Some(1)).expect("gueltig").accepted);
+
+    // Und die Stelle, an der die Python-Fassung ausdruecklich abweist: eine
+    // fehlende Schreiberfassung neben einer VORHANDENEN gespeicherten. Sie
+    // stillschweigend als 1 zu lesen liesse jeden Klienten, der das Feld
+    // vergessen hat, alles ueberschreiben.
+    assert!(formats::write_verdict(Some(3), None).is_err());
+    assert!(formats::write_verdict(Some(3), Some(0)).is_err());
+    assert!(formats::serve_verdict(Some(4), None).is_err());
+}
+
+#[test]
+fn rotate_laesst_die_liste_des_rufers_in_ruhe() {
+    // In Python ist das eine Zusicherung, die brechen KANN: `rotate` bekommt
+    // die Liste des Rufers und koennte sie sortieren oder kuerzen. Hier
+    // verbietet der Typ es schon, und genau deshalb steht der Zeuge da: er
+    // haelt das VERSPRECHEN fest, nicht die Gefahr. Wer die Signatur eines
+    // Tages auf `&mut Vec<String>` oder `Vec<String>` zieht, faellt hier.
+    let gegeben: Vec<String> = ["v1", "v2", "v3", "v4"].iter().map(|s| s.to_string()).collect();
+    let (kept, dropped) = versions::rotate(&gegeben, 2).expect("gueltig");
+    assert_eq!(gegeben, vec!["v1", "v2", "v3", "v4"], "die Liste des Rufers ist unberuehrt");
+    assert_eq!(kept, vec!["v3", "v4"]);
+    assert_eq!(dropped, vec!["v1", "v2"]);
+}
+
+#[test]
+fn ein_leerer_stand_ueber_einem_leeren_verliert_nichts() {
+    // Der Rand, den die Tafel nicht faehrt: sie kennt "leer gespeichert, etwas
+    // kommt" (0 -> 50), aber nicht "leer ueber leer". Der Unterschied ist
+    // nicht akademisch: wer das leere EINGEHENDE zuerst prueft, weist hier ab
+    // und verteidigt einen leeren Speicher gegen seinen einzigen Benutzer.
+    let u = admission::admit(Some(0), 0, false, admission::DEFAULT_SHRINK_FLOOR)
+        .expect("gueltig");
+    assert!(u.accepted, "leer ueber leer verliert nichts: {}", u.reason);
+    assert_eq!(u.reason, "stored state was empty, 0 bytes accepted");
+}
+

@@ -300,3 +300,29 @@ fn eine_bewiesene_sitzung_ueberlebt_die_kurze_frist() {
     uhr.stellen(1600.0);
     assert!(!laden.is_live(&mit_beweis), "nach der langen Frist faellt auch sie");
 }
+
+/// **Eine Flut von hundertfacher Groesse aendert daran nichts.**
+///
+/// Der Zeuge daneben faehrt zwanzig Runden gegen eine Decke von drei. Das ist
+/// eine Anordnung weniger Runden, und eine Anordnung kann zufaellig guenstig
+/// sein. Die Python-Seite faehrt deshalb fuenfhundert Runden gegen fuenf, also
+/// das Hundertfache der Decke, und dieser Zeuge tut dasselbe.
+#[test]
+fn eine_flut_von_hundertfacher_groesse_aendert_daran_nichts() {
+    let privat = schluessel();
+    let grenzen = Limits { idle_seconds: 10_000.0, unproven_idle_seconds: 10_000.0,
+                           max_age_seconds: 100_000.0, capacity: 5 };
+    let (mut laden, _uhr) = laden_mit_uhr(grenzen);
+    let (_, erst) = erste_nachricht(&public_of(&privat), b"");
+    let (meine, _, _) = laden.open(&erst, &privat, b"").expect("Sitzung");
+    laden.prove(&meine).expect("beweisen");
+
+    for _ in 0..500 {
+        let (_, e) = erste_nachricht(&public_of(&privat), b"");
+        laden.open(&e, &privat, b"").expect("Sitzung");
+        assert!(laden.len() <= 5, "der Laden waechst ueber seine Decke: {}", laden.len());
+    }
+    assert!(laden.is_live(&meine),
+            "ein Fremder, der immer weiter fragt, darf ein Geraet nicht verdraengen, \
+das schon bewiesen hat, wer es ist");
+}

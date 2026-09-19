@@ -82,6 +82,10 @@ EXEMPT = {
                                 "it, and JSON has no comment to put a header in; the fence "
                                 "in tests/test_abdeckung.py holds every line of it against "
                                 "the repository",
+    "abdeckung/126-faelle.json": "a judgement per case, written by its generator beside "
+                                "it, and JSON has no comment to put a header in; the fence "
+                                "in tests/test_abdeckung.py holds every line of it against "
+                                "the repository",
     "vektoren/protokoll.json": "which line each refusal leaves, measured off the real "
                               "application, and JSON has no comment to put a header in; "
                               "its generator is stated in the README beside it",
