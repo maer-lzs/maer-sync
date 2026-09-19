@@ -466,99 +466,99 @@
     },
     {
       "fall": "test_session_store.AHandshakeBecomesASession.test_a_different_prologue_never_becomes_a_session",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "der Prologue ist durchgereicht, aber kein Fall faehrt einen abweichenden"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::ein_abweichender_prologue_wird_nie_eine_sitzung",
+      "grund": "ein Handschlag mit fremdem Prologue wird keine Sitzung und hinterlaesst nichts"
     },
     {
       "fall": "test_session_store.AHandshakeBecomesASession.test_a_failed_handshake_costs_the_store_nothing",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "gebaut (nichts wird gespeichert, wenn der Handschlag nicht aufgeht), kein Fall"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::ein_gescheiterter_handschlag_kostet_den_laden_nichts",
+      "grund": "vier Arten, kein Handschlag zu sein, und der Laden bleibt leer"
     },
     {
       "fall": "test_session_store.AHandshakeBecomesASession.test_a_message_sealed_by_the_device_opens_here",
       "art": "zeuge",
-      "gegenpart": "tests/wege.rs::der_tunnel_traegt_dieselben_antworten",
-      "grund": "mittelbar: der Tunnel siegelt und entsiegelt in beide Richtungen. Ein EIGENER Zeuge fuer sitzungsladen.rs fehlt"
+      "gegenpart": "tests/sitzungsladen.rs::zwei_sitzungen_teilen_keine_schluessel",
+      "grund": "sitzungsladen.rs: zwei_sitzungen_teilen_keine_schluessel siegelt und entsiegelt in der eigenen Sitzung"
     },
     {
       "fall": "test_session_store.AHandshakeBecomesASession.test_an_answer_sealed_here_opens_at_the_device",
       "art": "zeuge",
       "gegenpart": "tests/wege.rs::der_tunnel_traegt_dieselben_antworten",
-      "grund": "mittelbar: der Tunnel siegelt und entsiegelt in beide Richtungen. Ein EIGENER Zeuge fuer sitzungsladen.rs fehlt"
+      "grund": "der Tunnel entsiegelt die Antwort am Geraet"
     },
     {
       "fall": "test_session_store.AHandshakeBecomesASession.test_two_sessions_do_not_share_keys",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "kein Fall; der Tunnel faehrt eine Sitzung, die Horchprobe eine zweite, aber niemand haelt sie gegeneinander"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::zwei_sitzungen_teilen_keine_schluessel",
+      "grund": "ein Brief der zweiten Sitzung geht in der ersten NICHT auf"
     },
     {
       "fall": "test_session_store.TheNameIsUnguessable.test_two_sessions_never_share_a_name",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "der Name kommt aus derselben Quelle wie das Zeichen (16 Byte aus /dev/urandom), kein Fall vergleicht zwei"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::zwei_sitzungen_teilen_nie_einen_namen",
+      "grund": "vierundzwanzig Namen, alle verschieden, alle 32 Hex-Zeichen"
     },
     {
       "fall": "test_session_store.TheStoreStaysBounded.test_a_flood_cannot_grow_it",
-      "art": "tafel",
-      "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: room_for_one und capacity"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_flut_laesst_den_laden_nicht_wachsen",
+      "grund": "vierzig Handschlaege gegen eine Decke von vier"
     },
     {
       "fall": "test_session_store.TheStoreStaysBounded.test_a_flood_cannot_push_out_a_proven_session",
-      "art": "tafel",
-      "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: give_way, proven zuletzt"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_flut_drueckt_keine_bewiesene_sitzung_hinaus",
+      "grund": "die bewiesene Sitzung ueberlebt zwanzig Handschlaege"
     },
     {
       "fall": "test_session_store.TheStoreStaysBounded.test_proving_needs_a_live_session",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "prove gibt einen Fehler auf eine tote Sitzung, kein Fall faehrt es"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::ein_beweis_braucht_eine_lebende_sitzung",
+      "grund": "auf eine tote und auf eine erfundene: Fehler"
     },
     {
       "fall": "test_session_store.TheStoreStaysBounded.test_sweeping_says_how_many_it_dropped",
       "art": "tafel",
       "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: sweep gibt die Liste"
+      "grund": "sitzungen.json: sweep gibt die Liste der Gefallenen"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_a_handshake_in_use_stays_alive_inside_its_minute",
-      "art": "tafel",
-      "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: unproven_idle_seconds (die REGEL ist bezeugt, der Ladenteil mit Schluesseln nicht)"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_echte_nachricht_haelt_die_sitzung_am_leben",
+      "grund": "dieselbe Messung mit gestellter Uhr innerhalb der Frist"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_a_name_nobody_made_is_unknown",
-      "art": "tafel",
-      "gegenpart": "tests/wege.rs::der_tunnel_traegt_dieselben_antworten",
-      "grund": "wege.json, Tunnel: 'eine Sitzung, die es nicht gibt', 410"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::ein_name_den_niemand_gemacht_hat_ist_unbekannt",
+      "grund": "unseal, seal und is_live auf einem erfundenen Namen"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_a_real_message_does_keep_it_alive",
-      "art": "keiner",
-      "gegenpart": "",
-      "grund": "der Zeitpunkt der Benutzung wird gesetzt, aber kein Fall misst, DASS er gesetzt wird"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_echte_nachricht_haelt_die_sitzung_am_leben",
+      "grund": "die echte Nachricht stellt die Frist neu"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_a_session_that_went_quiet_is_unknown",
-      "art": "tafel",
-      "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: standing mit Stille (die REGEL ist bezeugt, der Ladenteil mit Schluesseln nicht)"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_beendete_sitzung_wird_auf_der_stelle_fallen_gelassen",
+      "grund": "mit gestellter Uhr ueber die Frist hinaus"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_an_ended_session_is_dropped_on_the_spot",
-      "art": "tafel",
-      "gegenpart": "tests/sitzungen.rs",
-      "grund": "sitzungen.json: sweep (die REGEL ist bezeugt, der Ladenteil mit Schluesseln nicht)"
+      "art": "zeuge",
+      "gegenpart": "tests/sitzungsladen.rs::eine_beendete_sitzung_wird_auf_der_stelle_fallen_gelassen",
+      "grund": "sie ist weg, ohne dass jemand gefegt hat"
     },
     {
       "fall": "test_session_store.TheWaysOfNotBeingASession.test_noise_under_a_known_name_does_not_keep_it_alive",
       "art": "zeuge",
-      "gegenpart": "tests/wege.rs::rauschen_unter_einem_namen_kostet_die_sitzung_nichts",
-      "grund": ""
+      "gegenpart": "tests/sitzungsladen.rs::rauschen_haelt_die_sitzung_nicht_am_leben",
+      "grund": "der Zeuge steht da, WEIL eine Rot-Probe gruen blieb: der Zeitpunkt der Benutzung rueckt nur bei Erfolg"
     },
     {
       "fall": "test_tunnel.TheInsideIsTheOrdinaryWire.test_a_sign_in_a_write_a_read_and_a_listing_all_work_inside",

@@ -181,44 +181,59 @@ z(C, "RemovingAnAccountThroughTheCommand", "test_removing_an_absent_account_says
 
 # -------------------------------------------------------- test_session_store
 S = "test_session_store"
-for n in ["test_a_message_sealed_by_the_device_opens_here",
-          "test_an_answer_sealed_here_opens_at_the_device"]:
-    z(S, "AHandshakeBecomesASession", n, "zeuge",
-      "tests/wege.rs::der_tunnel_traegt_dieselben_antworten",
-      "mittelbar: der Tunnel siegelt und entsiegelt in beide Richtungen. Ein EIGENER "
-      "Zeuge fuer sitzungsladen.rs fehlt")
-z(S, "AHandshakeBecomesASession", "test_two_sessions_do_not_share_keys", "keiner", "",
-  "kein Fall; der Tunnel faehrt eine Sitzung, die Horchprobe eine zweite, aber niemand "
-  "haelt sie gegeneinander")
-z(S, "AHandshakeBecomesASession", "test_a_different_prologue_never_becomes_a_session", "keiner", "",
-  "der Prologue ist durchgereicht, aber kein Fall faehrt einen abweichenden")
-z(S, "AHandshakeBecomesASession", "test_a_failed_handshake_costs_the_store_nothing", "keiner", "",
-  "gebaut (nichts wird gespeichert, wenn der Handschlag nicht aufgeht), kein Fall")
-z(S, "TheWaysOfNotBeingASession", "test_a_name_nobody_made_is_unknown", "tafel",
-  "tests/wege.rs::der_tunnel_traegt_dieselben_antworten",
-  "wege.json, Tunnel: 'eine Sitzung, die es nicht gibt', 410")
-for n, g in [
-  ("test_a_session_that_went_quiet_is_unknown", "sitzungen.json: standing mit Stille"),
-  ("test_an_ended_session_is_dropped_on_the_spot", "sitzungen.json: sweep"),
-  ("test_a_handshake_in_use_stays_alive_inside_its_minute", "sitzungen.json: unproven_idle_seconds"),
+SL = "tests/sitzungsladen.rs"
+for n, g, f in [
+  ("test_a_message_sealed_by_the_device_opens_here",
+   "sitzungsladen.rs: zwei_sitzungen_teilen_keine_schluessel siegelt und entsiegelt "
+   "in der eigenen Sitzung", "zwei_sitzungen_teilen_keine_schluessel"),
+  ("test_an_answer_sealed_here_opens_at_the_device",
+   "der Tunnel entsiegelt die Antwort am Geraet", "der_tunnel_traegt_dieselben_antworten"),
+  ("test_two_sessions_do_not_share_keys",
+   "ein Brief der zweiten Sitzung geht in der ersten NICHT auf",
+   "zwei_sitzungen_teilen_keine_schluessel"),
+  ("test_a_different_prologue_never_becomes_a_session",
+   "ein Handschlag mit fremdem Prologue wird keine Sitzung und hinterlaesst nichts",
+   "ein_abweichender_prologue_wird_nie_eine_sitzung"),
+  ("test_a_failed_handshake_costs_the_store_nothing",
+   "vier Arten, kein Handschlag zu sein, und der Laden bleibt leer",
+   "ein_gescheiterter_handschlag_kostet_den_laden_nichts"),
 ]:
-    z(S, "TheWaysOfNotBeingASession", n, "tafel", "tests/sitzungen.rs",
-      g + " (die REGEL ist bezeugt, der Ladenteil mit Schluesseln nicht)")
-z(S, "TheWaysOfNotBeingASession", "test_noise_under_a_known_name_does_not_keep_it_alive",
-  "zeuge", "tests/wege.rs::rauschen_unter_einem_namen_kostet_die_sitzung_nichts", "")
-z(S, "TheWaysOfNotBeingASession", "test_a_real_message_does_keep_it_alive", "keiner", "",
-  "der Zeitpunkt der Benutzung wird gesetzt, aber kein Fall misst, DASS er gesetzt wird")
-for n, g in [
-  ("test_a_flood_cannot_grow_it", "sitzungen.json: room_for_one und capacity"),
-  ("test_a_flood_cannot_push_out_a_proven_session", "sitzungen.json: give_way, proven zuletzt"),
-  ("test_sweeping_says_how_many_it_dropped", "sitzungen.json: sweep gibt die Liste"),
+    ziel = ("tests/wege.rs::der_tunnel_traegt_dieselben_antworten"
+            if f == "der_tunnel_traegt_dieselben_antworten" else f"{SL}::{f}")
+    z(S, "AHandshakeBecomesASession", n, "zeuge", ziel, g)
+for n, g, f in [
+  ("test_a_name_nobody_made_is_unknown", "unseal, seal und is_live auf einem erfundenen Namen",
+   "ein_name_den_niemand_gemacht_hat_ist_unbekannt"),
+  ("test_a_session_that_went_quiet_is_unknown", "mit gestellter Uhr ueber die Frist hinaus",
+   "eine_beendete_sitzung_wird_auf_der_stelle_fallen_gelassen"),
+  ("test_an_ended_session_is_dropped_on_the_spot",
+   "sie ist weg, ohne dass jemand gefegt hat",
+   "eine_beendete_sitzung_wird_auf_der_stelle_fallen_gelassen"),
+  ("test_noise_under_a_known_name_does_not_keep_it_alive",
+   "der Zeuge steht da, WEIL eine Rot-Probe gruen blieb: der Zeitpunkt der Benutzung "
+   "rueckt nur bei Erfolg", "rauschen_haelt_die_sitzung_nicht_am_leben"),
+  ("test_a_real_message_does_keep_it_alive", "die echte Nachricht stellt die Frist neu",
+   "eine_echte_nachricht_haelt_die_sitzung_am_leben"),
+  ("test_a_handshake_in_use_stays_alive_inside_its_minute",
+   "dieselbe Messung mit gestellter Uhr innerhalb der Frist",
+   "eine_echte_nachricht_haelt_die_sitzung_am_leben"),
 ]:
-    z(S, "TheStoreStaysBounded", n, "tafel", "tests/sitzungen.rs", g)
-z(S, "TheStoreStaysBounded", "test_proving_needs_a_live_session", "keiner", "",
-  "prove gibt einen Fehler auf eine tote Sitzung, kein Fall faehrt es")
-z(S, "TheNameIsUnguessable", "test_two_sessions_never_share_a_name", "keiner", "",
-  "der Name kommt aus derselben Quelle wie das Zeichen (16 Byte aus /dev/urandom), "
-  "kein Fall vergleicht zwei")
+    z(S, "TheWaysOfNotBeingASession", n, "zeuge", f"{SL}::{f}", g)
+for n, g, f in [
+  ("test_a_flood_cannot_grow_it", "vierzig Handschlaege gegen eine Decke von vier",
+   "eine_flut_laesst_den_laden_nicht_wachsen"),
+  ("test_a_flood_cannot_push_out_a_proven_session",
+   "die bewiesene Sitzung ueberlebt zwanzig Handschlaege",
+   "eine_flut_drueckt_keine_bewiesene_sitzung_hinaus"),
+  ("test_proving_needs_a_live_session", "auf eine tote und auf eine erfundene: Fehler",
+   "ein_beweis_braucht_eine_lebende_sitzung"),
+]:
+    z(S, "TheStoreStaysBounded", n, "zeuge", f"{SL}::{f}", g)
+z(S, "TheStoreStaysBounded", "test_sweeping_says_how_many_it_dropped", "tafel",
+  "tests/sitzungen.rs", "sitzungen.json: sweep gibt die Liste der Gefallenen")
+z(S, "TheNameIsUnguessable", "test_two_sessions_never_share_a_name", "zeuge",
+  f"{SL}::zwei_sitzungen_teilen_nie_einen_namen",
+  "vierundzwanzig Namen, alle verschieden, alle 32 Hex-Zeichen")
 
 # -------------------------------------------------------- test_session_paths
 P = "test_session_paths"
