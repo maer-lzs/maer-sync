@@ -11,6 +11,19 @@
 # Grundabbild macht aus --require-hashes in requirements.txt eine halbe Zusage.
 # Der Sinn des Pinnens ist, dass sich die Laufzeit unter einem TLS-terminierten
 # Dienst nicht ändert, und das Grundabbild IST Laufzeit.
+# DIESES ABBILD BAUT DIE PYTHON-FASSUNG, NICHT DIE RUST-FASSUNG.
+#
+# Seit v0.2.0 liegen beide Implementierungen in diesem Baum. Wer hier
+# `docker compose up` sagt, bekommt Python, und das ist Absicht: die
+# Python-Fassung ist der Rueckweg. Die Rust-Fassung wird NICHT von hier
+# gebaut, sondern mit `werkzeug/bau.sh build --release` (statisch gegen musl,
+# ein Erzeugnis ohne Laufzeit darunter); ihr Bauabbild steht in
+# `werkzeug/Dockerfile`.
+#
+# Der Satz steht hier, weil ein Abbild, das etwas anderes baut als der Leser
+# erwartet, nichts meldet: es laeuft, und erst der Betrieb zeigt die falsche
+# Fassung.
+
 FROM python:3.13.7-slim-bookworm
 
 # Kein root. Die feste Nummer ist Absicht: das benannte Volume gehört einer UID,
