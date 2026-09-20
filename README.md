@@ -19,6 +19,24 @@ the operator's, behind TLS. The takeover end to end (a locked, playing
 device stops when the other starts) needs two devices and is measured in
 the device test.
 
+## Two implementations, one contract
+
+Since `v0.2.0` this repository carries **two** services that speak the same
+contract: the Python one under `service/` and `core/`, and the Rust one under
+`src/`. `CONTRACT.md` sits above both, and the route table in `vektoren/wege.json`
+is measured against both sides (28 cases, 0 differing).
+
+**The Rust build is what gets deployed.** It is a single statically linked
+binary against musl, about 4.7 MB, with no runtime underneath it. **The Python
+build is the way back.** It stays complete in the tree for exactly that reason,
+and the container image in `Dockerfile` still builds it.
+
+If you are setting up a host, read *Setting it up* for the Python way or
+*Setting up the Rust build* below. If you are moving a running host from one to
+the other, read *Switching a running host*. Do not mix the two: the services
+read different environment variables, and the wrong unit file fails silently.
+See the table under *Environment*.
+
 ## Setting it up
 
 **Every command below was run before it was written here**, on macOS with
@@ -266,6 +284,227 @@ keychain; the secret itself is not kept.
 
 The switch above it decides whether anything travels at all. Set up and
 switched off means nothing moves, and the page says so.
+
+## Setting up the Rust build
+
+Nine steps, the same shape as the Python ones above. Every number here was
+measured on a running host, not remembered.
+
+### 1. What it needs
+
+Nothing on the host. The binary is linked statically against musl and carries
+its own runtime. What you need is a machine that can build it, and that machine
+needs Docker: the build runs inside a pinned image so that the toolchain cannot
+drift. `werkzeug/README.md` explains why, and what the pinning covers. Do not
+build with a locally installed cargo unless you are prepared to answer what your
+toolchain differs in.
+
+Build host and target must match: the tool refuses to cross compile, so an
+x86_64 host builds the x86_64 target and an aarch64 host builds its own.
+
+### 2. Build the product
+
+    werkzeug/bau.sh build --release --offline
+
+The result lands in
+`ziel/abbau/<target>-unknown-linux-musl/release/maer-sync`, for example
+`ziel/abbau/x86_64-unknown-linux-musl/release/maer-sync`.
+
+Check what you built, because a binary says nothing about itself yet (see
+*Knowing which build is running*):
+
+    ls -l ziel/abbau/*/release/maer-sync
+    sha256sum ziel/abbau/*/release/maer-sync
+
+### 3. Run the tests before you carry it anywhere
+
+    werkzeug/vor-dem-commit.sh
+
+This runs both suites, the Python one and the Rust one, and it runs `git add -A`
+first on purpose: the license fence asks git what is tracked, so an untracked
+file would pass unseen. A green run prints `frei zum Committen.`
+
+### 4. Put it on the host
+
+The binary needs a place, a database, and a key. Nothing else.
+
+    sudo install -o <serviceuser> -g <serviceuser> -m 755 maer-sync /srv/maer-sync/maer-sync
+
+The service user needs write access to the directory holding the database and
+the key, and nothing beyond it.
+
+### 5. Lay down the key
+
+The service refuses to bind its port without a static identity, and it exits
+with code 4 rather than serving without one.
+
+    sudo -u <serviceuser> env \
+      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
+      MAER_SYNC_KEY=/srv/maer-sync/data/identity.key \
+      /srv/maer-sync/maer-sync key --new
+
+It prints the fingerprint. **Copy that key file somewhere safe now.** Clients
+pin the fingerprint on first contact, so losing the key means every device has
+to trust the service again from scratch.
+
+### 6. Lay down an account
+
+    printf '%s\n' "$SECRET" | sudo -u <serviceuser> env \
+      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
+      /srv/maer-sync/maer-sync account <owner>
+
+It refuses if the account already exists. That is deliberate: an existing
+account is not silently overwritten.
+
+### 7. Let it start by itself
+
+    [Unit]
+    Description=Maer sync service
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    User=<serviceuser>
+    Group=<serviceuser>
+    WorkingDirectory=/srv/maer-sync
+    Environment=MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite
+    Environment=MAER_SYNC_KEY=/srv/maer-sync/data/identity.key
+    Environment=MAER_SYNC_BIND=127.0.0.1:8099
+    ExecStart=/srv/maer-sync/maer-sync serve
+    Restart=on-failure
+    RestartSec=5
+    NoNewPrivileges=true
+    PrivateTmp=true
+    ProtectSystem=strict
+    ReadWritePaths=/srv/maer-sync/data
+    ProtectHome=true
+
+    [Install]
+    WantedBy=multi-user.target
+
+**`MAER_SYNC_BIND` is one address, host and port together.** This is the line
+that a unit copied from the Python service gets wrong. See *Environment*.
+
+### 8. Prove that the right thing is running
+
+Not that something answers, but that it is yours:
+
+    curl -s http://127.0.0.1:8099/v1/health
+    curl -s http://127.0.0.1:8099/v1/key
+
+`/v1/health` answers `{"ok":true}` from **both** implementations, so it proves
+that a service is up, not which one. `/v1/key` answers with the fingerprint you
+wrote down in step 5, and comparing those two is what proves the service is the
+one you laid down rather than a stranger on a port you assumed was free.
+
+The log tells you the rest. From `v0.2.0` on, the service writes one line per
+request, with the inner path, the status and how long it took:
+
+    2026-09-20T17:25:28.630Z INFO maer.sync access from=127.0.0.1:57694 session=- inner=false method=GET path=/v1/health scope=- status=200 ms=0
+
+A service that logs nothing at all under traffic is not idle, it is the old
+build.
+
+### 9. Point the app at it
+
+Unchanged from the Python way, see step 9 above. The service is the same
+service to a client.
+
+## Environment
+
+Measured by counting occurrences in the source, not from memory.
+
+| Variable | Rust | Python | Default in Rust |
+|---|---|---|---|
+| `MAER_SYNC_DB` | yes | yes | `maer-sync.sqlite` |
+| `MAER_SYNC_KEY` | yes | yes | see `src/kennung.rs` |
+| `MAER_SYNC_PLAIN_WAYS` | yes | yes | on |
+| `MAER_SYNC_MAX_BODY_BYTES` | yes | yes | see `src/wege.rs` |
+| **`MAER_SYNC_BIND`** | **yes** | no | **`127.0.0.1:8081`** |
+| **`MAER_SYNC_HOST`** | **no** | yes | |
+| **`MAER_SYNC_PORT`** | **no** | yes | |
+
+**The last three lines are the trap.** The Rust build does not know
+`MAER_SYNC_HOST` and `MAER_SYNC_PORT` at all: zero occurrences in `src/`. A unit
+file carried over from the Python service therefore sets two variables that
+nothing reads, the service falls back to its default `127.0.0.1:8081`, starts
+cleanly, logs nothing unusual, and answers on a port nobody is asking. There is
+no error to find, because nothing went wrong from the service's point of view.
+
+`MAER_SYNC_PLAIN_WAYS` deserves one more sentence, because it also fails
+quietly. It reads `off`, `0`, `no` and `false`, case insensitive, and **neither
+implementation trims whitespace**. A value of `off ` with a trailing space falls
+back to the default, which is on. Do not check the unit file to see whether it
+worked, check the behaviour: with plain ways off, `/v1/doc/...` answers **426**
+instead of 401, and it does so even with a valid token, because the gate sits in
+front of the token check.
+
+## Switching a running host from Python to Rust
+
+This is the one procedure where a mistake touches real data. It was done on a
+live host on 2026-09-20; the numbers below are from that run.
+
+**Before you stop anything.** Build the product (steps 2 and 3), copy it to the
+host, and rehearse against a **copy** of the live database, never against the
+live one:
+
+    sudo -u <serviceuser> python3 -c "
+    import sqlite3
+    q = sqlite3.connect('file:/srv/maer-sync/data/sync.sqlite?mode=ro', uri=True)
+    z = sqlite3.connect('/tmp/rehearsal.sqlite')
+    q.backup(z)"
+
+Use the backup API, not `cp`: a running SQLite keeps recent writes in the WAL,
+and a file copy leaves them behind. Then run the new build against that copy on
+a free port and read the documents back. Both implementations write schema
+version 2 and the same four tables, so no migration happens, but the run is what
+proves it rather than the reading.
+
+Rehearse one more thing that no checklist mentions: **whether existing tokens
+still work.** Issue a token from the old build against the copy, then present
+the same token to the new build. If it answers 200, no device needs to sign in
+again. This was measured and it does.
+
+**The switch itself.**
+
+1. Stop the service and **measure** that the port is free, do not assume it.
+2. Back up the database while it is stopped, and check `pragma integrity_check`.
+3. Install the binary, lay down the key (step 5), and copy the key aside.
+4. Write the new unit file. `MAER_SYNC_BIND`, not `HOST` and `PORT`.
+5. `systemctl daemon-reload`, start, and check `is-active`.
+6. Prove it with `/v1/health` **and** `/v1/key`, locally and through the proxy.
+7. Count the documents and compare against the backup you just took.
+
+**The way back** is the same four handles in reverse: stop, restore the unit
+file, restore `app/` and the virtualenv, start. Keep all four aside before you
+begin, because the way back needs the old unit file just as much as the old
+code. A file copy of the binary is not enough.
+
+**The limit of that way back, said out loud:** it carries as long as the clients
+still speak the old protocol. Once a client is updated to use sealed sessions,
+the old Python build cannot answer it, and the way back becomes one directional.
+That is not an argument against the order of deployment, it is the reason for
+it: service first, clients second.
+
+## Knowing which build is running
+
+The binary does not yet carry its version: `Cargo.toml` says `0.0.0` while the
+tag says `v0.2.0`, and the service does not print a version at startup. Until
+that is fixed, the honest handles are indirect:
+
+    systemctl show maer-sync.service -p ExecStart --value
+    sha256sum /srv/maer-sync/maer-sync
+
+and, for the question that actually matters in practice, whether the running
+build carries the request log:
+
+    grep -c 'access from=' /srv/maer-sync/maer-sync
+
+A build from `v0.2.0` or later contains that string, an older one does not.
+This is a workaround, not a feature, and it is listed here because the
+alternative, extending `/v1/health`, is forbidden by the contract: that route
+answers a status and nothing else.
 
 ## Or run it in a container
 
