@@ -27,7 +27,7 @@ set -eu
 WURZEL=$(cd "$(dirname "$0")/.." && pwd)
 WELCHE=${1:-}
 PORT=${PORT:-8873}
-VENV=${VENV:-}
+VENV=${VENV:-$WURZEL/.venv/bin/python}
 ERZEUGNIS=${ERZEUGNIS:-$WURZEL/ziel/abbau/x86_64-unknown-linux-musl/release/maer-sync}
 
 # Genau die Werte aus `vektoren/erzeuge_wege.py`. Sie hier zu wiederholen ist
@@ -105,7 +105,9 @@ if [ "$WELCHE" = rust ]; then
   starte() { "$RUF" serve > "$TMP/protokoll.txt" 2>&1 & PID=$!; }
 else
   if [ ! -x "$VENV" ]; then
-    echo "UEBERSPRUNGEN MIT GRUND: kein Python mit uvicorn unter $VENV." >&2
+    echo "UEBERSPRUNGEN MIT GRUND: kein ausfuehrbares Python unter $VENV." >&2
+    echo "Vorgabe ist die venv aus der Anleitung (README, Schritt 2); ein anderer" >&2
+    echo "Ort geht ueber VENV=<pfad>/bin/python." >&2
     echo "Ohne Server kann diese Kopie die Frage nicht stellen (Regel 7)." >&2
     exit 0
   fi
