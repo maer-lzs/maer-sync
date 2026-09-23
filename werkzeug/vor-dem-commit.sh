@@ -23,7 +23,11 @@ cd "$(dirname "$0")/.."
 echo "== erst verfolgen =="
 git add -A
 
-echo "== Python =="
+echo "== Zaeune des Repos (Python) =="
+# Seit dem 24.09.2026 ist hier kein Dienst mehr in Python. Was bleibt, sind
+# die Zaeune, die das REPO pruefen (Lizenzkoepfe, was verfolgt ist): sie fragen
+# `git`, und das gibt es auf dem Wirt, nicht im Bau-Abbild der Rust-Suite.
+#
 # In eine Datei, nicht durch eine Pipe: hinter einer Pipe ist der Ausgang der
 # des LETZTEN Gliedes, also der von `tail`, und der ist immer 0. Genau diese
 # Verwechslung hat die zwei roten Commits verursacht, die es zu verhindern
@@ -34,7 +38,7 @@ if python3 -m unittest discover -s tests -t . > "$PROT" 2>&1; then
 else
   tail -20 "$PROT"
   rm -f "$PROT"
-  echo "HALT: die Python-Suite ist rot. Nicht committen." >&2
+  echo "HALT: ein Zaun des Repos ist rot. Nicht committen." >&2
   exit 1
 fi
 rm -f "$PROT"

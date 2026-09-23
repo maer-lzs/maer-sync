@@ -174,6 +174,8 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(befehle::befehl_account(wort(1)) as u8),
         Some("account-remove") =>
             return std::process::ExitCode::from(befehle::befehl_account_remove(wort(1)) as u8),
+        Some("health") =>
+            return std::process::ExitCode::from(befehle::befehl_health() as u8),
         Some("key") => {
             let hat = |f: &str| args.iter().any(|a| a == f);
             return std::process::ExitCode::from(
@@ -184,13 +186,14 @@ fn main() -> std::process::ExitCode {
             // Der gefaehrliche Fall waere, dass `--help` versehentlich den
             // Dienst startet.
             println!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
-account-remove <owner>|key [--adopt|--new]]");
+account-remove <owner>|health|key [--adopt|--new]]");
             println!();
             println!("The Mar sync service and its operator commands.");
             println!("  serve            run the service (the default with no command)");
             println!("  backup PATH      copy the store and rehearse the restore");
             println!("  account OWNER    lay down an account (secret on stdin)");
             println!("  account-remove OWNER");
+            println!("  health           ask the running service, exit 0 when it answers well");
             println!("  key [--adopt|--new]");
             return std::process::ExitCode::SUCCESS;
         }
@@ -198,7 +201,7 @@ account-remove <owner>|key [--adopt|--new]]");
         Some(anderes) => {
             eprintln!("no such command: {anderes}");
             eprintln!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
-account-remove <owner>|key [--adopt|--new]]");
+account-remove <owner>|health|key [--adopt|--new]]");
             return std::process::ExitCode::from(2);
         }
     }

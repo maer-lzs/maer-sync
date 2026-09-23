@@ -64,18 +64,51 @@ fn ein_wahrheitswert_ist_kein_status() {
     assert!(frames::reply_of(&kopf).is_err());
 }
 
+/// Die AUSNAHME dieser Tafel, mit Grund: aufgezeichnet ist der Aufruf der
+/// Python-Fassung, und die gibt es seit dem 24.09.2026 nicht mehr. Der Dienst
+/// nennt seither seinen eigenen (`identity::ADOPT`, `identity::MAKE_NEW`).
+/// Uebersetzt werden genau diese zwei Aufrufe, und der Zeuge unten zaehlt, dass
+/// die Uebersetzung genau die zwei abweisenden Saetze trifft: trifft sie
+/// weniger, ist die Ausnahme ohne Gegenstand, trifft sie mehr, deckt sie etwas,
+/// das niemand gemeint hat.
+const AUFGEZEICHNET_ADOPT: &str = "python3 -m service key --adopt";
+const AUFGEZEICHNET_MAKE_NEW: &str = "python3 -m service key --new";
+
 #[test]
 fn der_stand_eines_dienst_schluessels_ist_der_gemessene() {
     let v = lese();
-    assert_eq!(v["ADOPT"].as_str(), Some(identity::ADOPT));
-    assert_eq!(v["MAKE_NEW"].as_str(), Some(identity::MAKE_NEW));
+    // Die Aufzeichnung ist unveraendert, und die Uebersetzung weiss, wovon.
+    assert_eq!(v["ADOPT"].as_str(), Some(AUFGEZEICHNET_ADOPT));
+    assert_eq!(v["MAKE_NEW"].as_str(), Some(AUFGEZEICHNET_MAKE_NEW));
     assert_eq!(v["decide"].as_array().map(|a| a.len()), Some(5), "fuenf Faelle");
+    let mut uebersetzt = Vec::new();
     for f in v["decide"].as_array().unwrap() {
         let s = identity::decide(f["found"].as_str(), f["remembered"].as_str());
         assert_eq!(s.name, f["name"].as_str().unwrap(), "Name bei {f}");
         assert_eq!(s.may_serve, f["may_serve"].as_bool().unwrap(), "may_serve bei {f}");
-        assert_eq!(s.reason, f["reason"].as_str().unwrap(), "SATZ bei {f}");
+        let aufgezeichnet = f["reason"].as_str().unwrap();
+        let soll = aufgezeichnet
+            .replace(AUFGEZEICHNET_ADOPT, identity::ADOPT)
+            .replace(AUFGEZEICHNET_MAKE_NEW, identity::MAKE_NEW);
+        if soll != aufgezeichnet {
+            uebersetzt.push(s.name.clone());
+        }
+        assert_eq!(s.reason, soll, "SATZ bei {f}");
     }
+    assert_eq!(uebersetzt, ["gone", "changed"],
+               "die Ausnahme trifft genau die zwei abweisenden Saetze");
+}
+
+#[test]
+fn kein_satz_des_dienstes_nennt_die_python_fassung() {
+    // Die Gegenrichtung der Ausnahme: was der Dienst dem Betreiber sagt, nennt
+    // keinen Aufruf, den es nicht mehr gibt.
+    for (f, r) in [(None, Some("ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT")),
+                   (Some("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF"), Some("ZZZZ-YYYY-XXXX-WWWW-VVVV-TTTT"))] {
+        let s = identity::decide(f, r);
+        assert!(!s.reason.contains("python"), "nennt Python: {}", s.reason);
+    }
+    assert!(!identity::ADOPT.contains("python") && !identity::MAKE_NEW.contains("python"));
 }
 
 #[test]

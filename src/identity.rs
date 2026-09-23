@@ -54,8 +54,16 @@ pub fn fingerprint(public_key: &[u8]) -> Result<String, String> {
 
 /// Was der Betreiber tippt, um zu sagen, dass eine Aenderung gewollt ist.
 /// Einmal benannt, damit die Abweisungen und die Hilfe nicht auseinanderlaufen.
-pub const ADOPT: &str = "python3 -m service key --adopt";
-pub const MAKE_NEW: &str = "python3 -m service key --new";
+///
+/// Bis zum 24.09.2026 stand hier der Aufruf der Python-Fassung, byte-gleich mit
+/// ihr, damit die zwei Umsetzungen von aussen nicht zu unterscheiden waren. Seit
+/// sie das Repo verlassen hat, nannte der Satz einen Befehl, den es nicht mehr
+/// gibt, und zwar genau dort, wo jemand ihn braucht: vor einem Dienst, der sich
+/// weigert hochzukommen. Die Aufzeichnung in `vektoren/kopf-und-schluessel.json`
+/// bleibt, wie sie gemessen wurde; der Zeuge uebersetzt dort genau diese zwei
+/// Aufrufe und sonst nichts.
+pub const ADOPT: &str = "maer-sync key --adopt";
+pub const MAKE_NEW: &str = "maer-sync key --new";
 
 /// Was mit dem Schluessel zu tun ist, der hier liegt, und warum.
 ///

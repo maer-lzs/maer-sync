@@ -174,6 +174,81 @@ pub fn befehl_account_remove(owner: Option<&str>) -> i32 {
     }
 }
 
+/// Wohin `health` fragt: die Bindung des Dienstes, und eine Bindung an ALLE
+/// Adressen heisst fuer eine Frage von innen die Schleife.
+///
+/// `0.0.0.0:8099` im Container bindet alle Adressen, und dorthin kann man
+/// nicht fragen; `127.0.0.1:8099` erreicht denselben Dienst. Eine Bindung, die
+/// sich nicht lesen laesst, ist `None` und kein geratener Port: eine Probe, die
+/// irgendwohin fragt, prueft den falschen Dienst und meldet ihn gesund.
+pub fn ziel_aus_bindung(bindung: &str) -> Option<std::net::SocketAddr> {
+    let a: std::net::SocketAddr = bindung.trim().parse().ok()?;
+    let ip = match a.ip() {
+        std::net::IpAddr::V4(v) if v.is_unspecified() => std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+        std::net::IpAddr::V6(v) if v.is_unspecified() => std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
+        andere => andere,
+    };
+    Some(std::net::SocketAddr::new(ip, a.port()))
+}
+
+/// Ob eine Antwort `/v1/health` gesund ist: Status 200 UND der Koerper, den der
+/// Dienst dort gibt. Nur der Status waere zu wenig: ein fremder Dienst auf
+/// demselben Port antwortet auch mit 200.
+pub fn gesund(antwort: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(antwort);
+    let mut zeilen = text.lines();
+    let status_ok = zeilen.next()
+        .map(|z| z.starts_with("HTTP/1.1 200") || z.starts_with("HTTP/1.0 200"))
+        .unwrap_or(false);
+    let koerper = text.split("\r\n\r\n").nth(1).unwrap_or("");
+    let koerper_ok = serde_json::from_str::<serde_json::Value>(koerper.trim())
+        .ok()
+        .and_then(|v| v.get("ok").and_then(|o| o.as_bool()))
+        .unwrap_or(false);
+    status_ok && koerper_ok
+}
+
+/// `health`: fragt den laufenden Dienst nach `/v1/health`, 0 fuer gesund, 1
+/// fuer alles andere.
+///
+/// **Fuer den Container**, der kein curl und kein Python traegt: das Abbild
+/// enthaelt nur dieses Binary, also fragt es sich selbst. Ohne HTTP-Klienten
+/// aus einer Crate (das waere eine Aufnahme), von Hand ueber TCP: eine Zeile
+/// hin, die Antwort zurueck, drei Sekunden Frist.
+pub fn befehl_health() -> i32 {
+    let bindung = std::env::var("MAER_SYNC_BIND").unwrap_or_else(|_| "127.0.0.1:8081".into());
+    let Some(ziel) = ziel_aus_bindung(&bindung) else {
+        eprintln!("not healthy: MAER_SYNC_BIND is not an address: {bindung}");
+        return 1;
+    };
+    match gesundheit_fragen(ziel) {
+        Ok(satz) => { println!("{satz}"); 0 }
+        Err(satz) => { eprintln!("{satz}"); 1 }
+    }
+}
+
+/// Die eigentliche Frage an `ziel`, ohne Umgebung: `Ok` mit dem Satz fuer
+/// gesund, `Err` mit dem Grund fuer alles andere.
+pub fn gesundheit_fragen(ziel: std::net::SocketAddr) -> Result<String, String> {
+    use std::io::{Read as _, Write as _};
+    let frist = std::time::Duration::from_secs(3);
+    let mut leitung = std::net::TcpStream::connect_timeout(&ziel, frist)
+        .map_err(|e| format!("not healthy: nothing answers on {ziel}: {e}"))?;
+    let _ = leitung.set_read_timeout(Some(frist));
+    let _ = leitung.set_write_timeout(Some(frist));
+    let frage = format!("GET /v1/health HTTP/1.1\r\nHost: {ziel}\r\nConnection: close\r\n\r\n");
+    leitung.write_all(frage.as_bytes())
+        .map_err(|e| format!("not healthy: the question did not go out: {e}"))?;
+    let mut antwort = Vec::new();
+    let _ = leitung.take(4096).read_to_end(&mut antwort);
+    if gesund(&antwort) {
+        Ok(format!("healthy: {ziel}"))
+    } else {
+        let erste = String::from_utf8_lossy(&antwort).lines().next().unwrap_or("").to_string();
+        Err(format!("not healthy: {ziel} answered {erste:?}"))
+    }
+}
+
 /// `key`, `key --adopt`, `key --new`.
 ///
 /// Drei Befehle in einem, weil sie eine Frage beantworten: wer ist dieser

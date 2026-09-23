@@ -1,38 +1,29 @@
 # Die Vektoren, bevor eine Zeile Rust entsteht
 
-## Neu ziehen
+## Eingefroren seit dem 24.09.2026
 
-Jede Datei mit einem Erzeuger wird so neu gezogen:
+**Die Dateien hier sind eine AUFZEICHNUNG, und sie wachsen nicht mehr.** Jede
+bis auf `noise-nk.json` wurde von einem Erzeuger gezogen, der die
+Python-Fassung des Dienstes fuhr und aufschrieb, was sie antwortete. Am
+24.09.2026 ging die Python-Fassung aus diesem Repo (ENTSCHEID des Betreibers),
+und mit ihr die Erzeuger und ihr Zeuge `tests/test_erzeuger.py`, der jede Datei
+byte-gleich gegen einen frischen Lauf hielt. Der letzte Stand, an dem sie
+liefen, ist `6415e8c`; dort sind sie nachzulesen und zu fahren.
 
-    python3 vektoren/erzeuge_wege.py      > vektoren/wege.json
-    python3 vektoren/erzeuge_horcher.py   > vektoren/horcher.json
-    python3 vektoren/erzeuge_befehle.py   > vektoren/befehle.json
-    python3 vektoren/erzeuge_protokoll.py > vektoren/protokoll.json
-    python3 vektoren/erzeuge_abdruecke.py > vektoren/abdruecke.json
-    python3 vektoren/erzeuge_rahmen.py    > vektoren/rahmen.json
-    python3 vektoren/erzeuge_rueckkehr.py > vektoren/rueckkehr.json
-    python3 vektoren/erzeuge_sitzungen.py > vektoren/sitzungen.json
-    python3 vektoren/erzeuge_zeichen.py   > vektoren/zeichen.json
-    python3 vektoren/erzeuge_schreiben.py > vektoren/schreiben.json
-    python3 vektoren/erzeuge_kopf_und_schluessel.py > vektoren/kopf-und-schluessel.json
+**Was die Dateien damit noch sagen:** so hat Fassung 5 des Vertrags auf der
+Leitung geantwortet, gemessen an einer zweiten, unabhaengigen Umsetzung. Die
+Rust-Seite haelt sich weiter Fall fuer Fall daran. **Was sie nicht mehr
+sagen:** wie sich eine NEUE Fassung verhalten soll. Eine Aenderung am Dienst,
+die einen dieser Faelle bewegt, ist entweder ein Fehler oder eine neue Fassung
+des Vertrags; im zweiten Fall bekommt der Fall eine Ausnahme mit Grund im
+Zeugen, und die Datei bleibt, wie sie gemessen wurde.
 
-Eine Datei braucht zusaetzlich einen SERVER, also eine venv mit uvicorn (die
-Anleitung steht in der README des Repos):
+**Die erwarteten Antworten einer neuen Fassung schreibt nicht, wer den Dienst
+baut.** Ohne zweite Umsetzung fehlt die Gegenprobe; an ihre Stelle tritt ein
+anderer Autor, der die Faelle aus dem Vertrag schreibt, und ein Lauf der App
+selbst gegen den Dienst.
 
-    python3 vektoren/erzeuge_abweisung.py --python .venv/bin/python \
-        > vektoren/abweisung.json
-
-Ohne venv wird ihr Zeuge **ausgewiesen uebersprungen**, nie bestanden.
-
-`tests/test_erzeuger.py` faehrt jeden Erzeuger und haelt das Ergebnis
-**byte-gleich** gegen die eingecheckte Datei. Faellt der Zeuge, ist entweder
-der Dienst geaendert worden, dann ist die Datei neu zu ziehen und der
-Unterschied vorher zu LESEN, weil er die Liste des geaenderten Verhaltens ist,
-oder der Erzeuger misst etwas anderes. Die Fallzahl wird eigens geprueft: ein
-Erzeuger, der stillschweigend weniger Faelle zieht, ergaebe sonst eine kleinere
-Datei, die weiter zu sich selbst passt.
-
-**Eine Vektordatei ohne Erzeuger ist eine Behauptung** (Entscheid 18.09.2026).
+**Eine Vektordatei ohne Erzeuger ist eine Behauptung** (Entscheid 18.09.2026), und so hat es gegolten, solange es die Python-Fassung gab.
 Die sieben Dateien der Scheiben 1 bis 3 haben ihren seit dem **19.09.2026**, und
 sie sind dabei **byte-gleich geblieben**: jeder Erzeuger zieht genau die Datei,
 die vorher von Hand danebenlag, mit derselben Fallzahl. Das ist das Ergebnis und
@@ -54,7 +45,7 @@ Implementierung.
 
 | Datei | Herkunft | Staerke |
 |---|---|---|
-| `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert aus `tests/vectors/` | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
+| `noise-nk.json` | **veroeffentlichte Vektoren**, unveraendert (bis `6415e8c` lag dieselbe Datei auch unter `tests/vectors/`, fuer die Python-Seite) | am staerksten: sie kommen von ausserhalb, zwei Fassungen, die keine unserer Umsetzungen kennt |
 | `abdruecke.json` | aus `core/identity.py`, **und gegengerechnet** mit einer unabhaengigen Crockford-Umsetzung im Erzeuger | mittel: das Verfahren ist SHA-256 plus eine veroeffentlichte Alphabet-Tabelle, also von Dritten nachrechenbar |
 | `rahmen.json` | aus `core/frames.py` | am schwaechsten: das Format ist unser eigenes, die Zahlen halten den heutigen Stand fest |
 | `protokoll.json` | **an der laufenden Anwendung gemessen**, der Protokoll-Handler mitgeschrieben | mittel: die Saetze sind unsere eigenen, aber nichts darin ist behauptet |

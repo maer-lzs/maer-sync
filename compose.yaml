@@ -39,22 +39,35 @@ services:
     volumes:
       - maer-sync-store:/var/lib/maer-sync
 
+    # EINE Adresse, `MAER_SYNC_BIND`: die Rust-Fassung kennt `MAER_SYNC_HOST`
+    # und `MAER_SYNC_PORT` nicht, und wer sie setzt, bekommt keinen Fehler,
+    # sondern einen Dienst auf dem Vorgabeport 8081, den niemand fragt.
     environment:
       MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
-      MAER_SYNC_HOST: 0.0.0.0
-      MAER_SYNC_PORT: 8099
+      MAER_SYNC_BIND: 0.0.0.0:8099
 
-    # Der Dienst beantwortet /v1/health ohne Token — genau dafür ist er da.
+    # Das Abbild traegt kein curl und kein Python, also fragt das Binary sich
+    # selbst: `health` fragt /v1/health und endet mit 0 oder 1.
     healthcheck:
-      test: ["CMD", "/opt/maer-sync/.venv/bin/python", "-c",
-             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8099/v1/health',timeout=3).status==200 else 1)"]
+      test: ["CMD", "/maer-sync", "health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
 
+    # Ein Init vor dem Dienst. Im Container ist der Dienst sonst PID 1, und fuer
+    # PID 1 gilt kein Vorgabe-Verhalten eines Signals: SIGTERM verpufft, und
+    # jeder `stop` und jeder `restart` wartete zehn Sekunden und endete mit
+    # SIGKILL, Ausgang 137 (gemessen am 24.09.2026). Das Init ist das von Docker
+    # mitgelieferte, keine weitere Abhaengigkeit im Abbild.
+    init: true
+
     security_opt:
       - no-new-privileges:true
+    # Gemessen am 24.09.2026 gegen eine Kopie eines echten Bestands (78
+    # Dokumente): 8 MB im Lauf, Spitze 14 MB mit Sicherung. Die Grenze bleibt
+    # trotzdem hoch, weil ein einzelner Schrieb bis MAER_SYNC_MAX_BODY_BYTES
+    # (64 MiB) gross sein darf und im Speicher liegt, bevor er geprueft wird.
     mem_limit: 256m
     pids_limit: 128
 

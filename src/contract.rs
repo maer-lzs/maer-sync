@@ -5,17 +5,16 @@
 
 //! Der Vertrag, von DIESER Seite gemessen.
 //!
-//! Die Python-Fassung haelt denselben Digest in `tests/test_contract.py`. Zwei
-//! Seiten, die je nur ihre eigene Datei gegen ihre eigene Konstante halten,
-//! bleiben beide gruen, waehrend die Konstanten auseinanderlaufen: **genau das
-//! ist am 18.09.2026 passiert**, als ein Satz in den Vertrag kam und der
-//! Zweig-Digest von `547d9a75` auf `fc35e150` wanderte, waehrend die App-Seite
-//! die alte Zahl hielt. Beide Suiten blieben gruen.
+//! Zwei Seiten, die je nur ihre eigene Datei gegen ihre eigene Konstante
+//! halten, bleiben beide gruen, waehrend die Konstanten auseinanderlaufen:
+//! **genau das ist am 18.09.2026 passiert**, als ein Satz in den Vertrag kam
+//! und der Zweig-Digest von `547d9a75` auf `fc35e150` wanderte, waehrend die
+//! App-Seite die alte Zahl hielt. Beide Suiten blieben gruen.
 //!
-//! Innerhalb DIESES Repos ist das jetzt unmoeglich: der Zeuge daneben haelt
-//! drei Dinge gegeneinander, die Datei, diese Konstante und die der
-//! Python-Seite. Was er nicht sehen kann, ist die App: sie liegt in einem
-//! anderen Repo, und ihr Nachzug bleibt ein Schritt von Hand.
+//! Bis die Python-Fassung am 24.09.2026 aus diesem Repo ging, hielt der Zeuge
+//! daneben drei Dinge gegeneinander: die Datei, diese Konstante und die der
+//! Python-Seite. Jetzt sind es zwei. Was er nicht sehen kann, ist die App: sie
+//! liegt in einem anderen Repo, und ihr Nachzug bleibt ein Schritt von Hand.
 
 use std::collections::BTreeMap;
 

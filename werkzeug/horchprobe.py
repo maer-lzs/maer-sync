@@ -24,10 +24,10 @@ nicht weggeraeumt.
 
 import argparse, base64, hashlib, json, os, socket, struct, sys, urllib.request
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.frames import pack, unpack
-from core.handshake import HandshakeState
+from klient.frames import pack, unpack
+from klient.handshake import HandshakeState
 
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 

@@ -24,24 +24,6 @@ fn der_vertrag_hat_den_digest_den_diese_seite_erwartet() {
 }
 
 #[test]
-fn beide_seiten_halten_DIESELBE_zahl() {
-    // DER Zeuge. Die Python-Seite traegt ihren Erwartungswert in
-    // tests/test_contract.py; laufen die zwei auseinander, ist die Zusage
-    // "byte-gleich in beiden Repos" gebrochen, ohne dass eine der beiden
-    // Suiten es merkt.
-    let py = std::fs::read_to_string("tests/test_contract.py").expect("die Python-Seite liegt hier");
-    let zeile = py.lines()
-        .find(|z| z.trim_start().starts_with("CONTRACT_DIGEST"))
-        .expect("die Python-Seite nennt einen Digest");
-    let ihre = zeile.split('"').nth(1).expect("in Anfuehrungszeichen");
-    assert_eq!(ihre, DIGEST,
-               "die beiden Seiten dieses Repos halten verschiedene Digests: \
-Python {ihre}, Rust {DIGEST}");
-    // Und beide gegen die Datei, sonst waeren zwei gleiche falsche Zahlen gruen.
-    assert_eq!(digest_of(&vertrag()), ihre);
-}
-
-#[test]
 fn der_vertrag_nennt_seine_fassung_und_es_ist_unsere() {
     let text = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&text).expect("der Vertrag hat einen maschinenlesbaren Block");

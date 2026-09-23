@@ -45,15 +45,14 @@ LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 # Quelltext, und eine Vektordatei ohne Erzeuger ist eine Behauptung. Die
 # JSON-Dateien daneben werden nicht eingesammelt (die Sammlung nimmt nur
 # .py, .rs, .sh und Dockerfile) und tragen ihre Ausnahme mit Grund.
-SOURCE_DIRS = ("core", "service", "tests", "src", "werkzeug", "vektoren",
-               "abdeckung")
+# `core`, `service` und `abdeckung` gingen am 24.09.2026 mit der Python-Fassung.
+SOURCE_DIRS = ("tests", "src", "werkzeug", "vektoren")
 
 #: Files at the root that are source too, each named on purpose.
-ROOT_FILES = ("Dockerfile", "compose.yaml", "run-tests.sh", "Cargo.toml")
+ROOT_FILES = ("Dockerfile", "compose.yaml", "Cargo.toml")
 
 #: Exempt, each with the reason at the entry — not in a list elsewhere.
 EXEMPT = {
-    "requirements.txt": "a pinned dependency list, not our source",
     ".gitignore": "a list of patterns, and comments in it would be read as patterns",
     "README.md": "prose about the service; the LICENSE file covers the repository",
     "CONTRACT.md": "byte-identical in both repositories with a fence on each side, "
@@ -78,14 +77,6 @@ EXEMPT = {
                                "where they come from is stated in the README beside them",
     "vektoren/kopf-und-schluessel.json": "numbers, and JSON has no comment to put a header in; "
                                           "where they come from is stated in the README beside them",
-    "abdeckung/108-faelle.json": "a judgement per case, written by its generator beside "
-                                "it, and JSON has no comment to put a header in; the fence "
-                                "in tests/test_abdeckung.py holds every line of it against "
-                                "the repository",
-    "abdeckung/126-faelle.json": "a judgement per case, written by its generator beside "
-                                "it, and JSON has no comment to put a header in; the fence "
-                                "in tests/test_abdeckung.py holds every line of it against "
-                                "the repository",
     "vektoren/protokoll.json": "which line each refusal leaves, measured off the real "
                               "application, and JSON has no comment to put a header in; "
                               "its generator is stated in the README beside it",
@@ -102,13 +93,9 @@ EXEMPT = {
     "vektoren/wege.json": "answers measured off the running application, and JSON has no "
                           "comment to put a header in; how it was produced, and what it "
                           "pins, is stated in the README beside it",
-    "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim from "
-                              "tests/vectors so the Rust side reads the same file; a header "
-                              "would alter the bytes whose whole value is that nobody touched them",
-    "tests/vectors/noise-nk.json": "somebody else's published numbers, copied verbatim; "
-                                   "a header would alter the bytes whose whole value is "
-                                   "that we did not touch them, and JSON has no comments "
-                                   "to put one in",
+    "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim; a "
+                              "header would alter the bytes whose whole value is that "
+                              "nobody touched them, and JSON has no comments to put one in",
 }
 
 SPDX = "SPDX-License-Identifier"

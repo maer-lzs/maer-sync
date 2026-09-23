@@ -45,9 +45,50 @@ nicht einmal anlaeuft.
 was VERFOLGT ist; eine Datei, die nur angelegt wurde, sieht er nicht. Wer die
 Suite vor dem Hinzufuegen faehrt, bekommt gruen und committet die Luecke. Genau
 das ist hier zweimal passiert, beim zweiten Mal einen Schritt frueher als beim
-ersten. Reihenfolge also: `git add -A`, dann `run-tests.sh` und `bau.sh test`,
-dann committen.
+ersten. Reihenfolge also: `git add -A`, dann die Zaeune des Repos und
+`bau.sh test`, dann committen. `vor-dem-commit.sh` faehrt genau das, in dieser
+Reihenfolge, und haelt bei Rot an.
 
-**Was hier NICHT liegt: eine Crate.** Der Auftrag haelt die Crate-Liste als
-eigenen Entscheid fest, und bis der vorliegt, traegt der Zweig kein
-`Cargo.toml` mit Abhaengigkeiten. Die gemessenen Baeume stehen im Bericht.
+**Die Zaeune des Repos bleiben in Python, und nur sie.** Seit dem 24.09.2026
+liegt hier kein Dienst mehr in Python. Was bleibt, sind `tests/test_license.py`
+und `tests/test_repo_hygiene.py` mit ihrem gemeinsamen `tests/gitquery.py`: sie
+fragen `git`, was verfolgt ist, und `git` gibt es auf dem Wirt, nicht im
+Bau-Abbild der Rust-Suite. Sie brauchen nur die Standardbibliothek.
+
+**Die Crates stehen in `Cargo.toml` und `Cargo.lock`, und jede ist einzeln
+entschieden.** Eine neue Crate ist ein Entscheid vor dem Commit, nicht ein
+Commit mit Begruendung: Kandidat mit Baum, Lizenz und Pflegestand vorlegen,
+`Cargo.toml` erst nach dem Wort.
+
+## Zwei Dockerfiles, und warum
+
+`werkzeug/Dockerfile` ist die Bau-Schicht fuer `bau.sh`: das gepinnte
+Grundabbild plus `musl-dev`, sonst nichts. Das `Dockerfile` an der Wurzel ist
+das Betriebsabbild: es baut in derselben Umgebung und legt am Ende NUR das
+Binary in ein leeres Abbild (`FROM scratch`). Ein Dockerfile kann kein anderes
+einbinden, also stehen der Digest und die `musl-dev`-Fassung zweimal da.
+`tests/abbild.rs` haelt beide Stellen und `bau.sh` gleich; wer einen Pin
+bewegt, bewegt alle drei, oder die Suite wird rot.
+
+## Die Proben gegen einen LAUFENDEN Dienst
+
+    python3 werkzeug/gegenprobe.py --gegen http://127.0.0.1:8081 --zeichen <wert>
+    python3 werkzeug/horchprobe.py --gegen http://127.0.0.1:8081 --zeichen <wert>
+
+`gegenprobe.py` spielt `vektoren/wege.json` ueber eine echte Leitung ab,
+`horchprobe.py` die Horcher-Tafel ueber einen echten WebSocket. Beide fahren den
+Tunnel als KLIENT und bringen dafuer die Klient-Seite mit: `klient/frames.py`
+und `klient/handshake.py`. Die zwei Dateien lagen bis zum 24.09.2026 in `core/`
+neben der Python-Fassung des Dienstes; mit ihr ging der Rest, und die Proben
+behielten, was sie als Klient brauchen.
+
+**Sie brauchen `cryptography`, und nur sie.** Der Handschlag braucht X25519 und
+ChaCha20-Poly1305, und beides hat die Standardbibliothek nicht. Der Dienst
+selbst braucht davon nichts. Eine `requirements.txt` gibt es seit dem Auszug der
+Python-Fassung nicht mehr; wer die Proben faehrt, nimmt das Paket seines
+Systems (auf Debian `python3-cryptography`) oder eine eigene Umgebung.
+
+**`wege.json` ist eingefroren** (siehe `vektoren/README.md`). Die Gegenprobe
+misst also gegen die Fassung 5, wie sie am 18.09.2026 gemessen wurde. Aendert
+eine spaetere Fassung einen Fall bewusst, bekommt er eine Ausnahme mit Grund,
+und die Tafel bleibt, wie sie gemessen wurde.

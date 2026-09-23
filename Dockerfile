@@ -3,65 +3,65 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-# Mär Sync Service — Abbild.
+# Mär Sync Service als Container: zwei Stufen, und im Ergebnis NUR das Binary.
 #
-# Gebaut und gefahren am 16.09.2026 auf dem Tiny, nicht geschrieben und gehofft.
+# Stufe 1 baut das Binary in DERSELBEN Umgebung wie `werkzeug/bau.sh`: das
+# Grundabbild am Index-Digest, `musl-dev` in der gepinnten Fassung, das Ziel
+# ausdruecklich gesetzt und `+crt-static` NUR fuer das Ziel (sonst bricht der
+# Bau am Proc-Macro ab, siehe `werkzeug/README.md`). Die beiden Pins stehen hier
+# ein zweites Mal, weil ein Dockerfile kein anderes einbinden kann; der Zeuge
+# `tests/abbild.rs` haelt sie gegen `werkzeug/Dockerfile`, damit sie nicht
+# auseinanderlaufen.
 #
-# Das Grundabbild ist auf den Punkt gepinnt, nicht auf "3.13": ein wanderndes
-# Grundabbild macht aus --require-hashes in requirements.txt eine halbe Zusage.
-# Der Sinn des Pinnens ist, dass sich die Laufzeit unter einem TLS-terminierten
-# Dienst nicht ändert, und das Grundabbild IST Laufzeit.
-# DIESES ABBILD BAUT DIE PYTHON-FASSUNG, NICHT DIE RUST-FASSUNG.
-#
-# Seit v0.2.0 liegen beide Implementierungen in diesem Baum. Wer hier
-# `docker compose up` sagt, bekommt Python, und das ist Absicht: die
-# Python-Fassung ist der Rueckweg. Die Rust-Fassung wird NICHT von hier
-# gebaut, sondern mit `werkzeug/bau.sh build --release` (statisch gegen musl,
-# ein Erzeugnis ohne Laufzeit darunter); ihr Bauabbild steht in
-# `werkzeug/Dockerfile`.
-#
-# Der Satz steht hier, weil ein Abbild, das etwas anderes baut als der Leser
-# erwartet, nichts meldet: es laeuft, und erst der Betrieb zeigt die falsche
-# Fassung.
+# Stufe 2 ist leer (`FROM scratch`): kein Shell, keine libc, kein Paket. Das
+# Binary ist statisch und braucht nichts davon. Was darin liegt, ist das
+# Binary, das Datenverzeichnis fuer die UID 10001 und die zwei Lizenztexte.
+FROM rust@sha256:4333721398de61f53ccbe53b0b855bcc4bb49e55828e8f652d7a8ac33dd0c118 AS bau
+RUN apk add --no-cache musl-dev=1.2.5-r11
+WORKDIR /bau
+# Dieselben Pfade wie `bau.sh`: die Pfade der Quellen stehen im Binary (in den
+# Meldungen einer Panik), und mit anderen Pfaden waere das Binary im Abbild ein
+# anderes als das, das ein Wirt per Kopie bekommt.
+ENV CARGO_HOME=/bau/ziel/cargo-home \
+    CARGO_TARGET_DIR=/bau/ziel/abbau
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+# Das Ziel je Bauwirt, wie in `werkzeug/bau.sh`: der Tiny baut x86_64, der Pi
+# aarch64, und gekreuzt wird nicht. `--locked`: das Lockfile ist die Zusage,
+# und ein Bau, der es aendern wollte, soll abbrechen statt still aufzuloesen.
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64)  ziel=x86_64-unknown-linux-musl;  schalter=CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;; \
+      aarch64) ziel=aarch64-unknown-linux-musl; schalter=CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;; \
+      *) echo "unbekannte Architektur $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    env "$schalter=-C target-feature=+crt-static" cargo build --release --locked --target "$ziel"; \
+    cp "$CARGO_TARGET_DIR/$ziel/release/maer-sync" /maer-sync; \
+    mkdir -p /leer/var/lib/maer-sync /leer/tmp
 
-FROM python:3.13.7-slim-bookworm
+FROM scratch
+COPY --from=bau /maer-sync /maer-sync
+# Ein /tmp, weil `backup` seine Rueckspielprobe dort oeffnet
+# (`std::env::temp_dir()` in `src/befehle.rs`). Ohne es endete jede Sicherung im
+# Container mit `not measured … Permission denied`: gemessen am 24.09.2026, und
+# richtig gemeldet, weil die Probe dann nicht »fits« sagt. Es gehoert der UID
+# des Dienstes: ein `chmod 1777` in der Baustufe kam beim ersten Versuch NICHT
+# im Abbild an (`docker export` zeigte `drwxr-xr-x root`), die Eigentuemerschaft
+# traegt dagegen nachweislich, wie beim Datenverzeichnis darunter.
+COPY --from=bau --chown=10001:10001 /leer/tmp /tmp
+# Das Datenverzeichnis gehoert der festen UID, denn das Volume gehoert einer
+# UID, und die muss jeden Neubau des Abbilds ueberleben.
+COPY --from=bau --chown=10001:10001 /leer/var/lib/maer-sync /var/lib/maer-sync
+COPY LICENSE LICENSE-ADDITIONAL-TERMS /
 
-# Kein root. Die feste Nummer ist Absicht: das benannte Volume gehört einer UID,
-# und die muss über Neubauten des Abbilds hinweg dieselbe bleiben, sonst steht
-# der Dienst nach einem Update vor seinem eigenen Speicher und darf nicht hinein.
-RUN groupadd --system --gid 10001 maersync \
- && useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin maersync
-
-WORKDIR /opt/maer-sync
-
-# Erst die Abhängigkeiten, dann der Code: so muss die Installationsschicht nicht
-# bei jeder Code-Änderung neu gebaut werden.
-COPY requirements.txt ./
-RUN python -m venv .venv \
- && .venv/bin/python -m pip install --no-cache-dir --require-hashes -r requirements.txt
-
-COPY core ./core
-COPY service ./service
-# Die Lizenz reist mit. Ein Abbild ist eine Weitergabe, und die GPL verlangt den
-# Text dabei; ohne ihn koennte der Zaun in tests/ hier drin auch gar nicht pruefen,
-# was jeder Dateikopf verspricht.
-COPY LICENSE LICENSE-ADDITIONAL-TERMS ./
-COPY run-tests.sh CONTRACT.md README.md ./
-COPY tests ./tests
-
-# Der Speicherort ist ein VOLUME, kein Pfad im Abbild. Läge er im Abbild, wäre die
-# Ablage beim nächsten Abbild weg — das ist der Fehler, der Daten kostet, und er
-# fällt beim Lesen nicht auf.
-RUN mkdir -p /var/lib/maer-sync && chown maersync:maersync /var/lib/maer-sync
-VOLUME ["/var/lib/maer-sync"]
-
+# Die Rust-Fassung liest EINE Adresse, `MAER_SYNC_BIND`, und kennt
+# `MAER_SYNC_HOST` und `MAER_SYNC_PORT` nicht (null Vorkommen in `src/`).
+# Gesetzt wie die frueheren zwei: alle Adressen im Container, Port 8099.
 ENV MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite \
-    MAER_SYNC_HOST=0.0.0.0 \
-    MAER_SYNC_PORT=8099
+    MAER_SYNC_BIND=0.0.0.0:8099
 
-USER maersync
+USER 10001:10001
+VOLUME ["/var/lib/maer-sync"]
 EXPOSE 8099
-
-# Kein Shell-Formular: so bekommt der Dienst das Signal von docker stop direkt und
-# beendet sich sauber, statt nach zehn Sekunden getötet zu werden.
-ENTRYPOINT ["/opt/maer-sync/.venv/bin/python", "-m", "service"]
+ENTRYPOINT ["/maer-sync"]
+CMD ["serve"]

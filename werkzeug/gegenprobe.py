@@ -30,10 +30,10 @@ Nur die Standardbibliothek, ausser dem Repo selbst.
 
 import argparse, base64, json, os, sys, urllib.error, urllib.request
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.frames import pack, unpack
-from core.handshake import HandshakeState
+from klient.frames import pack, unpack
+from klient.handshake import HandshakeState
 
 
 def hole(url, method="GET", kopfzeilen=None, koerper=None):

@@ -1,5 +1,6 @@
 {
   "was": "Die Reihenfolge der Tore in service/app.py, gemessen an der Anwendung selbst.",
+  "eingefroren": "An der Python-Fassung gemessen am 18.09.2026 (Commit 06ce78e), Fassung 5 des Vertrags, eingefroren am 24.09.2026, als die Python-Fassung ging. Die Rust-Seite haelt Fassung 5 weiter dagegen; Faelle, die eine spaetere Fassung bewegt, tragen dort ihre Ausnahme mit Grund, die Datei bleibt wie gemessen.",
   "wie": "Jeder Fall wurde gegen die echte ASGI-Anwendung gerufen; nichts ist behauptet.",
   "anwendungen": {
     "ohne_kennung": "App(store) ohne statischen Schluessel",

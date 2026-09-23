@@ -8,161 +8,136 @@ beside iCloud as a second way, and the user picks; it is not a replacement
 and not a default.
 
 **Status: in the app since 3.0.** The netless decision units, a SQLite
-store, a bare ASGI application, bearer-token authentication, the account
-commands and the backup with its rehearsal, all under test. The app reaches
-it through `MaerSyncCarriers.swift`: one session carries the five document
-kinds (`stands`, `claim`, `stats`, `playlists`, `choices`) behind the
-carrier seams, so the runners in the app know nothing of it; the settings
-page (Settings, Sync) signs in, tests the connection and shows a refused
-write with the service's own sentence. It runs behind uvicorn on a host of
-the operator's, behind TLS. The takeover end to end (a locked, playing
-device stops when the other starts) needs two devices and is measured in
-the device test.
+store, an HTTP service with its changes socket, bearer-token authentication,
+the encrypted session, the account commands and the backup with its
+rehearsal, all under test. The app reaches it through
+`MaerSyncCarriers.swift`: one session carries the five document kinds
+(`stands`, `claim`, `stats`, `playlists`, `choices`) behind the carrier
+seams, so the runners in the app know nothing of it; the settings page
+(Settings, Sync) signs in, tests the connection and shows a refused write
+with the service's own sentence. It runs as one static binary on a host of
+the operator's, behind a proxy that holds the certificate. The takeover end
+to end (a locked, playing device stops when the other starts) needs two
+devices and is measured in the device test.
 
-## Two implementations, one contract
+## One implementation, one contract
 
-Since `v0.2.0` this repository carries **two** services that speak the same
-contract: the Python one under `service/` and `core/`, and the Rust one under
-`src/`. `CONTRACT.md` sits above both, and the route table in `vektoren/wege.json`
-is measured against both sides (28 cases, 0 differing).
+The service is written in Rust and lives under `src/`. `CONTRACT.md` beside
+this file is what binds it, and the app carries the same file with the same
+digest.
 
-**The Rust build is what gets deployed.** It is a single statically linked
-binary against musl, about 4.7 MB, with no runtime underneath it. **The Python
-build is the way back.** It stays complete in the tree for exactly that reason,
-and the container image in `Dockerfile` still builds it.
+**Until 24.09.2026 there were two.** The first implementation was Python, and
+the Rust one was written against it: the route table in `vektoren/wege.json`
+was measured against both sides, 28 cases, 0 differing. The Python build left
+this repository on 24.09.2026. What it measured stays as a record: the files in
+`vektoren/` are frozen at that state, and the Rust suite still holds itself to
+them case by case (see `vektoren/README.md`). The last commit that carries the
+Python build is `6415e8c`.
 
-If you are setting up a host, read *Setting it up* for the Python way or
-*Setting up the Rust build* below. If you are moving a running host from one to
-the other, read *Switching a running host*. Do not mix the two: the services
-read different environment variables, and the wrong unit file fails silently.
-See the table under *Environment*.
+**The way back is the previous binary and a backup of the store**, not a
+second language. See *Updating a running host, and the way back*.
 
 ## Setting it up
 
-**Every command below was run before it was written here**, on macOS with
-Python 3.14 against a throwaway store; the outputs quoted are the ones that
-came back. The two blocks that were NOT run are marked as such where they
-stand, and the section at the end says what that leaves unproven.
+Where a step quotes what came back, it was run on a Debian host on 24.09.2026
+against a throwaway store, and the output is the one that came back. Where a
+step was not run as written, it says so where it stands.
 
 ### 1. What it needs
 
-**Python 3.10 or newer**, and one line is the whole reason:
+**Nothing on the host.** The binary is linked statically against musl and
+carries its own runtime: no interpreter, no virtual environment, no system
+library. What you need is a machine that can build it, and that machine needs
+Docker: the build runs inside a pinned image so that the toolchain cannot
+drift. `werkzeug/README.md` explains why, and what the pinning covers. Do not
+build with a locally installed cargo unless you are prepared to answer what
+your toolchain differs in.
 
-    core/authorization.py:72:    owner: str | None
+Build host and target must match: the tool refuses to cross compile, so an
+x86_64 host builds the x86_64 target and an aarch64 host builds its own.
 
-`X | None` is the union spelling of PEP 604, which is 3.10 and up. **One
-occurrence is enough, and that is the part worth writing down rather than a
-count.** It is a field annotation, annotations are evaluated when the module
-is loaded, and there is no `from __future__ import annotations` anywhere in
-this repository to defer them (measured: zero). So on 3.9 the import fails
-with a type error before a single request is served.
+**One thing in this repository is Python, and it is not the service.** Two
+tests ask `git` what the repository tracks (license headers, hygiene). git
+lives on the host and not in the build image, so they are written for the host,
+in Python with the standard library only. You need `python3` and `git` to run
+them, never to run the service.
 
-Nothing here needs anything newer than 3.10.
-
-**And `sqlite3`, which is standard library and still worth one command.** It
-is a C extension binding the system's SQLite, so a self-compiled or
-slimmed-down Python can be missing it, and then the import fails before
-anything else does. That is not a theoretical case for people who build their
-own Python on a small server:
-
-    $ python3 -c "import sqlite3, sys; print(sys.version.split()[0], sqlite3.sqlite_version)"
-    3.14.6 3.53.4
-
-**No SQLite version floor beyond that.** Measured against the sources: no
-`VACUUM INTO`, no `RETURNING`, no `json_` functions, no upsert, no `STRICT`
-tables. The only thing with a floor at all is `Connection.backup`, which is
-Python 3.7 and up, so the 3.10 above already covers it.
-
-Nothing else from the language itself. **Two things come from outside**, and
-both are named where they are installed: an ASGI server, because the
-application is finished without one but cannot be reached without one, and
-`cryptography`, because the encrypted session needs X25519 and
-ChaCha20-Poly1305 and Python ships neither. That is step 2, and it now comes
-BEFORE the tests: the suite tests the encrypted session too, so it needs what
-that session is built from.
-
-### 2. Fetch it and install what it needs
+### 2. Fetch it and build the product
 
     git clone https://codeberg.org/LzS/maer-sync.git
     cd maer-sync
-    python3 -m venv .venv
-    .venv/bin/python -m pip install --require-hashes -r requirements.txt
+    werkzeug/bau.sh build --release
 
-The application is finished without a server; it needs one that speaks ASGI.
+**The first build needs the network**: it fetches the crates that `Cargo.lock`
+pins, into `ziel/cargo-home` inside the project and not into your home. After
+that, `--offline` holds every later build to exactly what was fetched:
 
-    python3 -m venv .venv
-    .venv/bin/python -m pip install --require-hashes -r requirements.txt
+    werkzeug/bau.sh build --release --offline
 
-`--require-hashes` is not decoration. Without it the pinning in
-`requirements.txt` is a suggestion, and the point of pinning a runtime that
-terminates TLS-protected traffic is that it cannot change under you.
+The result lands in
+`ziel/abbau/<target>-unknown-linux-musl/release/maer-sync`, for example
+`ziel/abbau/x86_64-unknown-linux-musl/release/maer-sync`, about 4.7 MB.
 
-What that installs, and why each one:
+Check what you built, because a binary says nothing about itself yet (see
+*Knowing which build is running*):
 
-| package | why |
-| --- | --- |
-| `uvicorn` | the ASGI server |
-| `wsproto` | the WebSocket implementation, for `/v1/changes` |
-| `h11`, `click`, `typing_extensions` | what those two need |
-| `cryptography` | X25519 and ChaCha20-Poly1305 for the encrypted session |
-| `cffi`, `pycparser` | what `cryptography` needs |
+    ls -l ziel/abbau/*/release/maer-sync
+    sha256sum ziel/abbau/*/release/maer-sync
 
-**The crypto half is pinned PER PLATFORM, and that is a difference worth
-knowing before it surprises you.** `cryptography` is compiled: 45 wheels for
-one version, and `cffi` another 99. The file carries the hashes for macOS on
-arm64 and x86_64 and for Linux on x86_64 and aarch64, glibc and musl.
-Anywhere else, `--require-hashes` fails loudly with "no matching
-distribution" rather than installing something unpinned, and the fix is to
-add that platform's hashes to the file.
+### 3. Run the tests before you carry it anywhere
 
-### 3. Run the tests
+    werkzeug/vor-dem-commit.sh
 
-    ./run-tests.sh
+This runs `git add -A`, then the repository fences, then the Rust suite, and
+stops on red. `git add -A` comes first on purpose: the license fence asks git
+what is tracked, so an untracked file would pass unseen. A green run ends in
+`frei zum Committen.` The Rust suite alone is `werkzeug/bau.sh test --offline`.
 
-The suite needs no server, no network and no configuration, so a red run here
-means the machine is wrong and not the setup. It prints its case count and
-takes about 11.5 seconds, nearly all of it scrypt (see "Running the tests").
-It uses `.venv` if one is there, which is why step 2 comes first now: the
-handshake cases are held against published test vectors, and those need the
-same primitives the service uses.
+**A skip is not a pass, and the run says which is which.** One case is skipped
+on a plain host, and it names its reason: it reads a store that the Python
+build laid down, handed in as `MAER_SYNC_PYTHON_DB`. Without one it abstains
+instead of passing.
 
-**`wsproto` and not `websockets`, on purpose:** uvicorn without its
-`[standard]` extra carries no WebSocket at all ("No supported WebSocket
-library detected", measured), and `/v1/changes` needs one. `websockets`
-ships a wheel per platform, so a hash-pinned file would carry dozens of
-hashes or quietly stop working on the machine it was not generated on.
-`wsproto` is one pure-python wheel and one hash.
+### 4. Put it on the host
 
-### 4. Run it
+The binary needs a place, a database, and a key. Nothing else.
 
-    MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite .venv/bin/python -m service
+    sudo install -o <serviceuser> -g <serviceuser> -m 755 maer-sync /srv/maer-sync/maer-sync
 
-No subcommand runs the server: that is the common case, and an unknown
-command is refused rather than silently serving. `python3 -m service serve`
-says the same thing out loud.
+The service user needs write access to the directory holding the database and
+the key, and nothing beyond it. **Not run as written here**: the measured host
+keeps its binary under a path of its own.
 
-It answers immediately:
+### 5. The key: the first start makes it, and after that it is required
 
-    $ curl -s http://127.0.0.1:8099/v1/health
-    {"ok": true}
+**On a new store the first start makes the key by itself**, and says so:
 
-And nothing else does, without a token:
+    a static key was made: M2KZ-6KRX-4CTH-KR3K-65ZK-J3EM (every device that connects will pin it)
+    this service now answers as M2KZ-6KRX-4CTH-KR3K-65ZK-J3EM
+    serving on 127.0.0.1:18231
 
-    $ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8099/v1/doc/stands
-    401
+**From then on the store remembers it**, the fingerprint and never the private
+half, and a key file that is missing or different stops the service. It exits
+with code **3** and binds no port, rather than growing a new identity that
+every device would refuse. That is what a restore onto a new machine runs into;
+see *The identity of this service*.
 
-The knobs, all optional:
+To make the key before the first start, or to replace it on purpose:
 
-    MAER_SYNC_DB=maer-sync.sqlite       # the store
-    MAER_SYNC_KEY=<beside the store>    # the static key file, default identity.key
-    MAER_SYNC_HOST=127.0.0.1            # bind address
-    MAER_SYNC_PORT=8099
-    MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
-    MAER_SYNC_PLAIN_WAYS=on             # off: the five older ways answer only inside a session
+    sudo -u <serviceuser> env \
+      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
+      MAER_SYNC_KEY=/srv/maer-sync/data/identity.key \
+      /srv/maer-sync/maer-sync key --new
 
-### 5. Lay down an account
+It prints the fingerprint. **Copy that key file somewhere safe now.** Clients
+pin the fingerprint on first contact, so losing the key means every device has
+to trust the service again from scratch.
 
-    printf '%s' 'the-secret' | .venv/bin/python -m service account someone
+### 6. Lay down an account
+
+    printf '%s' "$SECRET" | sudo -u <serviceuser> env \
+      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
+      /srv/maer-sync/maer-sync account someone
 
     account someone laid down
 
@@ -170,33 +145,47 @@ The knobs, all optional:
 argument is visible to every other process on the machine and lands in the
 shell history. The service stores a scrypt hash, never the secret.
 
+**An account that is already there is refused**, and the command exits 1:
+
+    refused: an account named '<owner>' is already here
+
+An existing account is not silently overwritten.
+
 Check it from the outside:
 
     $ curl -s -X POST http://127.0.0.1:8099/v1/token \
         -H 'Content-Type: application/json' \
-        -d '{"owner":"someone","secret":"the-secret"}'
-    {"token": "…64 characters…"}
+        -d '{"owner":"someone","secret":"the-secret","device":"laptop"}'
+
+answers with a JSON object whose `token` is 64 characters, and that token
+writes:
 
     $ curl -s -o /dev/null -w '%{http_code}\n' \
         -X PUT 'http://127.0.0.1:8099/v1/doc/stands?scope=' \
         -H "Authorization: Bearer $TOKEN" -H 'X-Maer-Format: 1' -d '{"a":1}'
     200
 
-### 6. Put a proxy in front, and prove the socket
+Without the header the same document answers `401`. Run on 24.09.2026 on a
+free port; with `MAER_SYNC_PLAIN_WAYS=off` both plain requests answer `426`
+instead, because they then travel only inside a session.
+
+### 7. Put a proxy in front, and prove the socket
 
 **This is the step that goes wrong quietly.** A proxy that forwards REST but
 drops the WebSocket upgrade leaves a service that looks completely healthy:
 sign-in works, documents travel, and only the push is gone, so a change
 arrives thirty seconds late instead of instantly. Nothing logs an error.
 
-**RUN, 16.09.2026**, on nginx in front of this service: with the three upgrade
-lines the handshake answers `101` with a token and `403` without. With them
-commented out, REST still answers `200` and the upgrade returns **`404`**:
-not a hang and not a 502, which is exactly why nothing looks broken.
+**Run on 16.09.2026, on nginx, in front of the Python build that stood here
+then:** with the three upgrade lines the handshake answers `101` with a token
+and `403` without. With them commented out, REST still answers `200` and the
+upgrade returns **`404`**: not a hang and not a 502, which is exactly why
+nothing looks broken. The proxy lines are the same for the Rust build, and it
+answers the handshake the same way (`101` with a token, `403` with an empty
+body without one).
 
-The example below is written from the service's own
-requirements, not from a machine this author set up; the proof after it is
-what matters and that one WAS run.
+The example below is written from the service's own requirements, not from a
+machine this author set up; the proof after it is what matters.
 
     location /v1/changes {
         proxy_pass http://127.0.0.1:8099;
@@ -221,142 +210,23 @@ what matters and that one WAS run.
         https://sync.example.com/v1/changes
     101
 
-**101 means the upgrade got through.** Measured directly against the service:
-with a token the handshake answers `101 Switching Protocols`, without one
-`403`. A `403` here means "not authorized" and not "wrong network"; see the
-contract, which spells that difference out because it is easy to read the
-wrong way.
+**101 means the upgrade got through.** A `403` here means "not authorized" and
+not "wrong network"; see the contract, which spells that difference out
+because it is easy to read the wrong way.
 
 **Only behind TLS.** The token rides in a header, and over plain http a
 header is readable by everything between the device and the service.
 
-### 7. Let it start by itself
+### 8. Let it start by itself
 
 **Or skip this step entirely and use the container** (see "Or run it in a
 container" below): `restart: unless-stopped` is this step, and it needs no
 unit file, no system user and no permissions fixed by hand.
 
-**One thing this step does not say, and it costs an hour:** step 4 runs the
-service as whoever you are, and this step runs it as `maer-sync`. **The store
-and its directory have to belong to that user**, or systemd stops at
-`status=200/CHDIR`, or the service comes up and opens a readonly database.
-Measured on a Debian host, 16.09.2026.
-
-**NOT RUN HERE**, for the same reason as the proxy: this author has no host
-to install it on. It follows from what the service needs and nothing more.
-
-    [Unit]
-    Description=Maer sync service
-    After=network.target
-
-    [Service]
-    User=maer-sync
-    WorkingDirectory=/opt/maer-sync
-    Environment=MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite
-    ExecStart=/opt/maer-sync/.venv/bin/python -m service
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
-
-### 8. Back it up, and let the backup prove itself
-
-    .venv/bin/python -m service backup /backups/store-$(date +%F).sqlite
-
-    fits: 1 documents, 7 bytes, came back unchanged
-
-It copies the live store through SQLite's backup API, opens the copy the way
-a restore would, compares every document by size, and exits 0 only when the
-copy came back fitting. Schedule it and alarm on the exit code: **a backup
-that was never opened is a file, not a backup.**
-
-**It copies the store and NOT the service's key file**, on purpose: a
-private key inside a backup would let anybody holding an old copy answer as
-this service. Copy `identity.key` separately, and keep it somewhere a
-database backup does not go. See "The identity of this service" below.
-
-### 9. Point the app at it
-
-In Mär: Settings, the Mär Sync Service section. Three fields, the address
-with its scheme (`https://sync.example.com`), the owner and the secret from
-step 5. Signing in trades the secret for a token the device keeps in its
-keychain; the secret itself is not kept.
-
-The switch above it decides whether anything travels at all. Set up and
-switched off means nothing moves, and the page says so.
-
-## Setting up the Rust build
-
-Nine steps, the same shape as the Python ones above. Every number here was
-measured on a running host, not remembered.
-
-### 1. What it needs
-
-Nothing on the host. The binary is linked statically against musl and carries
-its own runtime. What you need is a machine that can build it, and that machine
-needs Docker: the build runs inside a pinned image so that the toolchain cannot
-drift. `werkzeug/README.md` explains why, and what the pinning covers. Do not
-build with a locally installed cargo unless you are prepared to answer what your
-toolchain differs in.
-
-Build host and target must match: the tool refuses to cross compile, so an
-x86_64 host builds the x86_64 target and an aarch64 host builds its own.
-
-### 2. Build the product
-
-    werkzeug/bau.sh build --release --offline
-
-The result lands in
-`ziel/abbau/<target>-unknown-linux-musl/release/maer-sync`, for example
-`ziel/abbau/x86_64-unknown-linux-musl/release/maer-sync`.
-
-Check what you built, because a binary says nothing about itself yet (see
-*Knowing which build is running*):
-
-    ls -l ziel/abbau/*/release/maer-sync
-    sha256sum ziel/abbau/*/release/maer-sync
-
-### 3. Run the tests before you carry it anywhere
-
-    werkzeug/vor-dem-commit.sh
-
-This runs both suites, the Python one and the Rust one, and it runs `git add -A`
-first on purpose: the license fence asks git what is tracked, so an untracked
-file would pass unseen. A green run prints `frei zum Committen.`
-
-### 4. Put it on the host
-
-The binary needs a place, a database, and a key. Nothing else.
-
-    sudo install -o <serviceuser> -g <serviceuser> -m 755 maer-sync /srv/maer-sync/maer-sync
-
-The service user needs write access to the directory holding the database and
-the key, and nothing beyond it.
-
-### 5. Lay down the key
-
-The service refuses to bind its port without a static identity, and it exits
-with code 4 rather than serving without one.
-
-    sudo -u <serviceuser> env \
-      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
-      MAER_SYNC_KEY=/srv/maer-sync/data/identity.key \
-      /srv/maer-sync/maer-sync key --new
-
-It prints the fingerprint. **Copy that key file somewhere safe now.** Clients
-pin the fingerprint on first contact, so losing the key means every device has
-to trust the service again from scratch.
-
-### 6. Lay down an account
-
-    printf '%s\n' "$SECRET" | sudo -u <serviceuser> env \
-      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
-      /srv/maer-sync/maer-sync account <owner>
-
-It refuses if the account already exists. That is deliberate: an existing
-account is not silently overwritten.
-
-### 7. Let it start by itself
+**The store and its directory have to belong to the service user**, or the
+service comes up and cannot write, or does not come up at all. **Not run as
+written here**; it is the shape of the unit the measured host runs, with its
+paths replaced.
 
     [Unit]
     Description=Maer sync service
@@ -384,114 +254,155 @@ account is not silently overwritten.
     WantedBy=multi-user.target
 
 **`MAER_SYNC_BIND` is one address, host and port together.** This is the line
-that a unit copied from the Python service gets wrong. See *Environment*.
+that a unit written for the earlier Python build gets wrong. See
+*Environment*.
 
-### 8. Prove that the right thing is running
+### 9. Back it up, and let the backup prove itself
+
+    sudo -u <serviceuser> env \
+      MAER_SYNC_DB=/srv/maer-sync/data/sync.sqlite \
+      /srv/maer-sync/maer-sync backup /backups/store-$(date +%F).sqlite
+
+    fits: 1 documents, 7 bytes, came back unchanged
+
+It copies the live store through SQLite's backup API, opens the copy the way
+a restore would, compares every document by size, and exits 0 only when the
+copy came back fitting. Schedule it and alarm on the exit code: **a backup
+that was never opened is a file, not a backup.**
+
+**A store with nothing in it does not back up as fitting.** It says
+
+    not_measured: not measured, the backup held no documents
+
+and exits 1, because a rehearsal that compared nothing has proven nothing.
+
+**It copies the store and NOT the service's key file**, on purpose: a
+private key inside a backup would let anybody holding an old copy answer as
+this service. Copy `identity.key` separately, and keep it somewhere a
+database backup does not go. See "The identity of this service" below.
+
+**Run it with the binary that is serving, not with a newer one.** Opening a
+store is allowed to raise its schema, and the backup opens the store. A newer
+build that backs up the live store before a switch has already changed it.
+
+### 10. Prove that the right thing is running
 
 Not that something answers, but that it is yours:
 
-    curl -s http://127.0.0.1:8099/v1/health
-    curl -s http://127.0.0.1:8099/v1/key
+    $ maer-sync health
+    healthy: 127.0.0.1:18231
 
-`/v1/health` answers `{"ok":true}` from **both** implementations, so it proves
-that a service is up, not which one. `/v1/key` answers with the fingerprint you
-wrote down in step 5, and comparing those two is what proves the service is the
-one you laid down rather than a stranger on a port you assumed was free.
+    $ curl -s http://127.0.0.1:18231/v1/key
+    {"fingerprint":"ZZR5-8MAF-N1HP-B3G8-A5RQ-NQVT","key":"…"}
 
-The log tells you the rest. From `v0.2.0` on, the service writes one line per
-request, with the inner path, the status and how long it took:
+(`18231` was the free port of the run these lines come from.)
 
-    2026-09-20T17:25:28.630Z INFO maer.sync access from=127.0.0.1:57694 session=- inner=false method=GET path=/v1/health scope=- status=200 ms=0
+`health` asks `/v1/health` at the address in `MAER_SYNC_BIND` (an address
+like `0.0.0.0` is asked on loopback) and exits 0 when the answer is `200` with
+`{"ok":true}`, and 1 otherwise:
 
-A service that logs nothing at all under traffic is not idle, it is the old
-build.
+    not healthy: nothing answers on 127.0.0.1:18231: Connection refused (os error 111)
 
-### 9. Point the app at it
+It proves that a service is up and answering well, not which one. `/v1/key`
+answers with the fingerprint you wrote down in step 5, and comparing those two
+is what proves the service is the one you laid down rather than a stranger on
+a port you assumed was free.
 
-Unchanged from the Python way, see step 9 above. The service is the same
-service to a client.
+The log tells you the rest. The service writes one line per request, with the
+inner path, the status and how long it took:
+
+    2026-09-23T22:23:28.219Z INFO maer.sync access from=127.0.0.1:39738 session=- inner=false method=GET path=/v1/health scope=- status=200 ms=0
+
+A service that logs nothing at all under traffic is not idle, it is a build
+from before `v0.2.0`.
+
+### 11. Point the app at it
+
+In Mär: Settings, the Mär Sync Service section. Three fields, the address
+with its scheme (`https://sync.example.com`), the owner and the secret from
+step 6. Signing in trades the secret for a token the device keeps in its
+keychain; the secret itself is not kept.
+
+The switch above it decides whether anything travels at all. Set up and
+switched off means nothing moves, and the page says so.
 
 ## Environment
 
 Measured by counting occurrences in the source, not from memory.
 
-| Variable | Rust | Python | Default in Rust |
-|---|---|---|---|
-| `MAER_SYNC_DB` | yes | yes | `maer-sync.sqlite` |
-| `MAER_SYNC_KEY` | yes | yes | see `src/kennung.rs` |
-| `MAER_SYNC_PLAIN_WAYS` | yes | yes | on |
-| `MAER_SYNC_MAX_BODY_BYTES` | yes | yes | see `src/wege.rs` |
-| **`MAER_SYNC_BIND`** | **yes** | no | **`127.0.0.1:8081`** |
-| **`MAER_SYNC_HOST`** | **no** | yes | |
-| **`MAER_SYNC_PORT`** | **no** | yes | |
+| Variable | Default |
+|---|---|
+| `MAER_SYNC_DB` | `maer-sync.sqlite` |
+| `MAER_SYNC_KEY` | `identity.key` beside the store |
+| **`MAER_SYNC_BIND`** | **`127.0.0.1:8081`** |
+| `MAER_SYNC_PLAIN_WAYS` | on |
+| `MAER_SYNC_MAX_BODY_BYTES` | 67108864 (64 MiB) |
 
-**The last three lines are the trap.** The Rust build does not know
-`MAER_SYNC_HOST` and `MAER_SYNC_PORT` at all: zero occurrences in `src/`. A unit
-file carried over from the Python service therefore sets two variables that
-nothing reads, the service falls back to its default `127.0.0.1:8081`, starts
-cleanly, logs nothing unusual, and answers on a port nobody is asking. There is
-no error to find, because nothing went wrong from the service's point of view.
+**`MAER_SYNC_BIND` is the trap.** The earlier Python build read
+`MAER_SYNC_HOST` and `MAER_SYNC_PORT`; this one reads neither, zero
+occurrences in `src/`. A unit or compose file written for the old build
+therefore sets two variables that nothing reads, the service falls back to its
+default `127.0.0.1:8081`, starts cleanly, logs nothing unusual, and answers on
+a port nobody is asking. There is no error to find, because nothing went wrong
+from the service's point of view.
 
 `MAER_SYNC_PLAIN_WAYS` deserves one more sentence, because it also fails
-quietly. It reads `off`, `0`, `no` and `false`, case insensitive, and **neither
-implementation trims whitespace**. A value of `off ` with a trailing space falls
-back to the default, which is on. Do not check the unit file to see whether it
-worked, check the behaviour: with plain ways off, `/v1/doc/...` answers **426**
-instead of 401, and it does so even with a valid token, because the gate sits in
-front of the token check.
+quietly. It reads `off`, `0`, `no` and `false`, case insensitive, and **it does
+not trim whitespace**. A value of `off ` with a trailing space falls back to
+the default, which is on. Do not check the unit file to see whether it worked,
+check the behaviour: with plain ways off, `/v1/doc/...` answers **426** instead
+of 401, and it does so even with a valid token, because the gate sits in front
+of the token check.
 
-## Switching a running host from Python to Rust
+## Updating a running host, and the way back
 
-This is the one procedure where a mistake touches real data. It was done on a
-live host on 2026-09-20; the numbers below are from that run.
+This is the one procedure where a mistake touches real data. The measured host
+went through it on 2026-09-20, from the Python build to the Rust one; the same
+steps carry every update since.
 
 **Before you stop anything.** Build the product (steps 2 and 3), copy it to the
-host, and rehearse against a **copy** of the live database, never against the
-live one:
-
-    sudo -u <serviceuser> python3 -c "
-    import sqlite3
-    q = sqlite3.connect('file:/srv/maer-sync/data/sync.sqlite?mode=ro', uri=True)
-    z = sqlite3.connect('/tmp/rehearsal.sqlite')
-    q.backup(z)"
-
-Use the backup API, not `cp`: a running SQLite keeps recent writes in the WAL,
-and a file copy leaves them behind. Then run the new build against that copy on
-a free port and read the documents back. Both implementations write schema
-version 2 and the same four tables, so no migration happens, but the run is what
-proves it rather than the reading.
+host, and rehearse against a **copy** of the live store, never against the live
+one. The backup from step 9, run with the binary that is serving, is that copy.
+Then run the new build against the copy on a free port and read the documents
+back. If the new build raises the store schema, it does so on that copy, and
+the run is what shows it rather than the reading.
 
 Rehearse one more thing that no checklist mentions: **whether existing tokens
-still work.** Issue a token from the old build against the copy, then present
-the same token to the new build. If it answers 200, no device needs to sign in
-again. This was measured and it does.
+still work.** Present a token the running service issued to the new build on
+the copy. If it answers 200, no device needs to sign in again.
 
 **The switch itself.**
 
 1. Stop the service and **measure** that the port is free, do not assume it.
-2. Back up the database while it is stopped, and check `pragma integrity_check`.
-3. Install the binary, lay down the key (step 5), and copy the key aside.
-4. Write the new unit file. `MAER_SYNC_BIND`, not `HOST` and `PORT`.
-5. `systemctl daemon-reload`, start, and check `is-active`.
-6. Prove it with `/v1/health` **and** `/v1/key`, locally and through the proxy.
-7. Count the documents and compare against the backup you just took.
+2. Back up the store while it is stopped, with the binary that was serving,
+   and check that the backup says `fits`.
+3. Put the new binary in place and keep the previous one aside, under its own
+   name.
+4. Keep the key file where it is. A new binary is not a new identity.
+5. `systemctl daemon-reload` if the unit changed, start, and check
+   `is-active`.
+6. Prove it with `health` **and** `/v1/key`, locally and through the proxy.
+7. Count the documents with a backup and compare against step 2.
 
-**The way back** is the same four handles in reverse: stop, restore the unit
-file, restore `app/` and the virtualenv, start. Keep all four aside before you
-begin, because the way back needs the old unit file just as much as the old
-code. A file copy of the binary is not enough.
+**The way back** is the previous binary and the backup from step 2: stop, put
+the previous binary back, restore the backup over the store, start, prove.
+**Everything written after that backup is lost**, and that is the price of the
+way back rather than an accident of it. A newer build may have raised the
+schema, and an older build refuses a store written by a newer one; it says so
+and does not serve. So the backup goes back, not the file that the newer build
+touched.
 
-**The limit of that way back, said out loud:** it carries as long as the clients
-still speak the old protocol. Once a client is updated to use sealed sessions,
-the old Python build cannot answer it, and the way back becomes one directional.
-That is not an argument against the order of deployment, it is the reason for
-it: service first, clients second.
+**The limit of that way back, said out loud:** it carries as long as the
+clients still speak what the previous build answers. Once a client relies on
+something only the newer contract has, the previous build cannot answer it,
+and the way back becomes one directional. That is not an argument against the
+order of deployment, it is the reason for it: service first, clients second.
 
 ## Knowing which build is running
 
-The binary does not yet carry its version: `Cargo.toml` says `0.0.0` while the
-tag says `v0.2.0`, and the service does not print a version at startup. Until
-that is fixed, the honest handles are indirect:
+The binary does not yet carry its version: `Cargo.toml` says `0.0.0`, and the
+service does not print a version at startup. Until that is fixed, the honest
+handles are indirect:
 
     systemctl show maer-sync.service -p ExecStart --value
     sha256sum /srv/maer-sync/maer-sync
@@ -508,110 +419,120 @@ answers a status and nothing else.
 
 ## Or run it in a container
 
-**Everything in this section was built and run on a Debian host on 16.09.2026**,
-not written from the documentation: the image was built, started, restarted, and the
-store was proven to survive a rebuild. Where something had to differ from a clean
-host, it says so and why.
+**Everything in this section was built and run on a Debian host on
+24.09.2026**, against a copy of a live store with 78 documents, not written
+from the documentation. Where something had to differ from a clean host, it
+says so and why.
 
-A container answers several of the steps above at once. It carries its own Python,
-so step 1 stops being a question; it carries the pinned runtime from step 3; and
-`restart: unless-stopped` **replaces step 7 entirely**: no unit file, no system
-user, and no permissions to fix by hand on the store.
+The image has two stages. The first builds the binary in the same pinned
+environment as `werkzeug/bau.sh`; the second is empty (`FROM scratch`) and
+receives the binary, the data directory, an empty `/tmp` and the two license
+texts. No shell, no C library, no package manager, and so nothing underneath
+the binary to update. Measured on 24.09.2026: the file
+tree inside the image is 4766720 bytes as exported, of which the binary is
+4717848 and the two license texts 37718; Docker lists the stored image at
+7021497 bytes.
 
-**It does not replace step 6.** The proxy in front still terminates TLS and still
-has to pass the WebSocket upgrade through, and that is still the part that fails
-quietly.
+A container answers several of the steps above at once: step 1 was already no
+question, and `restart: unless-stopped` **replaces step 8 entirely**: no unit
+file, no system user, and no permissions to fix by hand on the store. **It
+does not replace step 7.** The proxy in front still terminates TLS and still
+has to pass the WebSocket upgrade through, and that is still the part that
+fails quietly.
 
     docker compose build
     docker compose up -d
+    docker compose exec maer-sync /maer-sync health
 
-    $ curl -s http://127.0.0.1:8099/v1/health
-    {"ok": true}
+    healthy: 127.0.0.1:8099
 
 **If `8099` is taken on your host, set the port instead of editing the file:**
 
     MAER_SYNC_HOST_PORT=18099 docker compose up -d
 
-Only the published port moves; inside the container the service stays on `8099`,
-and so does everything the proxy in step 6 is configured against.
+Only the published port moves; inside the container the service stays on
+`8099`, and so does everything the proxy in step 7 is configured against.
+
+**A new volume makes its key on the first start. A restored store does not.**
+Measured with a copy of a live store and no key file beside it: the container
+refuses and restarts in a loop (`restarting`, exit code 3, seven restarts in
+the first twelve seconds, the health check `unhealthy`), and every attempt
+logs the same sentence with the way out. Put the key file of the old host into
+the volume, and nothing changes for any device. Or make a new identity on
+purpose, knowing that every device will ask again:
+
+    docker compose run --rm maer-sync key --new
+    docker compose up -d
 
 ### What the two files decide, and why
 
-**The base image is pinned to the patch, not to `3.13`.** A drifting base image
-turns `--require-hashes` in `requirements.txt` into half a promise: the point of
-pinning the runtime under a TLS-terminated service is that it cannot change under
-you, and the base image *is* runtime.
+**Nothing underneath the binary.** The earlier Python image had to pin a base
+image to the patch, because the base image was runtime. Here there is none:
+the last stage is empty, and the build stage is pinned by digest and never
+shipped.
 
-**The store is a named volume, never a path inside the image.** This is the line
-that costs data if it is wrong: a store inside the image is gone with the next
-build, and nothing about that is visible while reading the file. Proven rather than
-asserted: an account and a document were laid down, the container was removed, **the
-image was deleted**, both were rebuilt, and the account and the document were still
-there.
+**The store is a named volume, never a path inside the image.** This is the
+line that costs data if it is wrong: a store inside the image is gone with the
+next build, and nothing about that is visible while reading the file.
+Proven against the copy of a live store rather than asserted: the backup
+inside the container said `fits: 78 documents, 3508517 bytes, came back
+unchanged` after the first start, again after `docker compose restart`, and
+again after a full `down` and `up`, and `/v1/key` answered with the same
+fingerprint each time. Those are the numbers the host's own nightly backup had
+written for that very file.
 
-**The user has a fixed numeric id.** The volume belongs to a uid, and that uid has
-to survive rebuilds of the image, or the service comes back up standing in front of
-its own store without permission to enter it.
+**The user has a fixed numeric id, 10001.** The volume belongs to a uid, and
+that uid has to survive rebuilds of the image, or the service comes back up
+standing in front of its own store without permission to enter it. `docker top` shows both processes, the init and the service, running as
+10001.
 
-**It does not run as root**, and `docker exec … id` says so: `uid=10001(maersync)`.
+**Inside, the service listens on all addresses (`MAER_SYNC_BIND=0.0.0.0:8099`),
+and outside only on `127.0.0.1`.** Inside a container the published port
+reaches the service only if it listens beyond loopback; what is reachable from
+outside the host is decided by the port line and by the proxy from step 7,
+which is also what holds the certificate.
 
-**The port is bound to `127.0.0.1` only.** What is reachable from outside is decided
-by the proxy from step 6, which is also what holds the certificate.
+**The health check asks the binary itself.** The image carries no curl and no
+shell, so `/maer-sync health` asks `/v1/health` and exits 0 or 1. Its red probe was run: with the service stopped, `docker compose run --rm
+maer-sync health` said `not healthy: nothing answers on 127.0.0.1:8099:
+Connection refused (os error 111)` and exited 1; started again, it said
+`healthy` and exited 0.
 
-### Running the suite in the image
+**An init stands in front of the service (`init: true`).** Without one the service is PID 1, and PID 1 has no
+default action for a signal: `SIGTERM` does nothing, and every `stop` and
+every `restart` waited out Docker's ten seconds and ended in `SIGKILL`, exit
+code 137. Measured with it: `stop` took 385 ms and `restart` 577 ms, exit code
+143. The init is the one Docker ships (`docker-init`), not a package in the
+image. **If you run the image without Compose, pass `--init`.**
 
-    docker compose exec maer-sync /opt/maer-sync/.venv/bin/python -m unittest discover -s tests -t .
+**`mem_limit: 256m` is high on purpose.** Measured against the copy with 78 documents:
+5 to 8 MB in use, a peak of 13.9 MB including a backup. The limit stays high
+because a single write may be as large as `MAER_SYNC_MAX_BODY_BYTES` (64 MiB)
+and is held in memory before it is judged. A limit near the measured use
+would stop the service on the first large write that is entirely legitimate.
 
-**The suite is green in the image: `Ran 193 tests … OK (skipped=4)`.** Measured on
-16.09.2026 in the built image, as the unprivileged service user, running exactly that
-module invocation in the built image.
+### The suite and the image
 
-**That number moves with the encrypted session**: seven cases came with it, so the
-next run in the image should say 200. It is left as measured rather than predicted,
-because a number in this file that nobody ran is the thing this file keeps warning
-about; whoever builds the image next writes what it actually said.
+The image carries no suite and nothing to run one with. The suite runs in the
+build container (step 3), against the same sources and the same pins, and
+`tests/abbild.rs` holds the pins in both Dockerfiles and in `bau.sh` equal, so
+the image cannot quietly build with a different toolchain than the one the
+suite ran on. **And the binary in the image is the binary `bau.sh` builds**, byte for byte:
+the build stage uses the same paths (`CARGO_HOME`, `CARGO_TARGET_DIR`), and
+on 24.09.2026 both came out as the same 4717848 bytes with the same
+`sha256`. A host that installs by copy and a host that runs the container run
+the same product.
 
-The four skips are the questions this copy cannot put. Three hygiene tests and one
-fence ask `git` what the repository tracks; an image carries the sources without a
-repository and without a git program, so they report a skip **with its reason**
-instead of a result. Nothing is declared expected here, and that is deliberate.
+### Why the port is a variable and not an override file
 
-**Two earlier versions of this section did declare failures expected, and each time
-the sentence hid a real one.** First it said three, and the fourth was a fence that
-read `.venv` as though it were this service. Then it said four, and three of those
-were not abstentions at all but a hole: a missing git program made the call *raise*
-where a missing repository only made it return, and the raise came back as an error.
-A sentence that declares failures normal is a licence to stop looking, and a real
-failure then disappears among the correct ones. If a number appears here again, it
-belongs to a measured run and says what it counted.
-
-### What was run here, and what is the host's problem
-
-**Run against the container** (16.09.2026, this host): `docker compose build`,
-`docker compose up -d` with the port variable set, `/v1/health` answering `{"ok": true}`,
-the healthcheck reaching **healthy**, an account laid down and still present after a
-full `down` and `up` (read back out of the database, not inferred from the file being
-there), and a clean `down` afterwards. The suite inside the image: `Ran 193 tests … OK
-(skipped=4)`.
-
-**Run against the service from step 4, not against the container:** the token exchange,
-`401` without a token, and the WebSocket upgrade through the proxy (`101` with a token,
-`403` without). They are listed apart on purpose. An earlier version of this section
-claimed them for the container, and that claim had no run behind it: the container part
-had failed on the port collision at the time, which is what the paragraph below is about.
-
-**The host's, not the image's:** this machine already runs a service on `8099`, so the
-run above set `MAER_SYNC_HOST_PORT=18099`. The delivered default stays `8099`, which is
-what a host without that collision wants.
-
-**Why the port is a variable and not an override file.** The first attempt here did use
-a `compose.override.yaml`, and the container did not start: **Compose merges list
-entries, it does not replace them**: the override adds a *second* port, the container
-tries to bind both, and it fails on the one that was taken. That is the very port you
-were avoiding. Measured both ways on this host: with the override, `compose config`
-publishes two ports (`8099` and `18099`); with the variable, one. `ports: !override`
-would replace (Compose 2.24 and newer), but it still needs a second file for something
-one place in this one settles.
+The first attempt at moving the port, on 16.09.2026, used a
+`compose.override.yaml`, and the container did not start: **Compose merges
+list entries, it does not replace them**: the override adds a *second* port,
+the container tries to bind both, and it fails on the one that was taken. That
+is the very port you were avoiding. Measured both ways: with the override,
+`compose config` publishes two ports; with the variable, one. `ports:
+!override` would replace (Compose 2.24 and newer), but it still needs a second
+file for something one place in this one settles.
 
 ## Why it exists
 
@@ -631,60 +552,66 @@ named for the record, not as an instruction.
 ## What the core decides
 
 The units below are pure and netless, each with its own tests. **No count
-stands here on purpose:** the sentence said "four" while listing six, and there
-are seven. A number in prose ages with every unit added, and the list beside it
-is the thing that is true. They exist as units
-and not as lines inside request handlers because these are the decisions
-that lose people's data when they are wrong.
+stands here on purpose:** a number in prose ages with every unit added, and
+the list beside it is the thing that is true. They exist as units and not as
+lines inside request handlers because these are the decisions that lose
+people's data when they are wrong.
 
-- **`core/admission.py`**: may this state replace the stored one? Refuses
+- **`src/admission.rs`**: may this state replace the stored one? Refuses
   an empty state over a full one, and a collapse below a floor, unless the
   client says it meant it. The known loss case is not a broken update; it
   is a device that writes an empty state at start-up before it has loaded.
-- **`core/versions.py`**: which stored versions survive a write. Keeping
+- **`src/versions.rs`**: which stored versions survive a write. Keeping
   the last N covers a broken update and a client that wrote nonsense with
   one construction, and it is what "restore yesterday" is built on.
-- **`core/restore.py`**: did a rehearsed restore actually come back? Three
+- **`src/restore.rs`**: did a rehearsed restore actually come back? Three
   outcomes, and the third is the point: a rehearsal that could not run is
   not a passing rehearsal.
-- **`core/formats.py`**: the two version numbers that make a rollback
+- **`src/formats.rs`**: the two version numbers that make a rollback
   safe, kept apart: the document format (the client's) and the store schema
   (the service's).
-
-- **`core/writes.py`**: the three gates in an order, which is a decision
+- **`src/writes.rs`**: the three gates in an order, which is a decision
   of its own: precondition, then format, then size. A client behind the
   current version usually has a SMALLER state, so telling it "too small"
   before "read again" would send it to fix the wrong thing.
-- **`core/authorization.py`**: who is asking, and whether they may. **The
-  requirements set this one apart from the rest**, and its own header quotes
+- **`src/authorization.rs`**: who is asking, and whether they may. **The
+  requirements set this one apart from the rest**, and its own header says
   why: a mistake here opens other people's listening stands, and that is the
   kind you do not repair with an update. Three decisions live in it, each one
   an easy mistake: a missing account and a wrong secret give the SAME answer
   (anything else turns the endpoint into a list of who has an account here),
   every secret is compared in constant time, and the owner comes from the
-  store's answer and never from anything the caller said. It was missing from
-  this list while the sentence above it claimed to count the units.
-- **`core/paths.py`**: the shape of a kind and a scope, never the
+  store's answer and never from anything the caller said.
+- **`src/paths.rs`**: the shape of a kind and a scope, never the
   membership. A list of the five known kinds would make "add a sixth" a
   service update.
+- **`src/identity.rs`**: who the service IS, in a form a person can
+  compare, and what to do with the key on disk against the one the store
+  remembers.
 
 Every unit answers with a verdict that carries its sentence. A refusal that
 does not say why would be the failure the gates are built to prevent.
 
 ## The shell
 
-- **`service/store.py`**: SQLite, one row per version. The rotation IS the
+- **`src/store.rs`**: SQLite, one row per version. The rotation IS the
   backup, and "restore yesterday" needs no second construction. The read,
   the decision and the insert happen inside one `BEGIN IMMEDIATE`, or the
   compare-and-set would be a story: two devices holding the same version
   would both be told they are current and the second would overwrite the
   first.
-- **`service/app.py`**: a bare ASGI application. `GET`/`PUT`
-  `/v1/doc/<kind>[?scope=]` with `ETag`/`If-Match`, a WebSocket at
-  `/v1/changes` that announces every accepted write, and `/v1/health`.
-- **`service/__main__.py`**: binds the application to an application
-  server and carries the operator commands (`account`, `account-remove`,
-  `backup`).
+- **`src/wege.rs`**: the ways, and the tunnel through them. `GET`/`PUT`
+  `/v1/doc/<kind>[?scope=]` with `ETag`/`If-Match`, the listing, the token
+  exchange and `/v1/health`, each as a decision without I/O.
+- **`src/main.rs`**: the wire, where the decision meets the connection;
+  `src/aufstieg.rs`, `src/horcher.rs` and `src/listeners.rs` carry the
+  changes socket at `/v1/changes` that announces every accepted write.
+- **`src/handshake.rs`**, **`src/frames.rs`**, **`src/sessions.rs`** and
+  **`src/sitzungsladen.rs`**: the encrypted session, from the handshake to
+  the frame inside it to the rule for which session ends when.
+- **`src/befehle.rs`**: the operator commands (`account`, `account-remove`,
+  `backup`, `key`, `health`); **`src/protokoll.rs`**: what the operator sees
+  in the log; **`src/kennung.rs`**: the key as a file.
 
 ### The interface
 
@@ -704,13 +631,13 @@ refuse and this can.
 
 ## Accounts
 
-Every path but `/v1/health` and `/v1/token` needs `Authorization: Bearer
-<token>`, and the account the request acts on comes from the store's answer
-to that token, never from anything the caller wrote.
+Every path but `/v1/health`, `/v1/key`, `/v1/session` and `/v1/token` needs
+`Authorization: Bearer <token>`, and the account the request acts on comes
+from the store's answer to that token, never from anything the caller wrote.
 
-    python3 -m service account <owner>            # secret on stdin, never in argv
-    python3 -m service account-remove <owner>     # the account and its documents leave,
-                                                  # after a backup that rehearsed its restore
+    maer-sync account <owner>            # secret on stdin, never in argv
+    maer-sync account-remove <owner>     # the account and its documents leave,
+                                         # after a backup that rehearsed its restore
 
 `POST /v1/token` with `{"owner", "secret", "device"}` hands back a token for
 one device. A wrong secret and an account that is not here get the same
@@ -769,19 +696,17 @@ in front of it; that proxy has to carry the WebSocket upgrade on
 
     MAER_SYNC_DB=maer-sync.sqlite       # the store
     MAER_SYNC_KEY=<beside the store>    # the static key file, default identity.key
-    MAER_SYNC_HOST=127.0.0.1            # bind address
-    MAER_SYNC_PORT=8099
+    MAER_SYNC_BIND=127.0.0.1:8081       # one address, host and port together
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
     MAER_SYNC_PLAIN_WAYS=on             # off: the five older ways answer only inside a session
 
 ### The identity of this service
 
-**Two paths carry no token, and that is the pattern rather than an
-omission.** `/v1/key` hands out the public half so a device can pin it, and
-`/v1/session` trades a Noise handshake for an encrypted session. The caller
-proves who it is INSIDE the session, which is what lets a sign in be
-protected: a sign in carries the account secret and happens before there is
-any token to prove anything with.
+**`/v1/key` and `/v1/session` carry no token, and that is the pattern rather
+than an omission.** `/v1/key` hands out the public half so a device can pin
+it, and `/v1/session` trades a Noise handshake for an encrypted session. The caller proves who it is INSIDE the session,
+which is what lets a sign in be protected: a sign in carries the account
+secret and happens before there is any token to prove anything with.
 
 **`/v1/key` is the trust on first use channel, and over a plain connection
 whoever sits in the middle can answer it with their own key.** That is the
@@ -792,12 +717,13 @@ On its first start the service makes itself a static key pair and prints the
 fingerprint. From then on that fingerprint is who it is, and devices hold on
 to it.
 
-    .venv/bin/python -m service key
-
+    $ maer-sync key
     key file: /var/lib/maer-sync/identity.key
-    fingerprint: BHWW-K285-92TR-Q3NV-DHHF-SH95
-    this store expects: BHWW-K285-92TR-Q3NV-DHHF-SH95
-    the key BHWW-K285-92TR-Q3NV-DHHF-SH95 is the one this store expects
+    fingerprint: <fingerprint>
+    this store expects: <fingerprint>
+    the key <fingerprint> is the one this store expects
+
+(inside the container, the fingerprint left out.)
 
 **The private half is a file beside the store, and deliberately not in the
 database.** A copy of the database travels to wherever backups travel, and a
@@ -812,13 +738,13 @@ there, and this is a different service now.
 
 **A key that changed or went missing stops the service instead of growing a
 new one.** The refusal names the fingerprint it expected, the one it found,
-and the way out. The service exits 4 and binds no port.
+and the way out. The service exits 3 and binds no port.
 
 Two commands say that a change is wanted, and nothing else in the service
 will ever change an identity:
 
-    .venv/bin/python -m service key --adopt   # the key here is the right one now
-    .venv/bin/python -m service key --new     # make a new identity
+    maer-sync key --adopt   # the key here is the right one now
+    maer-sync key --new     # make a new identity
 
 `--adopt` is for moving a service onto a machine that keeps its own key.
 `--new` is a deliberate rotation: **every device that pinned the old key
@@ -828,10 +754,6 @@ because a rotation done by mistake must not be unrecoverable. **Every
 rotation keeps its own file**, so the second one does not write over what
 the first put aside; the command prints the name it used.
 
-**NOT MEASURED:** none of this has run inside the container against a
-volume. It is driven by the suite with real files in temporary directories,
-and by hand on a development machine.
-
 ### Inside a session
 
 Once a device holds the key it opens a handshake on `/v1/session` and from
@@ -840,80 +762,55 @@ session's name in `X-Maer-Session` and a sealed frame as the body. The frame
 is the ordinary wire, whole (method, target, headers, body), the service runs
 it through the same doors a plain request goes through, and the reply comes
 back sealed. Nobody between the device and this process reads the token, the
-path or the document. The exact shape stands in `CONTRACT.md`, version 5.
+path or the document. The exact shape stands in `CONTRACT.md`.
 
 **The five older ways keep answering in the clear until you turn them off.**
 A device that was not updated speaks in the clear, and it must keep syncing
 until it is. When every device speaks inside, set `MAER_SYNC_PLAIN_WAYS=off`:
-a plain request then gets a `426` with a sentence, a plain socket the close
-code `4426`, and `/v1/health`, `/v1/key` and `/v1/session` keep answering.
-The suite drives both settings; **which one your devices need is measured on
-them, not here.**
+a plain request then gets a `426` with a sentence, and `/v1/health`,
+`/v1/key` and `/v1/session` keep answering. The suite drives both settings;
+**which one your devices need is measured on them, not here.**
 
 **A restart ends every session, on purpose.** The keys live in memory and
 nowhere else, so a session that survived a restart would be one whose keys
 were on disk. The device answers a `410` with one new handshake and one
 retry, and nobody sees a sentence.
 
-**The runtime is uvicorn plus a WebSocket library, both pinned.** The
-service code and its tests are standard library only, but serving it is
-not: uvicorn without its `[standard]` extra carries no WebSocket ("No
-supported WebSocket library detected", measured), and `/v1/changes` needs
-one, so the deployment installs `websockets` (or `wsproto`) alongside
-uvicorn. One package, not the whole `[standard]` set. No web framework was
-taken: the interface is "fetch bytes, put bytes, announce a change", and a
-framework buys routing sugar for that and little else; Flask was never a
-candidate, because WSGI cannot carry a WebSocket. Pin both with hashes.
+**A socket that may not open is refused before the upgrade, with a `403` and
+an empty body**, whatever the reason: a wrong path, no token, an unknown
+token, or a plain socket while the plain ways are off. The reason is not lost:
+the log line names it, with the close code it stands for (for example 4401
+for a missing token, 4426 for a plain socket).
+A client reads the `403` as "not authorized" the same as a REST 401, never as
+"unreachable"; its REST calls carry the same token and answer first, so the
+authorization state is driven there and the socket is only a silently
+reopened accelerator.
 
-**An unauthorized socket is refused in the handshake.** The service closes
-a token-less `/v1/changes` with WebSocket code 4401 before it accepts the
-connection; uvicorn surfaces that pre-accept close to the client as an
-HTTP 403 on the handshake, not as a close frame. A client reads that as
-"not authorized" the same as a REST 401, never as "unreachable"; its REST
-calls carry the same token and answer 401 first, so the authorization
-state is driven there and the socket is only a silently reopened
-accelerator.
-
-**Every refusal leaves a line** on stderr (`maer.sync`): the source
-address, the owner, the document, the status and the gate's sentence; a
-failed sign-in leaves the source address and the owner. Never a token,
-never a secret, never a body, and a case in the suite reads this file to
-hold that. Without those lines the case the service is built for, a device
-that writes empty at start-up and a client that swallows the 409, would be
-invisible for as long as it lasts.
+**Every refusal leaves a line** in the log (`maer.sync`): the source address,
+the owner, the document, the status and the gate's sentence; a failed sign-in
+leaves the source address and the owner. Never a token, never a secret, never
+a body, and a case in the suite reads the log to hold that. Without those
+lines the case the service is built for, a device that writes empty at
+start-up and a client that swallows the 409, would be invisible for as long
+as it lasts.
 
 **The body limit is host protection, not a data ceiling.** A document
 larger than `MAER_SYNC_MAX_BODY_BYTES` is refused with 413 before it is
 held in memory. It is generous on purpose and set per deployment; the
 shrink gate protects the data, this protects the machine.
 
-**The backup rehearses its own restore:**
-
-    python3 -m service backup /backups/maer-sync-$(date +%F).sqlite
-
-copies the live store through SQLite's backup API, opens the copy in a
-throwaway directory the way a restore would, compares every document
-version by size, and exits 0 only when the copy came back fitting. The
-operator schedules it and alarms on the exit code; a backup that was
-never opened is a file, not a backup.
-
 ## Running the tests
 
-    ./run-tests.sh
+    werkzeug/vor-dem-commit.sh          # everything, and stops on red
+    werkzeug/bau.sh test --offline      # the Rust suite alone
 
-No dependencies: the whole service is standard library only, and the tests
-run under `unittest`. The run prints its case count on purpose.
-
-It takes about 11.5 seconds rather than a few milliseconds (measured 11.3 to
-11.6 over several runs, 182 cases before the contract fence joined them), and
-all of that is
-scrypt: the account cases run the real password hashing at the real
-parameters. Turning those down for the suite would make it quick and would
-stop it testing the thing that matters.
+The Rust suite runs in the pinned build image and prints its counts per file.
+The repository fences run on the host, because they ask git. A case that
+cannot put its question on this copy skips with its reason instead of passing.
 
 ## What is measured, and what is not
 
-- The service runs behind uvicorn and a TLS proxy on a host of the
+- The service runs as a static binary behind a TLS proxy on a host of the
   operator's; the app's sign-in, the document round trip and the changes
   socket are exercised there.
 - The takeover end to end (a locked, playing device stops within the
