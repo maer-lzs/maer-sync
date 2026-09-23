@@ -23,6 +23,8 @@ baut.** Ohne zweite Umsetzung fehlt die Gegenprobe; an ihre Stelle tritt ein
 anderer Autor, der die Faelle aus dem Vertrag schreibt, und ein Lauf der App
 selbst gegen den Dienst.
 
+**Fuer Fassung 6 liegen zwei Dateien daneben, und beide stammen nicht von hier.** `sign-in-v6.json` traegt die Ableitung (Passwort, Salz, Beweis, Feed-Schluessel) fuer drei Passwoerter, zweimal unabhaengig gerechnet und mit dem Vertrag geliefert. `faelle-v6.json` traegt die erwarteten Antworten der neuen Wege, aus dem Vertragstext geschrieben, nicht aus diesem Code; `tests/faelle_v6.rs` spielt sie ab und haelt ihren Stand am Digest fest. Weicht der Dienst davon ab, ist das ein Befund und keine Datei zum Nachziehen.
+
 **Eine Vektordatei ohne Erzeuger ist eine Behauptung** (Entscheid 18.09.2026), und so hat es gegolten, solange es die Python-Fassung gab.
 Die sieben Dateien der Scheiben 1 bis 3 haben ihren seit dem **19.09.2026**, und
 sie sind dabei **byte-gleich geblieben**: jeder Erzeuger zieht genau die Datei,

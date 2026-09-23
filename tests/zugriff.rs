@@ -101,17 +101,26 @@ fn jede_anfrage_von_aussen_hinterlaesst_genau_eine_zugriffszeile() {
     st.app.http(&von(Anfrage::neu("GET", "/v1/health")));
     alle.push(eine(&mut st.app, "Gesundheit", "GET", "/v1/health", 200, "-", None));
 
-    st.app.http(&von(Anfrage::neu("GET", "/v1/key")));
-    alle.push(eine(&mut st.app, "Schluessel", "GET", "/v1/key", 200, "-", None));
+    st.app.http(&von(Anfrage::neu("GET", "/v2/key")));
+    alle.push(eine(&mut st.app, "Schluessel", "GET", "/v2/key", 200, "-", None));
 
+    // Fassung 6, Riegel (c): der alte Schluesselweg sagt 404, und auch das
+    // hinterlaesst genau eine Zeile.
+    st.app.http(&von(Anfrage::neu("GET", "/v1/key")));
+    alle.push(eine(&mut st.app, "alter Schluessel", "GET", "/v1/key", 404, "-",
+                   Some("no such path")));
+
+    // Fassung 6: die Anmeldung von aussen ist 426, richtig oder falsch. Die
+    // Zeile nennt den Grund, und sie verraet nicht, ob das Geheimnis stimmte.
     st.app.http(&von(Anfrage::neu("POST", "/v1/token")
         .mit_koerper(br#"{"owner": "anna", "secret": "falschgeheim"}"#)));
-    alle.push(eine(&mut st.app, "Anmeldung falsch", "POST", "/v1/token", 401, "-",
-                   Some(maer_sync::authorization::DENIED)));
+    alle.push(eine(&mut st.app, "Anmeldung falsch", "POST", "/v1/token", 426, "-",
+                   Some("the sign-in paths speak only inside a session")));
 
     st.app.http(&von(Anfrage::neu("POST", "/v1/token").mit_koerper(
         br#"{"owner": "anna", "secret": "ein hinreichend langes geheimnis", "device": "geraet-9"}"#)));
-    alle.push(eine(&mut st.app, "Anmeldung richtig", "POST", "/v1/token", 200, "-", None));
+    alle.push(eine(&mut st.app, "Anmeldung richtig", "POST", "/v1/token", 426, "-",
+                   Some("the sign-in paths speak only inside a session")));
 
     st.app.http(&von(Anfrage::neu("GET", "/v1/doc/playback").mit_frage("scope=g1")));
     alle.push(eine(&mut st.app, "ohne Zeichen", "GET", "/v1/doc/playback", 401, "g1",

@@ -29,7 +29,53 @@ use crate::writes::{decide, Write, WriteDecision};
 /// Die Gestalt DIESER Tabellen. Wird erhoeht, wenn die Tabellen sich aendern,
 /// nie wenn sich das Format eines Dokuments aendert: zwei Nummern mit zwei
 /// Aufgaben.
-pub const SCHEMA: i64 = 2;
+pub const SCHEMA: i64 = 3;
+
+/// Unter welchem Namen das Geheimnis des Dienstes fuer das Schein-Salz steht.
+pub const SALZ_ROW: &str = "salt_secret";
+
+/// Der Grund, den ein zurueckgezogenes Zeichen traegt, woertlich wie im
+/// Vertrag (`X-Maer-Refusal`).
+pub const GRUND_PASSWORT_GEWECHSELT: &str = "password-changed";
+
+/// Was eine Anmeldung ergibt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Anmeldung {
+    /// Ein frisches Zeichen fuer dieses Geraet.
+    Zeichen(String),
+    /// Falsch, unbekannt, oder eine Form, die dieses Konto nicht mehr nimmt:
+    /// EINE Antwort fuer alles.
+    Abgewiesen,
+    /// Das Passwort stimmt, aber der Betreiber hat es gesetzt: es taugt nur
+    /// zum Wechsel, und kein Zeichen entsteht daraus.
+    NurWechsel,
+}
+
+/// Womit sich ein Wechsel ausweist.
+#[derive(Debug, Clone, Copy)]
+pub enum Aktuell<'a> {
+    /// Der Beweis des geltenden Passworts.
+    Beweis(&'a [u8]),
+    /// Ein Passwort, das der Dienst kennt: das alte eines noch nicht
+    /// umgezogenen Kontos, oder das vom Betreiber gesetzte.
+    Geheimnis(&'a str),
+}
+
+/// Was `/v1/salt` fuer einen Namen sagt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Salz {
+    pub salt: Vec<u8>,
+    pub rounds: u64,
+    pub form: &'static str,
+}
+
+/// Der Zustand eines Kontos, soweit Fassung 6 ihn braucht.
+#[derive(Debug, Clone)]
+pub struct Konto {
+    pub form: String,
+    pub betreiber: bool,
+    pub umgezogen: Option<f64>,
+}
 
 /// Unter welchem Namen der Abdruck des statischen Schluessels im Speicher steht.
 pub const KEY_ROW: &str = "static_key";
@@ -59,6 +105,8 @@ pub struct Store {
     pub shrink_floor: Option<f64>,
     /// Die Attrappe, einmal gemacht und behalten. Siehe `decoy`.
     attrappe: Option<String>,
+    /// Das Geheimnis des Schein-Salzes, einmal gelesen und behalten.
+    salzgeheimnis: Option<Vec<u8>>,
 }
 
 /// Der neueste Stand eines Dokuments: Koerper, Format, Etikett.
@@ -73,7 +121,7 @@ impl Store {
         let db = Connection::open(path)?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         db.pragma_update(None, "foreign_keys", "ON")?;
-        let s = Self { db, keep, shrink_floor, attrappe: None };
+        let s = Self { db, keep, shrink_floor, attrappe: None, salzgeheimnis: None };
         s.lay_out()?;
         Ok(s)
     }
@@ -118,6 +166,7 @@ impl Store {
                 made_at REAL NOT NULL,
                 FOREIGN KEY (owner) REFERENCES accounts(owner) ON DELETE CASCADE
             );")?;
+        self.ein_geheimnis_auslegen()?;
 
         match found {
             None => {
@@ -134,6 +183,58 @@ impl Store {
             }
             Some(_) => {}
         }
+        Ok(())
+    }
+
+    /// Schema 3: was Fassung 6 zusaetzlich haelt.
+    ///
+    /// **Angefuegt, nicht neu angelegt.** Die Tabellen darueber stehen
+    /// woertlich wie in Fassung 5, und ein vorhandener Laden zieht um, indem
+    /// ihm Spalten wachsen: kein Kopieren, kein Umbenennen, nichts, was einen
+    /// Bestand in der Mitte anhalten koennte. Jede Spalte wird nur angefuegt,
+    /// wenn sie fehlt, also darf das hier bei jedem Oeffnen laufen.
+    ///
+    /// - `accounts.form`: `secret` (der Dienst kennt das Passwort: Fassung 5,
+    ///   oder vom Betreiber gesetzt) oder `proof` (umgezogen).
+    /// - `accounts.salt`, `accounts.rounds`: das Salz und die Runden, mit denen
+    ///   die Geraete dehnen. Nur fuer `proof`.
+    /// - `accounts.operator`: 1, wenn der Betreiber das Passwort gesetzt hat.
+    /// - `accounts.moved_at`: wann das Konto umgezogen ist.
+    /// - `tokens.withdrawn`: der Grund, aus dem ein Zeichen zurueckgezogen ist,
+    ///   oder leer. Ein zurueckgezogenes Zeichen bleibt stehen, damit die 401
+    ///   ihren Grund sagen kann.
+    /// - `sign_ins`: je Konto und Geraet die Form der letzten Anmeldung, die
+    ///   Messung fuer Bedingung (b).
+    fn ein_geheimnis_auslegen(&self) -> Result<(), StoreError> {
+        let spalten = |tabelle: &str| -> Result<Vec<String>, StoreError> {
+            let mut s = self.db.prepare(&format!("PRAGMA table_info({tabelle})"))?;
+            let namen = s.query_map([], |r| r.get::<_, String>(1))?;
+            Ok(namen.collect::<Result<Vec<_>, _>>()?)
+        };
+        let konten = spalten("accounts")?;
+        for (name, art) in [
+            ("form", "TEXT NOT NULL DEFAULT 'secret'"),
+            ("salt", "TEXT"),
+            ("rounds", "INTEGER"),
+            ("operator", "INTEGER NOT NULL DEFAULT 0"),
+            ("moved_at", "REAL"),
+        ] {
+            if !konten.iter().any(|s| s == name) {
+                self.db.execute_batch(&format!("ALTER TABLE accounts ADD COLUMN {name} {art}"))?;
+            }
+        }
+        if !spalten("tokens")?.iter().any(|s| s == "withdrawn") {
+            self.db.execute_batch("ALTER TABLE tokens ADD COLUMN withdrawn TEXT")?;
+        }
+        self.db.execute_batch(
+            "CREATE TABLE IF NOT EXISTS sign_ins (
+                owner  TEXT NOT NULL,
+                device TEXT NOT NULL DEFAULT '',
+                form   TEXT NOT NULL,
+                at     REAL NOT NULL,
+                PRIMARY KEY (owner, device),
+                FOREIGN KEY (owner) REFERENCES accounts(owner) ON DELETE CASCADE
+            );")?;
         Ok(())
     }
 
@@ -391,31 +492,293 @@ impl Store {
     pub fn issue_token(&mut self, owner: &str, secret: &str, device: &str)
         -> Result<Option<String>, StoreError>
     {
-        let zeile: Option<String> = self.db
-            .query_row("SELECT secret FROM accounts WHERE owner=?1", params![owner], |r| r.get(0))
+        Ok(match self.anmelden_mit_geheimnis(owner, secret, device)? {
+            Anmeldung::Zeichen(z) => Some(z),
+            _ => None,
+        })
+    }
+
+    /// Die Anmeldung mit einem Passwort, das der Dienst kennt.
+    ///
+    /// Drei Faelle, und nur der dritte ist die Anmeldung von Fassung 5:
+    ///
+    /// - **Umgezogenes Konto:** abgewiesen, ohne das Geheimnis zu dehnen, zu
+    ///   vergleichen oder zu loggen. Die Zeit wird trotzdem verbraucht, an einem
+    ///   festen Wert, damit die Dauer nicht verraet, dass das Konto umgezogen
+    ///   ist.
+    /// - **Vom Betreiber gesetzt:** stimmt es, `NurWechsel` (428), und kein
+    ///   Zeichen entsteht. Stimmt es nicht, dieselbe Abweisung wie immer.
+    /// - **Noch nicht umgezogen:** wie bisher, mit Attrappe fuer unbekannte
+    ///   Konten.
+    pub fn anmelden_mit_geheimnis(&mut self, owner: &str, secret: &str, device: &str)
+        -> Result<Anmeldung, StoreError>
+    {
+        let zeile: Option<(String, String, i64)> = self.db
+            .query_row("SELECT secret, form, operator FROM accounts WHERE owner=?1",
+                       params![owner], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .optional()?;
+        if let Some((_, form, _)) = &zeile {
+            if form == "proof" {
+                crate::authorization::zeit_verbrauchen();
+                return Ok(Anmeldung::Abgewiesen);
+            }
+        }
         let gab_es = zeile.is_some();
+        let betreiber = zeile.as_ref().map(|z| z.2 != 0).unwrap_or(false);
         let gespeichert = match zeile {
-            Some(f) => f,
+            Some((f, _, _)) => f,
             None => self.decoy()?,
         };
         // Beide Bedingungen, und die teure ZUERST: ein `if !gab_es` davor
         // waere genau der Zeitunterschied, den die Attrappe verhindern soll.
         let passt = crate::authorization::secret_matches(&gespeichert, secret);
         if !passt || !gab_es {
-            return Ok(None);
+            return Ok(Anmeldung::Abgewiesen);
         }
-        let zeichen = crate::authorization::new_token().map_err(StoreError::Refused)?;
-        self.db.execute(
-            "INSERT INTO tokens (digest, owner, device, made_at) VALUES (?1, ?2, ?3, ?4)",
-            params![crate::authorization::token_digest(&zeichen), owner, device, jetzt()])?;
-        Ok(Some(zeichen))
+        if betreiber {
+            return Ok(Anmeldung::NurWechsel);
+        }
+        let zeichen = self.zeichen_ausgeben(owner, device, "secret")?;
+        Ok(Anmeldung::Zeichen(zeichen))
     }
 
+    /// Die Anmeldung von Fassung 6: ein Beweis, nie ein Passwort.
+    ///
+    /// Nur ein umgezogenes Konto nimmt einen Beweis an. Ein unbekanntes Konto
+    /// und eines in der Form `secret` bekommen dieselbe Abweisung, nach
+    /// derselben Arbeit an der Attrappe.
+    pub fn anmelden_mit_beweis(&mut self, owner: &str, proof: &[u8], device: &str)
+        -> Result<Anmeldung, StoreError>
+    {
+        let zeile: Option<(String, String)> = self.db
+            .query_row("SELECT secret, form FROM accounts WHERE owner=?1",
+                       params![owner], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()?;
+        let (gespeichert, gilt) = match zeile {
+            Some((f, form)) if form == "proof" => (f, true),
+            _ => (self.decoy()?, false),
+        };
+        let passt = crate::authorization::proof_matches(&gespeichert, proof);
+        if !passt || !gilt {
+            return Ok(Anmeldung::Abgewiesen);
+        }
+        let zeichen = self.zeichen_ausgeben(owner, device, "proof")?;
+        Ok(Anmeldung::Zeichen(zeichen))
+    }
+
+    /// Das Passwort wechseln, und damit auch der Umzug eines Kontos.
+    ///
+    /// **Alles in EINEM Schritt** (`BEGIN IMMEDIATE`): pruefen, neuen
+    /// Pruefwert und neues Salz setzen, die Marke des Betreibers loeschen,
+    /// JEDES Zeichen des Kontos zurueckziehen und das eine neue ausgeben. Eine
+    /// Unterbrechung dazwischen darf kein Konto mit neuem Passwort und alten
+    /// Zeichen hinterlassen, und keines ohne jedes Zeichen.
+    ///
+    /// Welche Form `current` hat, entscheidet das KONTO, nicht der Rufer: ein
+    /// Beweis nur fuer ein umgezogenes Konto, ein Geheimnis nur fuer eines in
+    /// der Form `secret`. Das Geheimnis an ein umgezogenes Konto wird wie bei
+    /// der Anmeldung nicht angefasst.
+    pub fn passwort_wechseln(&mut self, owner: &str, device: &str, aktuell: Aktuell<'_>,
+                             neu_salz: &[u8], neu_runden: u64, neu_beweis: &[u8])
+        -> Result<Anmeldung, StoreError>
+    {
+        if neu_salz.len() != crate::authorization::KONTO_SALZ_BYTES
+            || neu_runden < crate::authorization::MIN_ROUNDS
+            || neu_beweis.len() != crate::authorization::PROOF_BYTES
+        {
+            return Err(StoreError::Refused("the new password is not readable".into()));
+        }
+        let attrappe = self.decoy()?;
+        let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let zeile: Option<(String, String, i64)> = tx
+            .query_row("SELECT secret, form, operator FROM accounts WHERE owner=?1",
+                       params![owner], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?;
+
+        let (passt, war) = match (&zeile, aktuell) {
+            (Some((f, form, op)), Aktuell::Beweis(b)) if form == "proof" =>
+                (crate::authorization::proof_matches(f, b), if *op != 0 { "reset" } else { "change" }),
+            (Some((f, form, op)), Aktuell::Geheimnis(s)) if form == "secret" =>
+                (crate::authorization::secret_matches(f, s), if *op != 0 { "reset" } else { "move" }),
+            (Some((_, form, _)), Aktuell::Geheimnis(_)) if form == "proof" => {
+                crate::authorization::zeit_verbrauchen();
+                (false, "")
+            }
+            (_, Aktuell::Beweis(b)) => {
+                let _ = crate::authorization::proof_matches(&attrappe, b);
+                (false, "")
+            }
+            (_, Aktuell::Geheimnis(s)) => {
+                let _ = crate::authorization::secret_matches(&attrappe, s);
+                (false, "")
+            }
+        };
+        if !passt || zeile.is_none() {
+            tx.rollback()?;
+            return Ok(Anmeldung::Abgewiesen);
+        }
+
+        let dienst_salz = crate::authorization::zufall(crate::authorization::SALT_BYTES)
+            .map_err(StoreError::Refused)?;
+        let form_neu = crate::authorization::hash_proof(neu_beweis, &dienst_salz)
+            .map_err(StoreError::Refused)?;
+        let jetzt_s = jetzt();
+        tx.execute(
+            "UPDATE accounts SET secret=?2, salt=?3, rounds=?4, form='proof', operator=0, \
+             moved_at=COALESCE(moved_at, ?5) WHERE owner=?1",
+            params![owner, form_neu, crate::authorization::hex(neu_salz), neu_runden as i64, jetzt_s])?;
+        tx.execute(
+            "UPDATE tokens SET withdrawn=?2 WHERE owner=?1 AND withdrawn IS NULL",
+            params![owner, GRUND_PASSWORT_GEWECHSELT])?;
+        let zeichen = crate::authorization::new_token().map_err(StoreError::Refused)?;
+        tx.execute(
+            "INSERT INTO tokens (digest, owner, device, made_at) VALUES (?1, ?2, ?3, ?4)",
+            params![crate::authorization::token_digest(&zeichen), owner, device, jetzt_s])?;
+        tx.execute(
+            "INSERT INTO sign_ins (owner, device, form, at) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(owner, device) DO UPDATE SET form=excluded.form, at=excluded.at",
+            params![owner, device, war, jetzt_s])?;
+        tx.commit()?;
+        Ok(Anmeldung::Zeichen(zeichen))
+    }
+
+    /// Ein Einmal-Passwort des Betreibers setzen, oder nichts, wenn es das
+    /// Konto nicht gibt.
+    ///
+    /// Das Konto faellt dabei in die Form `secret` zurueck, mit der Marke des
+    /// Betreibers, und JEDES seiner Zeichen wird zurueckgezogen: wer das
+    /// Passwort neu setzen muss, soll keine Geraete behalten, die noch mit dem
+    /// alten angemeldet sind. Aus dem Einmal-Passwort entsteht nie ein Zeichen
+    /// (428), nur ein Wechsel.
+    pub fn zuruecksetzen(&mut self, owner: &str) -> Result<Option<String>, StoreError> {
+        if owner.is_empty() {
+            return Err(StoreError::Refused("an account has an owner".into()));
+        }
+        let einmal = crate::authorization::einmal_passwort().map_err(StoreError::Refused)?;
+        let salz = crate::authorization::zufall(crate::authorization::SALT_BYTES)
+            .map_err(StoreError::Refused)?;
+        let form = crate::authorization::hash_secret(&einmal, &salz).map_err(StoreError::Refused)?;
+        let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let geaendert = tx.execute(
+            "UPDATE accounts SET secret=?2, salt=NULL, rounds=NULL, form='secret', operator=1 \
+             WHERE owner=?1", params![owner, form])?;
+        if geaendert == 0 {
+            tx.rollback()?;
+            return Ok(None);
+        }
+        tx.execute(
+            "UPDATE tokens SET withdrawn=?2 WHERE owner=?1 AND withdrawn IS NULL",
+            params![owner, GRUND_PASSWORT_GEWECHSELT])?;
+        tx.commit()?;
+        Ok(Some(einmal))
+    }
+
+    /// Was `/v1/salt` fuer einen Namen sagt.
+    ///
+    /// Fuer ein umgezogenes Konto das echte Salz. Fuer jeden anderen Namen das
+    /// Schein-Salz, und die Form sagt `secret` nur, wenn es ein Konto gibt,
+    /// dessen Passwort der Dienst kennt: das ist die eine Unterscheidung, die
+    /// der Vertrag zulaesst, solange sie gilt.
+    pub fn salz_fuer(&mut self, owner: &str) -> Result<Salz, StoreError> {
+        let zeile: Option<(String, Option<String>, Option<i64>)> = self.db
+            .query_row("SELECT form, salt, rounds FROM accounts WHERE owner=?1",
+                       params![owner], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?;
+        if let Some((form, Some(salz), Some(runden))) = &zeile {
+            if form == "proof" {
+                if let Some(roh) = crate::authorization::hex_lesen(salz) {
+                    return Ok(Salz { salt: roh, rounds: *runden as u64, form: "proof" });
+                }
+            }
+        }
+        let geheimnis = self.salzgeheimnis()?;
+        let schein = crate::authorization::schein_salz(&geheimnis, owner);
+        let form = match &zeile {
+            Some((f, _, _)) if f == "secret" => "secret",
+            _ => "proof",
+        };
+        Ok(Salz { salt: schein, rounds: crate::authorization::MIN_ROUNDS, form })
+    }
+
+    /// Der Zustand eines Kontos, oder nichts.
+    pub fn konto(&self, owner: &str) -> Result<Option<Konto>, StoreError> {
+        Ok(self.db
+            .query_row("SELECT form, operator, moved_at FROM accounts WHERE owner=?1",
+                       params![owner], |r| Ok(Konto {
+                           form: r.get(0)?, betreiber: r.get::<_, i64>(1)? != 0, umgezogen: r.get(2)?,
+                       }))
+            .optional()?)
+    }
+
+    /// Je Geraet die Form der letzten Anmeldung und ihre Zeit, aeltestes
+    /// zuerst. Die Messung fuer Bedingung (b).
+    pub fn geraete(&self, owner: &str) -> Result<Vec<(String, String, f64)>, StoreError> {
+        let mut s = self.db.prepare(
+            "SELECT device, form, at FROM sign_ins WHERE owner=?1 ORDER BY at ASC")?;
+        let zeilen = s.query_map(params![owner], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        Ok(zeilen.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// Ein Zeichen ausgeben und die Form der Anmeldung festhalten.
+    fn zeichen_ausgeben(&mut self, owner: &str, device: &str, form: &str)
+        -> Result<String, StoreError>
+    {
+        let zeichen = crate::authorization::new_token().map_err(StoreError::Refused)?;
+        let jetzt_s = jetzt();
+        self.db.execute(
+            "INSERT INTO tokens (digest, owner, device, made_at) VALUES (?1, ?2, ?3, ?4)",
+            params![crate::authorization::token_digest(&zeichen), owner, device, jetzt_s])?;
+        self.db.execute(
+            "INSERT INTO sign_ins (owner, device, form, at) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(owner, device) DO UPDATE SET form=excluded.form, at=excluded.at",
+            params![owner, device, form, jetzt_s])?;
+        Ok(zeichen)
+    }
+
+    /// Das Geheimnis des Schein-Salzes: einmal gezogen, im Laden gehalten,
+    /// damit es jeden Neustart ueberlebt. Der Sitzungsschluessel taugt dafuer
+    /// nicht, er lebt nur im Speicher; und der statische Schluessel hat eine
+    /// Aufgabe, die er nicht mit einer zweiten teilen soll.
+    fn salzgeheimnis(&mut self) -> Result<Vec<u8>, StoreError> {
+        if let Some(g) = &self.salzgeheimnis { return Ok(g.clone()); }
+        let da: Option<String> = self.db
+            .query_row("SELECT value FROM meta WHERE key=?1", params![SALZ_ROW], |r| r.get(0))
+            .optional()?;
+        let roh = match da.as_deref().and_then(crate::authorization::hex_lesen) {
+            Some(r) if r.len() == 32 => r,
+            _ => {
+                let neu = crate::authorization::zufall(32).map_err(StoreError::Refused)?;
+                // `INSERT OR IGNORE` und danach LESEN: zwei Prozesse, die
+                // gleichzeitig zum ersten Mal fragen, bekommen dasselbe.
+                self.db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?1, ?2)",
+                                params![SALZ_ROW, crate::authorization::hex(&neu)])?;
+                let gelesen: String = self.db.query_row(
+                    "SELECT value FROM meta WHERE key=?1", params![SALZ_ROW], |r| r.get(0))?;
+                crate::authorization::hex_lesen(&gelesen)
+                    .filter(|r| r.len() == 32)
+                    .ok_or_else(|| StoreError::Refused("the salt secret is unreadable".into()))?
+            }
+        };
+        self.salzgeheimnis = Some(roh.clone());
+        Ok(roh)
+    }
+
+    /// Wem ein Zeichen gehoert, solange es gilt. Ein zurueckgezogenes Zeichen
+    /// gehoert niemandem mehr.
     pub fn owner_of_token(&self, digest: &str) -> Result<Option<String>, StoreError> {
         Ok(self.db
-            .query_row("SELECT owner FROM tokens WHERE digest=?1", params![digest], |r| r.get(0))
+            .query_row("SELECT owner FROM tokens WHERE digest=?1 AND withdrawn IS NULL",
+                       params![digest], |r| r.get(0))
             .optional()?)
+    }
+
+    /// Warum ein Zeichen zurueckgezogen ist, oder nichts (unbekannt oder gueltig).
+    pub fn grund_des_rueckzugs(&self, digest: &str) -> Result<Option<String>, StoreError> {
+        Ok(self.db
+            .query_row("SELECT withdrawn FROM tokens WHERE digest=?1", params![digest],
+                       |r| r.get::<_, Option<String>>(0))
+            .optional()?
+            .flatten())
     }
 
     pub fn revoke_token(&mut self, digest: &str) -> Result<(), StoreError> {

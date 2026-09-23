@@ -249,6 +249,72 @@ pub fn gesundheit_fragen(ziel: std::net::SocketAddr) -> Result<String, String> {
     }
 }
 
+/// `reset <owner>`: ein Einmal-Passwort fuer ein Konto, dessen Passwort
+/// verloren ist.
+///
+/// **Der Dienst erzeugt es, nicht der Betreiber**, und zeigt es genau einmal.
+/// Es taugt nur zum Wechsel: eine Anmeldung damit antwortet 428, kein Zeichen
+/// entsteht, und das Geraet fragt sofort ein neues Passwort. Jedes Zeichen des
+/// Kontos ist danach zurueckgezogen. Der Betreiber kennt das Einmal-Passwort,
+/// und deshalb darf es nie der Schluessel der Feed-Zugaenge werden: das
+/// verhindert, dass das Konto in die Form `secret` faellt.
+pub fn befehl_reset(owner: Option<&str>) -> i32 {
+    let Some(owner) = owner.filter(|o| !o.is_empty()) else {
+        eprintln!("usage: maer-sync reset <owner>");
+        return 2;
+    };
+    let mut laden = match Store::open(&db_pfad(), crate::store::DEFAULT_KEEP, None) {
+        Ok(l) => l,
+        Err(e) => { eprintln!("the store cannot be opened: {e:?}"); return 2; }
+    };
+    match laden.zuruecksetzen(owner) {
+        Err(e) => { eprintln!("refused: {}", satz(&e)); 1 }
+        Ok(None) => { eprintln!("no account named '{owner}'"); 1 }
+        Ok(Some(einmal)) => {
+            println!("one-time password for {owner}: {einmal}");
+            println!("it only changes the password; every token of {owner} is withdrawn");
+            0
+        }
+    }
+}
+
+/// `devices <owner>`: je Geraet die Form der letzten Anmeldung.
+///
+/// Die Messung fuer Bedingung (b): bevor ein Konto den Schluessel der
+/// Feed-Zugaenge aus dem Passwort nimmt, darf sich seit dem Wechsel kein
+/// Geraet mehr mit einem Passwort angemeldet haben, das der Dienst kennt.
+/// Formen: `proof` (Fassung 6), `secret` (Fassung 5), `move` (der Umzug),
+/// `change` (ein Wechsel), `reset` (ein Wechsel nach dem Einmal-Passwort).
+pub fn befehl_devices(owner: Option<&str>) -> i32 {
+    let Some(owner) = owner.filter(|o| !o.is_empty()) else {
+        eprintln!("usage: maer-sync devices <owner>");
+        return 2;
+    };
+    let laden = match Store::open(&db_pfad(), crate::store::DEFAULT_KEEP, None) {
+        Ok(l) => l,
+        Err(e) => { eprintln!("the store cannot be opened: {e:?}"); return 2; }
+    };
+    let konto = match laden.konto(owner) {
+        Ok(Some(k)) => k,
+        Ok(None) => { eprintln!("no account named '{owner}'"); return 1; }
+        Err(e) => { eprintln!("refused: {}", satz(&e)); return 1; }
+    };
+    let umgezogen = konto.umgezogen.map(|t| format!("{t:.0}")).unwrap_or_else(|| "not yet".into());
+    println!("account {owner}: form={} set-by-operator={} moved-at={umgezogen}",
+             konto.form, if konto.betreiber { "yes" } else { "no" });
+    match laden.geraete(owner) {
+        Err(e) => { eprintln!("refused: {}", satz(&e)); 1 }
+        Ok(g) if g.is_empty() => { println!("no device has signed in since version 6"); 0 }
+        Ok(g) => {
+            for (geraet, form, zeit) in g {
+                let name = if geraet.is_empty() { "-".to_string() } else { geraet };
+                println!("device={name} form={form} at={zeit:.0}");
+            }
+            0
+        }
+    }
+}
+
 /// `key`, `key --adopt`, `key --new`.
 ///
 /// Drei Befehle in einem, weil sie eine Frage beantworten: wer ist dieser

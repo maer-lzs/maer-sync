@@ -176,6 +176,10 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(befehle::befehl_account_remove(wort(1)) as u8),
         Some("health") =>
             return std::process::ExitCode::from(befehle::befehl_health() as u8),
+        Some("reset") =>
+            return std::process::ExitCode::from(befehle::befehl_reset(wort(1)) as u8),
+        Some("devices") =>
+            return std::process::ExitCode::from(befehle::befehl_devices(wort(1)) as u8),
         Some("key") => {
             let hat = |f: &str| args.iter().any(|a| a == f);
             return std::process::ExitCode::from(
@@ -186,7 +190,7 @@ fn main() -> std::process::ExitCode {
             // Der gefaehrliche Fall waere, dass `--help` versehentlich den
             // Dienst startet.
             println!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
-account-remove <owner>|health|key [--adopt|--new]]");
+account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]");
             println!();
             println!("The Mar sync service and its operator commands.");
             println!("  serve            run the service (the default with no command)");
@@ -194,6 +198,8 @@ account-remove <owner>|health|key [--adopt|--new]]");
             println!("  account OWNER    lay down an account (secret on stdin)");
             println!("  account-remove OWNER");
             println!("  health           ask the running service, exit 0 when it answers well");
+            println!("  reset OWNER      a one-time password that only changes the password");
+            println!("  devices OWNER    how each device of an account signed in last");
             println!("  key [--adopt|--new]");
             return std::process::ExitCode::SUCCESS;
         }
@@ -201,7 +207,7 @@ account-remove <owner>|health|key [--adopt|--new]]");
         Some(anderes) => {
             eprintln!("no such command: {anderes}");
             eprintln!("usage: maer-sync [serve|backup <copy.sqlite>|account <owner>|\
-account-remove <owner>|health|key [--adopt|--new]]");
+account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]");
             return std::process::ExitCode::from(2);
         }
     }
@@ -324,7 +330,7 @@ async fn bedienen(dienst: Arc<Dienst>, anfrage: Request<Incoming>, von: String)
         let mut app = dienst.app.lock().unwrap();
         app.http(&Anfrage {
             method, path: pfad, query: frage, headers: kopfzeilen,
-            body: koerper, innen: false, client: Some(von), sitzung: None,
+            body: koerper, innen: false, client: Some(von), sitzung: None, adresse: None,
         })
     };
     dienst.protokoll_austeilen(beginn);
@@ -345,7 +351,7 @@ async fn bedienen(dienst: Arc<Dienst>, anfrage: Request<Incoming>, von: String)
 fn satz_unvollstaendig(pfad: &str) -> (&'static str, &'static str) {
     match pfad {
         "/v1/session" => ("reason", "the handshake broke off mid request"),
-        "/v1/token" => ("reason", "the request ended before it was whole"),
+        "/v1/token" | "/v1/password" => ("reason", "the request ended before it was whole"),
         _ => ("reason", "the write ended before the body did"),
     }
 }
@@ -353,7 +359,7 @@ fn satz_unvollstaendig(pfad: &str) -> (&'static str, &'static str) {
 fn satz_zu_gross(pfad: &str) -> (&'static str, &'static str) {
     match pfad {
         "/v1/session" => ("reason", "a handshake is not this large"),
-        "/v1/token" => ("reason", "the request is larger than this host takes"),
+        "/v1/token" | "/v1/password" => ("reason", "the request is larger than this host takes"),
         _ => ("reason", "the document is larger than this host takes"),
     }
 }

@@ -93,6 +93,11 @@ pub struct Anfrage {
     /// Der Name der Sitzung, aus der diese Anfrage entsiegelt wurde. Nur
     /// fuer die Zugriffszeile; die Entscheidung liest ihn nicht.
     pub sitzung: Option<String>,
+    /// Die Adresse, fuer die die Versuchsgrenze zaehlt. Aussen leer: dann
+    /// kommt sie aus der Gegenstelle und `X-Real-IP` (`versuche::adresse_aus`).
+    /// Innen traegt sie die Adresse des UMSCHLAGS, und nie eine Kopfzeile aus
+    /// dem versiegelten Rahmen: die schreibt der Rufer selbst.
+    pub adresse: Option<String>,
 }
 
 impl Anfrage {
@@ -188,6 +193,19 @@ pub struct App {
     /// und schreibt sie; hier faellt nur die Entscheidung, dass es eine Zeile
     /// wert ist.
     pub protokoll: Vec<Zeile>,
+    /// Die Fehlversuche an den Anmeldewegen, je Konto und Adresse.
+    pub versuche: crate::versuche::Versuche,
+    /// Die Uhr der Versuchsgrenze, als Sekunden. Von aussen, damit ein Zeuge
+    /// ein Fenster ablaufen lassen kann, ohne zu warten.
+    pub uhr: Box<dyn Fn() -> f64 + Send>,
+}
+
+/// Die Wanduhr als Sekunden seit 1970.
+fn wanduhr() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
 }
 
 impl App {
@@ -201,7 +219,18 @@ impl App {
             plain_ways: alte_wege_aus(std::env::var(PLAIN_WAYS).ok()),
             max_body_bytes: grenze_aus(std::env::var(GRENZE).ok()),
             protokoll: Vec::new(),
+            versuche: crate::versuche::Versuche::neu(),
+            uhr: Box::new(wanduhr),
         }
+    }
+
+    /// Eine andere Uhr fuer die Versuchsgrenze. Fuer Zeugen.
+    pub fn mit_uhr(mut self, uhr: Box<dyn Fn() -> f64 + Send>) -> Self { self.uhr = uhr; self }
+
+    /// Die Adresse, fuer die gezaehlt wird. Siehe `Anfrage::adresse`.
+    fn adresse_von(&self, a: &Anfrage) -> String {
+        a.adresse.clone().unwrap_or_else(|| crate::versuche::adresse_aus(
+            a.client.as_deref(), a.headers.get("x-real-ip").map(|s| s.as_str())))
     }
 
     pub fn mit_kennung(mut self, private: [u8; 32], abdruck: &str) -> Self {
@@ -251,13 +280,41 @@ impl App {
         if a.path == "/v1/health" {
             return als_json(200, json!({ "ok": true }), vec![]);
         }
+        // RIEGEL (c) der Fassung 6: der alte Schluesselweg antwortet 404, fuer
+        // jede Methode und vor allem anderen. Eine App der Fassung 5 fragt ihn
+        // vor JEDER Anmeldung und jedem Sitzungsaufbau, und nur ein 404 haelt
+        // sie an, BEVOR sie ein Passwort schickt; eine 401 oder 426 an dieser
+        // Stelle wuerde sie weiterlaufen lassen. Der Weg steht deshalb im Code,
+        // obwohl er nicht mehr im Vertrag steht (Ausnahme mit Grund im
+        // Vertragszeugen).
         if a.path == "/v1/key" {
+            return grund(404, "no such path");
+        }
+        if a.path == "/v2/key" {
             if a.method != "GET" { return falsche_methode(&a.method); }
-            return self.schluessel();
+            let mut aus = self.schluessel();
+            if aus.status == 200 {
+                aus.headers.push(("x-maer-contract".into(), crate::contract::VERSION.into()));
+            }
+            return aus;
         }
         if a.path == "/v1/session" {
             if a.method != "POST" { return falsche_methode(&a.method); }
             return self.sitzung(a);
+        }
+        // Die drei Anmeldewege sprechen NUR in einer Sitzung, was auch immer
+        // der Schalter der alten Wege sagt: sie tragen die einzigen Werte, die
+        // fuer einen Menschen stehen.
+        if matches!(a.path.as_str(), "/v1/token" | "/v1/salt" | "/v1/password") {
+            if !a.innen {
+                return grund(426, "the sign-in paths speak only inside a session");
+            }
+            return match (a.path.as_str(), a.method.as_str()) {
+                ("/v1/token", "POST") => self.zeichen(a),
+                ("/v1/salt", "GET") => self.salz(a),
+                ("/v1/password", "POST") => self.wechsel(a),
+                _ => falsche_methode(&a.method),
+            };
         }
         // Das Tor steht VOR dem Zeichen: ohne die alten Wege ist auch eine
         // Anfrage MIT gültigem Zeichen 426, und ein unbekannter Weg ebenso.
@@ -265,10 +322,6 @@ impl App {
         // spricht, muss erfahren, dass dieser Dienst nur innen zuhört.
         if !self.plain_ways && !a.innen {
             return grund(426, "this service speaks only inside a session");
-        }
-        if a.path == "/v1/token" {
-            if a.method != "POST" { return falsche_methode(&a.method); }
-            return self.zeichen(a);
         }
 
         let caller = {
@@ -280,8 +333,13 @@ impl App {
             self.protokoll.push(Zeile::warnung(format!(
                 "unauthorized from={} method={} path={}",
                 woher(a.client.as_deref()), a.method, a.path)));
-            return als_json(401, json!({ "reason": caller.reason }),
-                            vec![("www-authenticate".into(), "Bearer".into())]);
+            let mut kopf = vec![("www-authenticate".to_string(), "Bearer".to_string())];
+            // Ein ZURUECKGEZOGENES Zeichen sagt, warum: sonst fragt das Geraet
+            // nach dem Passwort, als waere nichts geschehen.
+            if let Some(g) = self.rueckzug_von(a.headers.get("authorization").map(|s| s.as_str())) {
+                kopf.push(("x-maer-refusal".into(), g));
+            }
+            return als_json(401, json!({ "reason": caller.reason }), kopf);
         }
         let owner = caller.owner.unwrap();
 
@@ -385,7 +443,7 @@ impl App {
         // gebaut wurde; nach beiden von innen zu fragen sagt nichts. Die
         // Weigerung geht UNVERSIEGELT zurück, wie jede Weigerung der äußeren
         // Schicht: sie ist keine Antwort auf die innere Anfrage.
-        if pfad == "/v1/session" || pfad == "/v1/key" {
+        if pfad == "/v1/session" || pfad == "/v2/key" {
             return grund(400, "this path is not answered inside a session");
         }
 
@@ -401,15 +459,19 @@ impl App {
             method, path: pfad.clone(), query: frage,
             headers: innere_kopfzeilen, body: koerper,
             innen: true, client: a.client.clone(), sitzung: Some(name.to_string()),
+            adresse: Some(self.adresse_von(a)),
         };
         let gab = self.http(&innen);
 
         // Bewiesen heißt: diese Sitzung hat eine Anfrage getragen, die
-        // bewiesen hat, WER fragt. Ein angenommenes Zeichen beweist es, und
-        // eine Anmeldung, zu der der Laden ja gesagt hat, auch. Eine 401
-        // beweist nichts.
-        if gab.status != 401
-            && (kopfzeilen.contains_key("authorization") || pfad == "/v1/token")
+        // bewiesen hat, WER fragt. Ein angenommenes Zeichen beweist es, eine
+        // Anmeldung, zu der der Laden ja gesagt hat, auch, und ein gelungener
+        // Passwortwechsel ebenso. Eine 401 beweist nichts, und die zwei
+        // Antworten der Fassung 6 auch nicht: eine 429 hat gar nicht erst
+        // geprueft, und eine 428 gibt kein Zeichen.
+        if !matches!(gab.status, 401 | 428 | 429)
+            && (kopfzeilen.contains_key("authorization") || pfad == "/v1/token"
+                || pfad == "/v1/password")
             && self.sessions.prove(name).is_err()
         {
             return grund(410, "this session has ended");
@@ -437,38 +499,174 @@ impl App {
 
     // ------------------------------------------------------- Die fünf Wege
 
+    /// `/v1/token`: ein Beweis (Fassung 6), oder ein Passwort, das der Dienst
+    /// kennt (Fassung 5, nur fuer ein noch nicht umgezogenes Konto).
     fn zeichen(&mut self, a: &Anfrage) -> Antwort {
         if a.body.len() > self.max_body_bytes {
             return grund(413, "the request is larger than this host takes");
         }
-        let satz = "this path wants an owner and a secret";
+        let satz = "this path wants an owner and a proof";
         let Ok(gefragt) = serde_json::from_slice::<Value>(&a.body) else {
             return grund(400, satz);
         };
-        let (Some(owner), Some(secret)) =
-            (gefragt.get("owner").and_then(|v| v.as_str()),
-             gefragt.get("secret").and_then(|v| v.as_str()))
-        else {
+        let Some(owner) = gefragt.get("owner").and_then(|v| v.as_str()) else {
             return grund(400, satz);
         };
         let device = gefragt.get("device").and_then(|v| v.as_str()).unwrap_or("");
+        let adresse = self.adresse_von(a);
+        // Die Grenze VOR jeder Ableitung: eine Sperre nach dem teuren
+        // Vergleich spart dem Wirt nichts.
+        if let Some(antwort) = self.gesperrt(owner, &adresse) {
+            return antwort;
+        }
 
-        match self.store.issue_token(owner, secret, device) {
-            // Dieselbe Antwort für ein falsches Geheimnis und für ein Konto,
-            // das es nicht gibt. Alles andere macht daraus eine Liste, wer
-            // ein Konto hat.
-            Ok(None) | Err(_) => {
-                self.protokoll.push(Zeile::warnung(format!(
-                    "sign-in refused from={} owner={owner}", woher(a.client.as_deref()))));
-                grund(401, crate::authorization::DENIED)
-            }
-            Ok(Some(zeichen)) => {
+        let ergebnis = if let Some(b) = gefragt.get("proof").and_then(|v| v.as_str()) {
+            let Some(beweis) = base64_lesen(b)
+                .filter(|r| r.len() == crate::authorization::PROOF_BYTES)
+            else {
+                return grund(400, satz);
+            };
+            self.store.anmelden_mit_beweis(owner, &beweis, device)
+        } else if let Some(s) = gefragt.get("secret").and_then(|v| v.as_str()) {
+            self.store.anmelden_mit_geheimnis(owner, s, device)
+        } else {
+            return grund(400, satz);
+        };
+
+        match ergebnis {
+            Ok(crate::store::Anmeldung::Zeichen(zeichen)) => {
+                self.versuche.erfolg(owner, &adresse);
                 self.protokoll.push(Zeile::hinweis(format!(
                     "sign-in from={} owner={owner} device={device}",
                     woher(a.client.as_deref()))));
                 als_json(200, json!({ "token": zeichen }), vec![])
             }
+            // Das Passwort stimmt, aber der Betreiber hat es gesetzt. Kein
+            // Fehlversuch, und kein Zeichen.
+            Ok(crate::store::Anmeldung::NurWechsel) => {
+                self.versuche.erfolg(owner, &adresse);
+                self.protokoll.push(Zeile::hinweis(format!(
+                    "sign-in with the password the operator set from={} owner={owner}",
+                    woher(a.client.as_deref()))));
+                grund(428, "the operator set this password; change it on /v1/password")
+            }
+            // Dieselbe Antwort für ein falsches Geheimnis und für ein Konto,
+            // das es nicht gibt. Alles andere macht daraus eine Liste, wer
+            // ein Konto hat.
+            Ok(crate::store::Anmeldung::Abgewiesen) | Err(_) => {
+                self.versuche.fehlschlag(owner, &adresse, (self.uhr)());
+                self.protokoll.push(Zeile::warnung(format!(
+                    "sign-in refused from={} owner={owner}", woher(a.client.as_deref()))));
+                grund(401, crate::authorization::DENIED)
+            }
         }
+    }
+
+    /// `/v1/salt?owner=`: fuer jeden Namen dieselbe Gestalt.
+    fn salz(&mut self, a: &Anfrage) -> Antwort {
+        let owner = frage_lesen(&a.query).get("owner").cloned().unwrap_or_default();
+        if owner.is_empty() {
+            return grund(400, "this path wants an owner");
+        }
+        match self.store.salz_fuer(&owner) {
+            Ok(s) => als_json(200, json!({
+                "salt": base64(&s.salt),
+                "kdf": crate::authorization::KDF,
+                "rounds": s.rounds,
+                "form": s.form,
+            }), vec![]),
+            Err(_) => leer(500),
+        }
+    }
+
+    /// `/v1/password`: das Passwort wechseln, und damit auch der Umzug.
+    fn wechsel(&mut self, a: &Anfrage) -> Antwort {
+        if a.body.len() > self.max_body_bytes {
+            return grund(413, "the request is larger than this host takes");
+        }
+        let satz = "this path wants an owner, the current credential and the new one";
+        let Ok(gefragt) = serde_json::from_slice::<Value>(&a.body) else {
+            return grund(400, satz);
+        };
+        let Some(owner) = gefragt.get("owner").and_then(|v| v.as_str()) else {
+            return grund(400, satz);
+        };
+        let device = gefragt.get("device").and_then(|v| v.as_str()).unwrap_or("");
+        let adresse = self.adresse_von(a);
+        if let Some(antwort) = self.gesperrt(owner, &adresse) {
+            return antwort;
+        }
+
+        // Das Neue zuerst lesen: ein Wechsel, dessen Ziel unlesbar ist, soll
+        // gar nicht erst pruefen, ob der Rufer der Richtige ist.
+        let neu = gefragt.get("new");
+        let feld = |n: &str| neu.and_then(|v| v.get(n));
+        let neu_salz = feld("salt").and_then(|v| v.as_str()).and_then(base64_lesen);
+        let neu_beweis = feld("proof").and_then(|v| v.as_str()).and_then(base64_lesen);
+        let neu_kdf = feld("kdf").and_then(|v| v.as_str());
+        let neu_runden = feld("rounds").and_then(|v| v.as_u64());
+        let (Some(neu_salz), Some(neu_beweis), Some(crate::authorization::KDF), Some(neu_runden)) =
+            (neu_salz, neu_beweis, neu_kdf, neu_runden)
+        else {
+            return grund(400, "the new password is not readable");
+        };
+        if neu_salz.len() != crate::authorization::KONTO_SALZ_BYTES
+            || neu_beweis.len() != crate::authorization::PROOF_BYTES
+            || neu_runden < crate::authorization::MIN_ROUNDS
+        {
+            return grund(400, "the new password is not readable");
+        }
+
+        let jetzt_gilt = gefragt.get("current");
+        let beweis_roh = jetzt_gilt.and_then(|v| v.get("proof")).and_then(|v| v.as_str());
+        let geheimnis = jetzt_gilt.and_then(|v| v.get("secret")).and_then(|v| v.as_str());
+        let beweis;
+        let aktuell = match (beweis_roh, geheimnis) {
+            (Some(b), None) => {
+                match base64_lesen(b).filter(|r| r.len() == crate::authorization::PROOF_BYTES) {
+                    Some(r) => { beweis = r; crate::store::Aktuell::Beweis(&beweis) }
+                    None => return grund(400, satz),
+                }
+            }
+            (None, Some(s)) => crate::store::Aktuell::Geheimnis(s),
+            _ => return grund(400, satz),
+        };
+
+        match self.store.passwort_wechseln(owner, device, aktuell, &neu_salz, neu_runden, &neu_beweis) {
+            Ok(crate::store::Anmeldung::Zeichen(zeichen)) => {
+                self.versuche.erfolg(owner, &adresse);
+                self.protokoll.push(Zeile::hinweis(format!(
+                    "password changed from={} owner={owner} device={device}; \
+every other sign-in of this owner is withdrawn", woher(a.client.as_deref()))));
+                als_json(200, json!({ "token": zeichen }), vec![])
+            }
+            Ok(_) => {
+                self.versuche.fehlschlag(owner, &adresse, (self.uhr)());
+                self.protokoll.push(Zeile::warnung(format!(
+                    "password change refused from={} owner={owner}", woher(a.client.as_deref()))));
+                grund(401, crate::authorization::DENIED)
+            }
+            Err(crate::store::StoreError::Refused(_)) => grund(400, "the new password is not readable"),
+            Err(_) => leer(500),
+        }
+    }
+
+    /// Die 429, wenn das Paar gesperrt ist, sonst nichts.
+    fn gesperrt(&mut self, owner: &str, adresse: &str) -> Option<Antwort> {
+        let sekunden = self.versuche.gesperrt(owner, adresse, (self.uhr)())?;
+        self.protokoll.push(Zeile::warnung(format!(
+            "sign-in held back from={adresse} owner={owner} for={sekunden}s")));
+        Some(als_json(429, json!({ "reason": "too many failed attempts; try again later" }),
+                      vec![("retry-after".into(), sekunden.to_string())]))
+    }
+
+    /// Warum das vorgelegte Zeichen zurueckgezogen ist, oder nichts.
+    fn rueckzug_von(&self, kopf: Option<&str>) -> Option<String> {
+        let rest = kopf?.trim();
+        let (art, zeichen) = rest.split_once(' ')?;
+        if !art.eq_ignore_ascii_case("bearer") || zeichen.trim().is_empty() { return None; }
+        let digest = crate::authorization::token_digest(zeichen.trim());
+        self.store.grund_des_rueckzugs(&digest).ok().flatten()
     }
 
     fn liste(&self, owner: &str, sorte: &str) -> Antwort {

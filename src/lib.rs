@@ -30,5 +30,6 @@ pub mod sessions;
 pub mod sitzungsladen;
 pub mod store;
 pub mod versions;
+pub mod versuche;
 pub mod wege;
 pub mod writes;

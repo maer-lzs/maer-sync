@@ -93,6 +93,10 @@ EXEMPT = {
     "vektoren/wege.json": "answers measured off the running application, and JSON has no "
                           "comment to put a header in; how it was produced, and what it "
                           "pins, is stated in the README beside it",
+    "vektoren/faelle-v6.json": "expected answers of contract version 6, written from the contract text by a second author "
+        "and not from this code; JSON has no comment to put a header in, the LICENSE file covers it",
+    "vektoren/sign-in-v6.json": "the derivation vectors of contract version 6, delivered with the contract and computed twice "
+        "independently, not measured off this service; JSON has no comment to put a header in, the LICENSE file covers it",
     "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim; a "
                               "header would alter the bytes whose whole value is that "
                               "nobody touched them, and JSON has no comments to put one in",

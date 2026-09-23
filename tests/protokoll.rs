@@ -79,13 +79,17 @@ fn jede_abweisung_hinterlaesst_die_zeile_der_python_fassung() {
         app.http(&mit_quelle(Anfrage::neu("GET", "/v1/doc/playback")
             .mit_kopf("authorization", "Bearer unsinnszeichen")));
     })));
+    // Seit Fassung 6 spricht die Anmeldung nur INNEN (von aussen 426, ohne
+    // Satz). Gefragt ist hier der Satz, den sie hinterlaesst, und der ist
+    // innen derselbe wie in der Tafel der Python-Fassung.
     tun.push(("eine Anmeldung mit falschem Geheimnis", Box::new(|app: &mut App| {
         app.http(&mit_quelle(Anfrage::neu("POST", "/v1/token")
-            .mit_koerper(br#"{"owner": "anna", "secret": "falschgeheim"}"#)));
+            .mit_koerper(br#"{"owner": "anna", "secret": "falschgeheim"}"#).von_innen()));
     })));
     tun.push(("eine Anmeldung, die glueckt", Box::new(|app: &mut App| {
         app.http(&mit_quelle(Anfrage::neu("POST", "/v1/token").mit_koerper(
-            br#"{"owner": "anna", "secret": "ein hinreichend langes geheimnis", "device": "geraet-9"}"#)));
+            br#"{"owner": "anna", "secret": "ein hinreichend langes geheimnis", "device": "geraet-9"}"#)
+            .von_innen()));
     })));
     tun.push(("ein Handschlag, der keiner ist", Box::new(|app: &mut App| {
         app.http(&mit_quelle(Anfrage::neu("POST", "/v1/session")

@@ -16,7 +16,10 @@ rehearsal, all under test. The app reaches it through
 seams, so the runners in the app know nothing of it; the settings page
 (Settings, Sync) signs in, tests the connection and shows a refused write
 with the service's own sentence. It runs as one static binary on a host of
-the operator's, behind a proxy that holds the certificate. The takeover end
+the operator's, behind a proxy that holds the certificate. **Since contract
+version 6 the service never sees a password**: the device derives a proof from
+it and signs in with that, and the key that seals the feed credentials never
+leaves the device (see *Signing in* below and `CONTRACT.md`). The takeover end
 to end (a locked, playing device stops when the other starts) needs two
 devices and is measured in the device test.
 
@@ -141,9 +144,16 @@ to trust the service again from scratch.
 
     account someone laid down
 
-**The secret comes in on stdin and never in the command line**, because an
+**The password comes in on stdin and never in the command line**, because an
 argument is visible to every other process on the machine and lands in the
-shell history. The service stores a scrypt hash, never the secret.
+shell history. The service stores a scrypt hash, never the password.
+
+**This password is one the operator knows, so it only ever opens a change.**
+The account starts in the form `secret`; the first device that signs in reads
+that and sets a new password in the same step, and from then on only the new
+one signs in, as a proof the service cannot turn back into a password. A
+password that the service or the operator once knew never becomes the key of
+the feed credentials.
 
 **An account that is already there is refused**, and the command exits 1:
 
@@ -151,23 +161,23 @@ shell history. The service stores a scrypt hash, never the secret.
 
 An existing account is not silently overwritten.
 
-Check it from the outside:
+Check it:
 
-    $ curl -s -X POST http://127.0.0.1:8099/v1/token \
-        -H 'Content-Type: application/json' \
-        -d '{"owner":"someone","secret":"the-secret","device":"laptop"}'
+    $ maer-sync devices someone
+    account someone: form=secret set-by-operator=no moved-at=not yet
+    no device has signed in since version 6
 
-answers with a JSON object whose `token` is 64 characters, and that token
-writes:
+**A sign in cannot be tried with curl, and that is the point.** The three
+sign-in paths answer only inside an encrypted session, whatever
+`MAER_SYNC_PLAIN_WAYS` says:
 
-    $ curl -s -o /dev/null -w '%{http_code}\n' \
-        -X PUT 'http://127.0.0.1:8099/v1/doc/stands?scope=' \
-        -H "Authorization: Bearer $TOKEN" -H 'X-Maer-Format: 1' -d '{"a":1}'
-    200
+    $ curl -s -X POST http://127.0.0.1:18231/v1/token \
+        -H 'Content-Type: application/json' -d '{"owner":"someone","secret":"x","device":"d"}'
+    {"reason":"the sign-in paths speak only inside a session"}
 
-Without the header the same document answers `401`. Run on 24.09.2026 on a
-free port; with `MAER_SYNC_PLAIN_WAYS=off` both plain requests answer `426`
-instead, because they then travel only inside a session.
+with status `426`. Run on 24.09.2026 on the free port `18231`. The whole sign
+in, from the handshake to the move and the attempt limit, is driven on a
+running build by `werkzeug/geheimnisprobe.py`, against a throwaway store.
 
 ### 7. Put a proxy in front, and prove the socket
 
@@ -198,8 +208,17 @@ machine this author set up; the proof after it is what matters.
     location / {
         proxy_pass http://127.0.0.1:8099;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
+**`X-Real-IP` is not decoration.** Guessing has a limit: ten failed sign ins
+for one owner name from one address within fifteen minutes, and the next one
+answers `429`. The service takes the address from `X-Real-IP` **only when the
+connection comes from its own host**, which is where the proxy sits; from
+anywhere else it takes the peer and ignores the header, so nobody can choose
+the address they are counted under. Without the line every device behind the
+proxy is one address, and one person guessing a name locks out everyone who
+signs in under it.
 **The proof, and run it against the PROXY, not against 127.0.0.1:**
 
     $ curl -s -o /dev/null -w '%{http_code}\n' -N \
@@ -292,10 +311,13 @@ Not that something answers, but that it is yours:
     $ maer-sync health
     healthy: 127.0.0.1:18231
 
-    $ curl -s http://127.0.0.1:18231/v1/key
-    {"fingerprint":"ZZR5-8MAF-N1HP-B3G8-A5RQ-NQVT","key":"…"}
+    $ curl -s -D - http://127.0.0.1:18231/v2/key
+    HTTP/1.1 200 OK
+    x-maer-contract: 6
+    …
+    {"fingerprint":"7TVS-52VV-2EKJ-8F3E-HP4A-FHMR","key":"…"}
 
-(`18231` was the free port of the run these lines come from.)
+(`18231` was the free port of the runs these lines come from.)
 
 `health` asks `/v1/health` at the address in `MAER_SYNC_BIND` (an address
 like `0.0.0.0` is asked on loopback) and exits 0 when the answer is `200` with
@@ -303,8 +325,9 @@ like `0.0.0.0` is asked on loopback) and exits 0 when the answer is `200` with
 
     not healthy: nothing answers on 127.0.0.1:18231: Connection refused (os error 111)
 
-It proves that a service is up and answering well, not which one. `/v1/key`
-answers with the fingerprint you wrote down in step 5, and comparing those two
+It proves that a service is up and answering well, not which one. `/v2/key`
+answers with the fingerprint you wrote down in step 5, and names the contract
+version it speaks, and comparing those two
 is what proves the service is the one you laid down rather than a stranger on
 a port you assumed was free.
 
@@ -319,9 +342,11 @@ from before `v0.2.0`.
 ### 11. Point the app at it
 
 In Mär: Settings, the Mär Sync Service section. Three fields, the address
-with its scheme (`https://sync.example.com`), the owner and the secret from
-step 6. Signing in trades the secret for a token the device keeps in its
-keychain; the secret itself is not kept.
+with its scheme (`https://sync.example.com`), the owner and the password from
+step 6. The first device asks for a new password at once (step 6 says why);
+the rule for it, at least twelve characters, lives in the app, because the
+service never sees a password to judge. Signing in trades a proof for a token
+the device keeps in its keychain.
 
 The switch above it decides whether anything travels at all. Set up and
 switched off means nothing moves, and the page says so.
@@ -381,7 +406,7 @@ the copy. If it answers 200, no device needs to sign in again.
 4. Keep the key file where it is. A new binary is not a new identity.
 5. `systemctl daemon-reload` if the unit changed, start, and check
    `is-active`.
-6. Prove it with `health` **and** `/v1/key`, locally and through the proxy.
+6. Prove it with `health` **and** `/v2/key`, locally and through the proxy.
 7. Count the documents with a backup and compare against step 2.
 
 **The way back** is the previous binary and the backup from step 2: stop, put
@@ -391,6 +416,14 @@ way back rather than an accident of it. A newer build may have raised the
 schema, and an older build refuses a store written by a newer one; it says so
 and does not serve. So the backup goes back, not the file that the newer build
 touched.
+
+**Moving to version 6 has two conditions that no rehearsal on the host
+shows.** Version 6 raises the store schema to 3, so an older build refuses the
+store afterwards, and the way back is the backup. And `/v1/key` answers `404`
+in version 6, which an app of version 5 reads as "the service is older than
+me" and stops syncing, before it sends a password. **Every device of every
+account speaks version 6 before the service does.** After the switch,
+`maer-sync devices <owner>` says, per device, how it last signed in.
 
 **The limit of that way back, said out loud:** it carries as long as the
 clients still speak what the previous build answers. Once a client relies on
@@ -429,9 +462,9 @@ environment as `werkzeug/bau.sh`; the second is empty (`FROM scratch`) and
 receives the binary, the data directory, an empty `/tmp` and the two license
 texts. No shell, no C library, no package manager, and so nothing underneath
 the binary to update. Measured on 24.09.2026: the file
-tree inside the image is 4766720 bytes as exported, of which the binary is
-4717848 and the two license texts 37718; Docker lists the stored image at
-7021497 bytes.
+tree inside the image is 4867584 bytes as exported, of which the binary is
+4818584 and the two license texts 37718; Docker lists the stored image at
+7162711 bytes.
 
 A container answers several of the steps above at once: step 1 was already no
 question, and `restart: unless-stopped` **replaces step 8 entirely**: no unit
@@ -477,8 +510,10 @@ next build, and nothing about that is visible while reading the file.
 Proven against the copy of a live store rather than asserted: the backup
 inside the container said `fits: 78 documents, 3508517 bytes, came back
 unchanged` after the first start, again after `docker compose restart`, and
-again after a full `down` and `up`, and `/v1/key` answered with the same
-fingerprint each time. Those are the numbers the host's own nightly backup had
+again after a full `down` and `up`, and `/v2/key` answered with the same
+fingerprint each time. The copy was written by a build of version 5 (schema
+2); the build of version 6 opened it, raised it to schema 3 on the way (so
+its code says; the number in the copy was not read), and served it. Those are the numbers the host's own nightly backup had
 written for that very file.
 
 **The user has a fixed numeric id, 10001.** The volume belongs to a uid, and
@@ -501,12 +536,12 @@ Connection refused (os error 111)` and exited 1; started again, it said
 **An init stands in front of the service (`init: true`).** Without one the service is PID 1, and PID 1 has no
 default action for a signal: `SIGTERM` does nothing, and every `stop` and
 every `restart` waited out Docker's ten seconds and ended in `SIGKILL`, exit
-code 137. Measured with it: `stop` took 385 ms and `restart` 577 ms, exit code
+code 137. Measured with it: `stop` took 409 ms and `restart` 502 ms, exit code
 143. The init is the one Docker ships (`docker-init`), not a package in the
 image. **If you run the image without Compose, pass `--init`.**
 
 **`mem_limit: 256m` is high on purpose.** Measured against the copy with 78 documents:
-5 to 8 MB in use, a peak of 13.9 MB including a backup. The limit stays high
+about 8 MB in use, a peak of 16.9 MB including a backup. The limit stays high
 because a single write may be as large as `MAER_SYNC_MAX_BODY_BYTES` (64 MiB)
 and is held in memory before it is judged. A limit near the measured use
 would stop the service on the first large write that is entirely legitimate.
@@ -519,7 +554,7 @@ build container (step 3), against the same sources and the same pins, and
 the image cannot quietly build with a different toolchain than the one the
 suite ran on. **And the binary in the image is the binary `bau.sh` builds**, byte for byte:
 the build stage uses the same paths (`CARGO_HOME`, `CARGO_TARGET_DIR`), and
-on 24.09.2026 both came out as the same 4717848 bytes with the same
+on 24.09.2026 both came out as the same 4818584 bytes with the same
 `sha256`. A host that installs by copy and a host that runs the container run
 the same product.
 
@@ -582,6 +617,9 @@ people's data when they are wrong.
   (anything else turns the endpoint into a list of who has an account here),
   every secret is compared in constant time, and the owner comes from the
   store's answer and never from anything the caller said.
+- **`src/versuche.rs`**: how many failed sign ins one owner name has had
+  from one address, and whether the next one is answered at all. Unknown
+  names count the same, or the limit would say which names exist.
 - **`src/paths.rs`**: the shape of a kind and a scope, never the
   membership. A list of the five known kinds would make "add a sixth" a
   service update.
@@ -631,20 +669,40 @@ refuse and this can.
 
 ## Accounts
 
-Every path but `/v1/health`, `/v1/key`, `/v1/session` and `/v1/token` needs
-`Authorization: Bearer <token>`, and the account the request acts on comes
+Every path but `/v1/health`, `/v2/key`, `/v1/session` and the three sign-in
+paths needs `Authorization: Bearer <token>`, and the account the request acts on comes
 from the store's answer to that token, never from anything the caller wrote.
 
-    maer-sync account <owner>            # secret on stdin, never in argv
+    maer-sync account <owner>            # password on stdin, never in argv
     maer-sync account-remove <owner>     # the account and its documents leave,
                                          # after a backup that rehearsed its restore
+    maer-sync reset <owner>              # a one-time password that only changes the password
+    maer-sync devices <owner>            # how each device of an account signed in last
 
-`POST /v1/token` with `{"owner", "secret", "device"}` hands back a token for
-one device. A wrong secret and an account that is not here get the same
-answer and take the same time, so the path cannot be used to find out who
-has an account. Secrets are stored with scrypt at parameters carried in the
-stored form; tokens are stored as digests, so a leaked store hands out no
-working credential.
+### Signing in (version 6)
+
+The exact wire stands in `CONTRACT.md`; this is what an operator needs to
+know about it.
+
+- **Three paths, only inside a session.** `/v1/salt` tells a device the salt
+  and the form of an account, `/v1/token` trades a proof for a token,
+  `/v1/password` changes the password. A plain request gets `426`.
+- **The service holds a proof, stretched once more with scrypt**, never a
+  password. A thief of the store can still guess passwords, at the cost of
+  both stretchings per guess; the running service learns nothing it could open
+  a sealed document with. Tokens are stored as digests, so a leaked store
+  hands out no working credential.
+- **A wrong proof and an owner that is not here get the same answer**, and
+  `/v1/salt` answers every name with a salt of the same shape, so the paths
+  cannot be used to find out who has an account.
+- **A password change withdraws every other token of the owner**, and a
+  device holding one is told why (`X-Maer-Refusal: password-changed`).
+- **Ten failed attempts per owner name and address in fifteen minutes**, and
+  the next one is `429` with `Retry-After`. See step 7 for the address.
+- **`reset <owner>` makes a one-time password and shows it once.** It signs
+  nobody in (`428`); it only lets a device set a new password, and every
+  token of the account is withdrawn. The operator knows it, which is exactly
+  why it can never become the key of the feed credentials.
 
 The token rides in a header, never in the address: a query string is copied
 into every access log and proxy record between the device and the service.
@@ -702,13 +760,13 @@ in front of it; that proxy has to carry the WebSocket upgrade on
 
 ### The identity of this service
 
-**`/v1/key` and `/v1/session` carry no token, and that is the pattern rather
-than an omission.** `/v1/key` hands out the public half so a device can pin
+**`/v2/key` and `/v1/session` carry no token, and that is the pattern rather
+than an omission.** `/v2/key` hands out the public half so a device can pin
 it, and `/v1/session` trades a Noise handshake for an encrypted session. The caller proves who it is INSIDE the session,
 which is what lets a sign in be protected: a sign in carries the account
 secret and happens before there is any token to prove anything with.
 
-**`/v1/key` is the trust on first use channel, and over a plain connection
+**`/v2/key` is the trust on first use channel, and over a plain connection
 whoever sits in the middle can answer it with their own key.** That is the
 chosen migration: trust the first time, hold on afterwards. The holding
 happens on the device, and it is what turns a later swap into an event.
@@ -768,7 +826,7 @@ path or the document. The exact shape stands in `CONTRACT.md`.
 A device that was not updated speaks in the clear, and it must keep syncing
 until it is. When every device speaks inside, set `MAER_SYNC_PLAIN_WAYS=off`:
 a plain request then gets a `426` with a sentence, and `/v1/health`,
-`/v1/key` and `/v1/session` keep answering. The suite drives both settings;
+`/v2/key` and `/v1/session` keep answering. The suite drives both settings;
 **which one your devices need is measured on them, not here.**
 
 **A restart ends every session, on purpose.** The keys live in memory and

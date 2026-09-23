@@ -157,6 +157,17 @@ die 500 des Servers. Diese Umsetzung schreibt dieselbe Zahl mit demselben \
 leeren Koerper, damit der Unterschied keiner ist"),
 ];
 
+/// Wege, die diese Umsetzung beantwortet, ohne dass der Vertrag sie nennt,
+/// je mit Grund. Wie bei den Statuswerten sperrt die Liste in beide
+/// Richtungen: ein Eintrag, den der Quelltext nicht mehr traegt, ist ein Befund.
+const AUSSERHALB_DER_PFADE: &[(&str, &str)] = &[
+    ("/v1/key", "Riegel (c) der Fassung 6: der Vertrag nimmt den alten \
+Schluesselweg aus seiner Liste, und genau deshalb MUSS der Dienst ihn kennen. \
+Er antwortet 404 fuer jede Methode, vor allem anderen; ohne eigenen Zweig liefe \
+er in die Zeichenpruefung und antwortete 401, und nur ein 404 haelt eine App \
+der Fassung 5 an, bevor sie ein Passwort schickt"),
+];
+
 #[test]
 fn jeder_genannte_weg_steht_in_dieser_umsetzung() {
     let text = quelltext();
@@ -204,11 +215,26 @@ fn jeder_weg_den_diese_umsetzung_beantwortet_steht_im_vertrag() {
             "dieser Scan findet nur {} der genannten Pfade als ganzes Literal, \
 er sieht also zu wenig", ganz_genannte.len());
 
+    let mit_grund: std::collections::BTreeSet<&str> =
+        AUSSERHALB_DER_PFADE.iter().map(|(w, _)| *w).collect();
     let ungenannt: Vec<&String> = gefunden.iter()
-        .filter(|w| !genannt.contains(w))
+        .filter(|w| !genannt.contains(w) && !mit_grund.contains(w.as_str()))
         .collect();
     assert!(ungenannt.is_empty(),
             "Wege, die diese Umsetzung beantwortet und der Vertrag nicht nennt: {ungenannt:?}");
+
+    // Die andere Richtung der Ausnahmeliste.
+    let ohne_gegenstand: Vec<&str> = AUSSERHALB_DER_PFADE.iter()
+        .map(|(w, _)| *w)
+        .filter(|w| !gefunden.contains(*w))
+        .collect();
+    assert!(ohne_gegenstand.is_empty(),
+            "die Ausnahmeliste nennt {ohne_gegenstand:?}, und diese Umsetzung kennt den Weg gar nicht");
+    for (w, grund) in AUSSERHALB_DER_PFADE {
+        assert!(!genannt.iter().any(|g| g.as_str() == *w),
+                "{w} steht in der Ausnahmeliste UND im Vertrag; eines von beiden ist alt");
+        assert!(grund.len() > 40, "jede Ausnahme traegt ihren Grund, nicht nur ihren Weg");
+    }
 }
 
 #[test]

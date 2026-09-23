@@ -211,3 +211,106 @@ pub fn zufall(n: usize) -> Result<Vec<u8>, String> {
 /// Bytes als Hex. Oeffentlich, weil der Sitzungsname dieselbe Schreibweise
 /// braucht wie Pythons `secrets.token_hex`.
 pub fn hex(b: &[u8]) -> String { bytes_zu_hex(b) }
+
+/// Hex zurueck in Bytes, oder nichts.
+pub fn hex_lesen(s: &str) -> Option<Vec<u8>> { hex_zu_bytes(s) }
+
+// ------------------------------------------------- Fassung 6: ein Geheimnis
+
+/// Wie lang ein Beweis ist: `HKDF-SHA256(M, "maer sign in v1")`, 32 Byte.
+pub const PROOF_BYTES: usize = 32;
+
+/// Wie lang das Salz eines Kontos ist, das die Geraete dehnen.
+pub const KONTO_SALZ_BYTES: usize = 16;
+
+/// Die Dehnung auf dem Geraet, die Fassung 6 vorschreibt. Weniger nimmt der
+/// Dienst nicht an; mehr darf eine spaetere Fassung verlangen.
+pub const KDF: &str = "pbkdf2-hmac-sha256";
+pub const MIN_ROUNDS: u64 = 600_000;
+
+/// Die gespeicherte Form eines BEWEISES, wie `hash_secret` fuer ein Passwort.
+///
+/// Der Dienst dehnt den Beweis noch einmal mit scrypt: gestohlene Daten
+/// kosten dann je geratenem Passwort beide Dehnungen, die des Geraets und
+/// diese. Gerechnet wird ueber die 32 rohen Bytes, nicht ueber ihre
+/// base64-Schreibweise.
+pub fn hash_proof(proof: &[u8], salt: &[u8]) -> Result<String, String> {
+    if proof.len() != PROOF_BYTES { return Err("a proof is 32 bytes".into()); }
+    let n: u64 = 1 << SCRYPT_LOG_N;
+    let key = ableiten_bytes(proof, salt, n, SCRYPT_R, SCRYPT_P, KEY_BYTES)
+        .ok_or_else(|| "the derivation refused these parameters".to_string())?;
+    Ok(format!("scrypt${n}${SCRYPT_R}${SCRYPT_P}${}${}", bytes_zu_hex(salt), bytes_zu_hex(&key)))
+}
+
+/// Ob `proof` der Beweis hinter `stored` ist. Dieselben Regeln wie fuer ein
+/// Geheimnis: unlesbar ist `false`, nie ein Fehler anderer Gestalt.
+pub fn proof_matches(stored: &str, proof: &[u8]) -> bool {
+    if stored.is_empty() || proof.len() != PROOF_BYTES { return false; }
+    let Some(s) = parse_stored(stored) else { return false };
+    let Some(berechnet) = ableiten_bytes(proof, &s.salt, s.n, s.r, s.p, s.key.len()) else {
+        return false;
+    };
+    berechnet.ct_eq(&s.key).into()
+}
+
+fn ableiten_bytes(eingabe: &[u8], salt: &[u8], n: u64, r: u32, p: u32, laenge: usize)
+    -> Option<Vec<u8>>
+{
+    if n == 0 || !n.is_power_of_two() { return None; }
+    let params = scrypt::Params::new(n.trailing_zeros() as u8, r, p).ok()?;
+    let mut aus = vec![0u8; laenge];
+    scrypt::scrypt(eingabe, salt, &params, &mut aus).ok()?;
+    Some(aus)
+}
+
+/// Die Zeit einer Pruefung verbrauchen, OHNE die Eingabe anzufassen.
+///
+/// Fuer ein `secret`, das an ein umgezogenes Konto geht: der Vertrag sagt, es
+/// wird weder gedehnt noch verglichen noch geloggt. Die Antwort kaeme dann
+/// aber sofort, und eine sofortige Abweisung verriete an der Dauer, dass das
+/// Konto umgezogen ist. Also wird dieselbe Arbeit an einem FESTEN Wert getan.
+pub fn zeit_verbrauchen() {
+    let n: u64 = 1 << SCRYPT_LOG_N;
+    let _ = ableiten_bytes(b"maer sync: time spent on nothing", &[0u8; SALT_BYTES],
+                           n, SCRYPT_R, SCRYPT_P, KEY_BYTES);
+}
+
+/// Das Schein-Salz fuer einen Namen, der kein umgezogenes Konto ist.
+///
+/// Aus dem Geheimnis des Dienstes und dem Namen, jedes Mal gleich: fragt
+/// jemand zweimal nach demselben unbekannten Namen, bekommt er zweimal
+/// dasselbe, und ein wechselndes Salz verriete sonst, dass es kein echtes
+/// ist.
+pub fn schein_salz(geheimnis: &[u8], owner: &str) -> Vec<u8> {
+    let hk = hkdf::Hkdf::<Sha256>::new(None, geheimnis);
+    let mut info = b"maer salt v1 ".to_vec();
+    info.extend_from_slice(owner.as_bytes());
+    let mut aus = vec![0u8; KONTO_SALZ_BYTES];
+    // Die Laenge ist fest und weit unter der Grenze von HKDF (255 * 32).
+    hk.expand(&info, &mut aus).expect("16 Byte liegen unter der Grenze von HKDF");
+    aus
+}
+
+/// Das Alphabet des Einmal-Passworts: 22 Buchstaben ohne die, die man
+/// verwechselt (I und L mit 1, O und Q mit 0). Dasselbe Mass wie der Code, den
+/// das Einmal-Passwort ersetzt.
+pub const EINMAL_ALPHABET: &[u8; 22] = b"ABCDEFGHJKMNPRSTUVWXYZ";
+pub const EINMAL_LAENGE: usize = 24;
+
+/// Ein Einmal-Passwort fuer den Betreiber, oder ein Fehler.
+///
+/// Gleichverteilt: ein Byte wird nur genommen, wenn es unter dem groessten
+/// Vielfachen von 22 liegt, das in ein Byte passt. `byte % 22` allein wuerde
+/// die ersten Buchstaben bevorzugen.
+pub fn einmal_passwort() -> Result<String, String> {
+    let grenze = (256 / EINMAL_ALPHABET.len() * EINMAL_ALPHABET.len()) as u8;
+    let mut aus = String::with_capacity(EINMAL_LAENGE);
+    while aus.len() < EINMAL_LAENGE {
+        for b in zufall(64)? {
+            if b < grenze && aus.len() < EINMAL_LAENGE {
+                aus.push(EINMAL_ALPHABET[(b as usize) % EINMAL_ALPHABET.len()] as char);
+            }
+        }
+    }
+    Ok(aus)
+}

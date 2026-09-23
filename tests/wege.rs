@@ -132,6 +132,51 @@ fn pruefen(name: &str, e: &Value, status: u16, kopf: &dyn Fn(&str) -> Option<Str
     geprueft
 }
 
+/// Die Faelle der eingefrorenen Tafel, die Fassung 6 BEWUSST bewegt.
+///
+/// `vektoren/wege.json` ist die Aufzeichnung der Fassung 5 und bleibt, wie sie
+/// gemessen wurde. Wo Fassung 6 anders antwortet, steht der Fall hier: mit der
+/// NEUEN Antwort, die statt der aufgezeichneten zugesichert wird, und mit der
+/// Stelle im Vertrag, die das verlangt. Ausgezaehlt am 24.09.2026, indem jeder
+/// rote Fall einzeln herausgenommen wurde, bis der Zeuge gruen war: genau diese
+/// zwoelf, und jeder andere Fall der Tafel haelt unter Fassung 6 unveraendert.
+///
+/// Die Liste sperrt in beide Richtungen (`die_ausnahmen_der_fassung_6_...`):
+/// ein Name, den es in der Tafel nicht gibt, ist rot, und ein Fall, dessen
+/// Aufzeichnung schon die neue Antwort traegt, auch; dann waere die Ausnahme
+/// ohne Gegenstand.
+struct Bewegt {
+    name: &'static str,
+    tunnel: bool,
+    status: u16,
+    innen_status: Option<u16>,
+    satz: &'static str,
+    grund: &'static str,
+}
+
+const KEY_404: &str = "CONTRACT.md: /v1/key answers 404 in version 6, on purpose (Riegel c)";
+const NUR_INNEN: &str = "CONTRACT.md: the three sign-in paths speak only inside a session, 426 whatever the plain ways switch says";
+
+const FASSUNG_6: &[Bewegt] = &[
+    Bewegt { name: "Schluessel ohne Kennung", tunnel: false, status: 404, innen_status: None, satz: "no such path", grund: KEY_404 },
+    Bewegt { name: "Schluessel mit Kennung", tunnel: false, status: 404, innen_status: None, satz: "no such path", grund: KEY_404 },
+    Bewegt { name: "Schluessel mit falscher Methode", tunnel: false, status: 404, innen_status: None, satz: "no such path", grund: KEY_404 },
+    Bewegt { name: "Schluessel auch bei geschlossenen Wegen", tunnel: false, status: 404, innen_status: None, satz: "no such path", grund: KEY_404 },
+    Bewegt { name: "Zeichen mit falscher Methode", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "Zeichen ohne JSON", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "Zeichen ohne Geheimnis", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "Zeichen, falsches Geheimnis", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "Zeichen, Konto gibt es nicht", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "Zeichen, richtig", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "geschlossen: das Zeichen selbst ist hinter dem Tor", tunnel: false, status: 426, innen_status: None, satz: "the sign-in paths speak only inside a session", grund: NUR_INNEN },
+    Bewegt { name: "innen: der Schluessel wird innen nicht beantwortet", tunnel: true, status: 200, innen_status: Some(404), satz: "no such path",
+             grund: "CONTRACT.md: inside, only /v1/session and /v2/key are not answered; /v1/key is no path in version 6 and answers the 404 of an unknown path, sealed" },
+];
+
+fn bewegt(name: &str) -> Option<&'static Bewegt> {
+    FASSUNG_6.iter().find(|b| b.name == name)
+}
+
 #[test]
 fn jeder_gemessene_weg_antwortet_genauso() {
     let v = vektoren();
@@ -140,6 +185,7 @@ fn jeder_gemessene_weg_antwortet_genauso() {
     let mut st = aufbauen();
     let kennung = st.app.identity.clone().expect("Kennung");
     let mut geprueft = 0;
+    let mut angewandt = 0;
 
     for fall in faelle {
         let name = fall["name"].as_str().unwrap();
@@ -174,6 +220,15 @@ fn jeder_gemessene_weg_antwortet_genauso() {
         }
 
         let gab = st.app.http(&a);
+        if let Some(b) = bewegt(name) {
+            assert!(!b.tunnel, "{name}: steht als Tunnelfall in der Liste");
+            assert_eq!(gab.status, b.status, "{name}: Status nach Fassung 6 ({})", b.grund);
+            assert_eq!(gab.grund().as_deref(), Some(b.satz), "{name}: Satz nach Fassung 6 ({})", b.grund);
+            assert!(gab.ansagen.is_empty(), "{name}: sagt an");
+            angewandt += 1;
+            geprueft += 1;
+            continue;
+        }
         let kopf = |k: &str| gab.kopf(k).map(|s| s.to_string());
         geprueft += pruefen(name, &fall["erwartet"], gab.status, &kopf, &gab.body);
 
@@ -195,6 +250,8 @@ fn jeder_gemessene_weg_antwortet_genauso() {
         }
     }
     assert!(geprueft >= faelle.len(), "zu wenig geprüft: {geprueft}");
+    assert_eq!(angewandt, FASSUNG_6.iter().filter(|b| !b.tunnel).count(),
+               "jede Ausnahme der Wegefaelle muss genau einmal gegriffen haben");
 }
 
 #[test]
@@ -214,6 +271,7 @@ fn der_tunnel_traegt_dieselben_antworten() {
     let sname = auf.kopf("x-maer-session").expect("Sitzungsname").to_string();
     rufer.read_message(&auf.body).expect("Antwort");
     let (mut hin, mut her) = rufer.split();
+    let mut angewandt = 0;
 
     for fall in tunnel {
         let name = fall["name"].as_str().unwrap();
@@ -238,6 +296,19 @@ fn der_tunnel_traegt_dieselben_antworten() {
             .mit_kopf("x-maer-session", &an_wen)
             .mit_koerper(&gesendet));
 
+        if let Some(b) = bewegt(name) {
+            assert!(b.tunnel, "{name}: steht als Wegefall in der Liste");
+            assert_eq!(gab.status, b.status, "{name}: Status aussen nach Fassung 6 ({})", b.grund);
+            let klar = her.decrypt_with_ad(b"", &gab.body).expect("entsiegeln");
+            let (kopf, koerper) = unpack(&klar).expect("Rahmen");
+            assert_eq!(kopf["status"].as_u64(), b.innen_status.map(u64::from),
+                       "{name}: Status innen nach Fassung 6 ({})", b.grund);
+            let gelesen: Value = serde_json::from_slice(&koerper).expect("JSON innen");
+            assert_eq!(gelesen["reason"].as_str(), Some(b.satz), "{name}: Satz innen nach Fassung 6");
+            assert!(gab.ansagen.is_empty(), "{name}: sagt an");
+            angewandt += 1;
+            continue;
+        }
         assert_eq!(gab.status as u64, aussen["status"].as_u64().unwrap(), "{name}: Status aussen");
         if let Some(satz) = aussen.get("grund").and_then(|x| x.as_str()) {
             assert_eq!(gab.grund().as_deref(), Some(satz), "{name}: Satz aussen");
@@ -266,6 +337,29 @@ fn der_tunnel_traegt_dieselben_antworten() {
             None => assert!(gab.ansagen.is_empty(), "{name}: sagt an, obwohl nichts gehört wurde"),
         }
     }
+    assert_eq!(angewandt, FASSUNG_6.iter().filter(|b| b.tunnel).count(),
+               "jede Ausnahme der Tunnelfaelle muss genau einmal gegriffen haben");
+}
+
+/// Die Gegenrichtung der Ausnahmen: jede nennt einen Fall, den es in der
+/// eingefrorenen Tafel GIBT, genau einmal, an der richtigen Stelle, mit einem
+/// Grund, und die Aufzeichnung sagt dort etwas ANDERES als die neue Antwort.
+#[test]
+fn die_ausnahmen_der_fassung_6_haben_je_einen_gegenstand() {
+    let v = vektoren();
+    for b in FASSUNG_6 {
+        assert!(!b.grund.trim().is_empty(), "{}: ohne Grund", b.name);
+        let liste = if b.tunnel { "tunnel" } else { "faelle" };
+        let treffer: Vec<&Value> = v[liste].as_array().unwrap().iter()
+            .filter(|f| f["name"].as_str() == Some(b.name)).collect();
+        assert_eq!(treffer.len(), 1, "{}: steht {} mal in {liste}", b.name, treffer.len());
+        let alt = if b.tunnel { &treffer[0]["aussen"] } else { &treffer[0]["erwartet"] };
+        let alt_status = alt["status"].as_u64();
+        let alt_satz = alt.get("grund").and_then(|x| x.as_str());
+        assert!(alt_status != Some(b.status as u64) || alt_satz != Some(b.satz) || b.innen_status.is_some(),
+                "{}: die Aufzeichnung traegt schon die neue Antwort, die Ausnahme hat keinen Gegenstand", b.name);
+    }
+    assert_eq!(FASSUNG_6.len(), 12, "ausgezaehlt waren zwoelf; eine neue Ausnahme braucht eine neue Zaehlung");
 }
 
 /// Eine Weigerung der ÄUSSEREN Schicht reist unversiegelt. Ein eigener Zeuge,

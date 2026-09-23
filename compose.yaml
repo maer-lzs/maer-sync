@@ -65,7 +65,8 @@ services:
     security_opt:
       - no-new-privileges:true
     # Gemessen am 24.09.2026 gegen eine Kopie eines echten Bestands (78
-    # Dokumente): 8 MB im Lauf, Spitze 14 MB mit Sicherung. Die Grenze bleibt
+    # Dokumente): 8 MB im Lauf, Spitze 14 MB mit Sicherung (Fassung 5), 17 MB
+    # mit Fassung 6. Die Grenze bleibt
     # trotzdem hoch, weil ein einzelner Schrieb bis MAER_SYNC_MAX_BODY_BYTES
     # (64 MiB) gross sein darf und im Speicher liegt, bevor er geprueft wird.
     mem_limit: 256m
