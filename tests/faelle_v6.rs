@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 const DATEI: &str = "vektoren/faelle-v6.json";
 /// Der Stand der Datei, der uebernommen wurde. Eine neue Fassung der Datei ist
 /// eine neue Lieferung und wird hier bewusst eingetragen, nicht still gelesen.
-const DATEI_DIGEST: &str = "fc79c44ace2084e14bc85b99f8d1de653ac633b4235f3ad1941555fe7481d8bd";
+const DATEI_DIGEST: &str = "26fbaf469ef626506d722f636f4a4f14e118c2a037e8508236cb88968d76b8d4";
 const QUELLE: &str = "203.0.113.7:40000";
 
 /// Wie die Datei die Konten beschreibt (`anwendungen.v6`).
@@ -52,7 +52,7 @@ const CARLA_IN_DER_DATEI: &str = "EINMALPASSWORTABCDEFGHIJ";
 /// Was ein `erwartet`-Block tragen darf. Eine Pruefart, die hier nicht steht,
 /// ist rot: sonst ginge eine neue Erweiterung der Datei still durch.
 const BEKANNT: &[&str] = &["status", "kopfzeilen", "felder", "felder_gleich", "salt_bytes",
-                           "koerper", "gleich_wie", "merke"];
+                           "koerper", "gleich_wie", "salt_ungleich_wie", "merke"];
 
 fn datei() -> Value {
     let roh = std::fs::read(DATEI).expect(DATEI);
@@ -202,6 +202,14 @@ fn pruefen(name: &str, e: &Value, gab: &Antwort, frueher: &BTreeMap<String, Vec<
         assert_eq!(&gab.body, vorher, "{name}: Koerper wie {w}");
         n += 1;
     }
+    if let Some(w) = e.get("salt_ungleich_wie").and_then(|x| x.as_str()) {
+        let vorher = frueher.get(w).unwrap_or_else(|| panic!("{name}: {w} lief nicht vorher"));
+        let jenes: Value = serde_json::from_slice(vorher).expect("JSON des verwiesenen Falls");
+        let dieses = json();
+        assert!(dieses["salt"].is_string() && jenes["salt"].is_string(), "{name}: ohne salt");
+        assert_ne!(dieses["salt"], jenes["salt"], "{name}: dasselbe Salz wie {w}");
+        n += 1;
+    }
     n
 }
 
@@ -210,8 +218,8 @@ fn die_datei_ist_die_uebernommene_und_gehoert_zu_diesem_vertrag() {
     let d = datei();
     assert_eq!(d["vertrag_sha256"].as_str(), Some(maer_sync::contract::DIGEST),
                "die Faelle sind aus einem anderen Vertrag geschrieben");
-    assert_eq!(d["faelle"].as_array().unwrap().len(), 22, "Faelle");
-    assert_eq!(d["ablaeufe"].as_array().unwrap().len(), 5, "Ablaeufe");
+    assert_eq!(d["faelle"].as_array().unwrap().len(), 25, "Faelle");
+    assert_eq!(d["ablaeufe"].as_array().unwrap().len(), 6, "Ablaeufe");
     for f in d["faelle"].as_array().unwrap() {
         assert!(!f["vertrag"].as_str().unwrap_or("").trim().is_empty(), "ohne Vertragszeile: {}", f["name"]);
     }
@@ -229,11 +237,14 @@ fn jeder_fall_des_zweiten_autors_antwortet_so() {
         let mut st = aufbauen(f["anwendung"].as_str().unwrap());
         let leer = BTreeMap::new();
         let mut frueher = BTreeMap::new();
-        if let Some(w) = f["erwartet"].get("gleich_wie").and_then(|x| x.as_str()) {
-            let vor = nach_name.get(w).unwrap_or_else(|| panic!("{name}: {w} gibt es nicht"));
-            let a = anfrage(&vor["anfrage"], &st, &leer);
-            let gab = st.app.http(&a);
-            frueher.insert(w.to_string(), gab.body.clone());
+        // Beide Verweise laufen auf DEMSELBEN Stand unmittelbar davor (siehe oben).
+        for art in ["gleich_wie", "salt_ungleich_wie"] {
+            if let Some(w) = f["erwartet"].get(art).and_then(|x| x.as_str()) {
+                let vor = nach_name.get(w).unwrap_or_else(|| panic!("{name}: {w} gibt es nicht"));
+                let a = anfrage(&vor["anfrage"], &st, &leer);
+                let gab = st.app.http(&a);
+                frueher.insert(w.to_string(), gab.body.clone());
+            }
         }
         let a = anfrage(&f["anfrage"], &st, &leer);
         let gab = st.app.http(&a);

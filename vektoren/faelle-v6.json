@@ -11,6 +11,7 @@
     "felder_gleich": "diese Felder des JSON-Koerpers haben genau diese Werte; die uebrigen muessen nur da sein",
     "salt_bytes": "das Feld salt ist base64 und dekodiert auf so viele Bytes",
     "gleich_wie": "der Koerper ist Byte fuer Byte der des genannten Falls",
+    "salt_ungleich_wie": "das Feld salt ist ein anderes als das des genannten Falls",
     "ablaeufe": "Schritte in Folge auf EINEM frischen Stand",
     "merke": "das Feld token dieser Antwort heisst fuer die folgenden Schritte <name>",
     "wiederhole": "der Schritt laeuft so oft, jedes Mal mit derselben Erwartung",
@@ -178,6 +179,27 @@
       }
     },
     {
+      "name": "salt: ein zweiter unbekannter Name bekommt ein anderes Salz",
+      "vertrag": "derived from the service's own secret and the name ... so the answer does not say who has an account",
+      "anwendung": "v6",
+      "anfrage": {
+        "method": "GET",
+        "path": "/v1/salt",
+        "query": "owner=keiner",
+        "innen": true
+      },
+      "erwartet": {
+        "status": 200,
+        "felder_gleich": {
+          "kdf": "pbkdf2-hmac-sha256",
+          "rounds": 600000,
+          "form": "proof"
+        },
+        "salt_bytes": 16,
+        "salt_ungleich_wie": "salt: unbekannter Name antwortet wie ein Konto"
+      }
+    },
+    {
       "name": "salt: noch nicht umgezogen",
       "vertrag": "`\"form\": \"secret\"` marks an account ... that has not moved",
       "anwendung": "v6",
@@ -262,7 +284,8 @@
         "innen": true
       },
       "erwartet": {
-        "status": 401
+        "status": 401,
+        "gleich_wie": "token: Beweis falsch"
       }
     },
     {
@@ -370,6 +393,34 @@
       }
     },
     {
+      "name": "password: Salz 17 Byte",
+      "vertrag": "salt not 16 bytes ... is `400`",
+      "anwendung": "v6",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/password",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsicHJvb2YiOiAiVjRvUW1oY0d6UjVSVVFaMHVOck9pWWZPT1RDa2VUSFZLVVFXYVpSUmxMaz0ifSwgIm5ldyI6IHsicHJvb2YiOiAiRHFnNDFBaE1qQWwxRjBKQ2RzZk1pTlFOSGN1NURhU1VwSEJpeWg1NmFpST0iLCAic2FsdCI6ICJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0iLCAia2RmIjogInBia2RmMi1obWFjLXNoYTI1NiIsICJyb3VuZHMiOiA2MDAwMDB9fQ==",
+        "innen": true
+      },
+      "erwartet": {
+        "status": 400
+      }
+    },
+    {
+      "name": "password: Beweis 33 Byte",
+      "vertrag": "proof not 32 bytes ... is `400`",
+      "anwendung": "v6",
+      "anfrage": {
+        "method": "POST",
+        "path": "/v1/password",
+        "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsicHJvb2YiOiAiVjRvUW1oY0d6UjVSVVFaMHVOck9pWWZPT1RDa2VUSFZLVVFXYVpSUmxMaz0ifSwgIm5ldyI6IHsicHJvb2YiOiAiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCAic2FsdCI6ICJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPT0iLCAia2RmIjogInBia2RmMi1obWFjLXNoYTI1NiIsICJyb3VuZHMiOiA2MDAwMDB9fQ==",
+        "innen": true
+      },
+      "erwartet": {
+        "status": 400
+      }
+    },
+    {
       "name": "password: Beweis nicht 32 Byte",
       "vertrag": "proof not 32 bytes ... is `400`",
       "anwendung": "v6",
@@ -390,6 +441,24 @@
       "vertrag": "the move signs in with the old password once more (`current.secret`) and sets a new one in the same request",
       "schritte": [
         {
+          "name": "vorher: Geraet 2 meldet sich an wie in Fassung 5",
+          "vertrag": "for an account that has not moved it is the sign in of version 5, unchanged",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJiZXJ0YSIsICJzZWNyZXQiOiAiZWluIGhpbnJlaWNoZW5kIGxhbmdlcyBnZWhlaW1uaXMiLCAiZGV2aWNlIjogImcyIn0=",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ],
+            "merke": "zeichen_g2_fassung5"
+          }
+        },
+        {
           "name": "Umzug",
           "vertrag": "answers {\"token\"} for this device",
           "anwendung": "v6",
@@ -407,6 +476,25 @@
             "felder": [
               "token"
             ]
+          }
+        },
+        {
+          "name": "danach: Geraet 2 liest mit seinem Zeichen aus Fassung 5",
+          "vertrag": "every other token of the owner is withdrawn ... 401 with X-Maer-Refusal: password-changed",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "GET",
+            "path": "/v1/docs/stands",
+            "headers": {
+              "authorization": "Bearer <zeichen_g2_fassung5>"
+            },
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401,
+            "kopfzeilen": {
+              "x-maer-refusal": "password-changed"
+            }
           }
         },
         {
@@ -553,6 +641,24 @@
           }
         },
         {
+          "name": "Geraet 2 meldet sich vorher an",
+          "vertrag": "answers {\"token\"}",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzIifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ],
+            "merke": "zeichen_g2_alt"
+          }
+        },
+        {
           "name": "Geraet 2 wechselt das Passwort",
           "vertrag": "answers {\"token\"} for this device",
           "anwendung": "v6",
@@ -579,6 +685,25 @@
             "path": "/v1/docs/stands",
             "headers": {
               "authorization": "Bearer <zeichen_g1>"
+            },
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401,
+            "kopfzeilen": {
+              "x-maer-refusal": "password-changed"
+            }
+          }
+        },
+        {
+          "name": "Geraet 2 liest mit seinem eigenen ALTEN Zeichen",
+          "vertrag": "every other token of the owner is withdrawn",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "GET",
+            "path": "/v1/docs/stands",
+            "headers": {
+              "authorization": "Bearer <zeichen_g2_alt>"
             },
             "innen": true
           },
@@ -617,6 +742,66 @@
           },
           "erwartet": {
             "status": 401
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mehr Runden als 600000 sind erlaubt und kommen mit dem Salz zurueck",
+      "vertrag": "`rounds` is 600000 in version 6 and comes with the salt, so a later version can raise it without a new wire",
+      "schritte": [
+        {
+          "name": "Wechsel mit 600001 Runden",
+          "vertrag": "answers {\"token\"} for this device",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/password",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsicHJvb2YiOiAiVjRvUW1oY0d6UjVSVVFaMHVOck9pWWZPT1RDa2VUSFZLVVFXYVpSUmxMaz0ifSwgIm5ldyI6IHsicHJvb2YiOiAiZnFHM042VEd6dTk0aFF4dmM2SXFKSC9EYUc4Y1AzUTIxaFpsYmdTNVlVST0iLCAic2FsdCI6ICJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPT0iLCAia2RmIjogInBia2RmMi1obWFjLXNoYTI1NiIsICJyb3VuZHMiOiA2MDAwMDF9fQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ]
+          }
+        },
+        {
+          "name": "danach: salt meldet 600001",
+          "vertrag": "comes with the salt",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "GET",
+            "path": "/v1/salt",
+            "query": "owner=anna6",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "koerper": {
+              "salt": "AAAAAAAAAAAAAAAAAAAAAA==",
+              "kdf": "pbkdf2-hmac-sha256",
+              "rounds": 600001,
+              "form": "proof"
+            }
+          }
+        },
+        {
+          "name": "danach: der Beweis mit 600001 Runden meldet an",
+          "vertrag": "the new proof is the only one that signs in",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJmcUczTjZUR3p1OTRoUXh2YzZJcUpIL0RhRzhjUDNRMjFoWmxiZ1M1WVVJPSIsICJkZXZpY2UiOiAiZzIifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ]
           }
         }
       ]
