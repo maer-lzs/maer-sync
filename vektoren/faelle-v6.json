@@ -1,6 +1,6 @@
 {
   "was": "Die erwarteten Antworten der Fassung 6, aus dem Vertragstext geschrieben, nicht aus dem Dienst. Jeder Fall nennt seine Vertragszeile.",
-  "vertrag_sha256": "83633083c02368e6a16e00316cf86aa8e97589b2493f0b2a967c174aec46a6b8",
+  "vertrag_sha256": "283761495f6fd0abc669ca30ab97fc02370addf3a7353e0fc770acfe32143b55",
   "anwendungen": {
     "v6": "Fassung 6 mit Schluessel; Konten: anna6 (Fassung 6, Passwort und Salz aus Vektor 1), berta (nicht umgezogen, Passwort BERTA_OLD in faelle_v6.py), carla (vom Betreiber gesetzt; das Einmal-Passwort wuerfelt der Dienst, in den Faellen steht <einmal_passwort>). Jeder Fall und jeder Ablauf auf frischem Stand, ohne Versuchszaehler; ein Fall mit gleich_wie oder salt_ungleich_wie teilt seinen Stand mit dem genannten Fall, der unmittelbar davor laeuft.",
     "v6_ohne_kennung": "Fassung 6 ohne statischen Schluessel"
@@ -621,7 +621,7 @@
     },
     {
       "name": "Wechsel zieht die anderen Zeichen zurueck, mit Grund",
-      "vertrag": "every other token of the owner is withdrawn, and a request with one of them answers 401 with X-Maer-Refusal: password-changed",
+      "vertrag": "every other token of the owner is withdrawn ... and a request with one of them answers 401 with X-Maer-Refusal: password-changed",
       "schritte": [
         {
           "name": "Geraet 1 meldet sich an",
@@ -698,7 +698,7 @@
         },
         {
           "name": "Geraet 2 liest mit seinem eigenen ALTEN Zeichen",
-          "vertrag": "every other token of the owner is withdrawn",
+          "vertrag": "every other token of the owner is withdrawn, the earlier tokens of the asking device included",
           "anwendung": "v6",
           "anfrage": {
             "method": "GET",
@@ -872,6 +872,181 @@
             "method": "POST",
             "path": "/v1/token",
             "koerper_b64": "eyJvd25lciI6ICJuaWVtYW5kIiwgInByb29mIjogIlY0b1FtaGNHelI1UlVRWjB1TnJPaVlmT09UQ2tlVEhWS1VRV2FaUlJsTGs9IiwgImRldmljZSI6ICJnMSJ9",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 429,
+            "kopfzeilen": {
+              "retry-after": "<sekunden>"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Zaehlregel: eine 400 ist kein Fehlversuch",
+      "vertrag": "`400`, `413`, `428` and `429` are not attempts",
+      "schritte": [
+        {
+          "name": "elf Wechsel mit richtigem Beweis und unlesbarem neuen (Beweis 33 Byte)",
+          "vertrag": "a `new` the service cannot read (salt not 16 bytes, rounds below 600000, proof not 32 bytes) is `400`",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/password",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsicHJvb2YiOiAiVjRvUW1oY0d6UjVSVVFaMHVOck9pWWZPT1RDa2VUSFZLVVFXYVpSUmxMaz0ifSwgIm5ldyI6IHsicHJvb2YiOiAiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCAic2FsdCI6ICJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPT0iLCAia2RmIjogInBia2RmMi1obWFjLXNoYTI1NiIsICJyb3VuZHMiOiA2MDAwMDB9fQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 400
+          },
+          "wiederhole": 11
+        },
+        {
+          "name": "danach meldet der richtige Beweis an, nicht 429",
+          "vertrag": "`400`, `413`, `428` and `429` are not attempts",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Zaehlregel: die 428 loescht die Zaehlung",
+      "vertrag": "A token, or the `428` for a password the operator set, clears the count for that owner and address",
+      "schritte": [
+        {
+          "name": "neun Beweise fuer carla (Form secret)",
+          "vertrag": "an account in form `secret` answers a proof with `401` too",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401
+          },
+          "wiederhole": 9
+        },
+        {
+          "name": "das Einmal-Passwort als secret: 428",
+          "vertrag": "For an account whose password the operator set it answers `428`",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJzZWNyZXQiOiAiPGVpbm1hbF9wYXNzd29ydD4iLCAiZGV2aWNlIjogImcxIn0=",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 428
+          }
+        },
+        {
+          "name": "zehn weitere Fehlversuche, alle noch 401",
+          "vertrag": "clears the count for that owner and address",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401
+          },
+          "wiederhole": 10
+        },
+        {
+          "name": "erst der elfte nach der 428 ist 429",
+          "vertrag": "the next one is answered 429",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 429,
+            "kopfzeilen": {
+              "retry-after": "<sekunden>"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Zaehlregel: ein Zeichen loescht die Zaehlung",
+      "vertrag": "A token, or the `428` for a password the operator set, clears the count for that owner and address",
+      "schritte": [
+        {
+          "name": "neun falsche Beweise",
+          "vertrag": "A failed attempt is a `401` on `/v1/token` or `/v1/password`, whatever its reason",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJqd0YxZWJldk1FbWdYdFc3NVpUTC9FMUdoVzJyTGZuUmkvV25Pb1g2d1hJPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401
+          },
+          "wiederhole": 9
+        },
+        {
+          "name": "der richtige Beweis bringt ein Zeichen",
+          "vertrag": "A token ... clears the count for that owner and address",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 200,
+            "felder": [
+              "token"
+            ]
+          }
+        },
+        {
+          "name": "zehn weitere falsche, alle noch 401",
+          "vertrag": "clears the count for that owner and address",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJqd0YxZWJldk1FbWdYdFc3NVpUTC9FMUdoVzJyTGZuUmkvV25Pb1g2d1hJPSIsICJkZXZpY2UiOiAiZzEifQ==",
+            "innen": true
+          },
+          "erwartet": {
+            "status": 401
+          },
+          "wiederhole": 10
+        },
+        {
+          "name": "erst der elfte nach dem Zeichen ist 429",
+          "vertrag": "the next one is answered 429",
+          "anwendung": "v6",
+          "anfrage": {
+            "method": "POST",
+            "path": "/v1/token",
+            "koerper_b64": "eyJvd25lciI6ICJhbm5hNiIsICJwcm9vZiI6ICJWNG9RbWhjR3pSNVJVUVowdU5yT2lZZk9PVENrZVRIVktVUVdhWlJSbExrPSIsICJkZXZpY2UiOiAiZzEifQ==",
             "innen": true
           },
           "erwartet": {

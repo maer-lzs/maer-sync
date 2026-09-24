@@ -105,7 +105,9 @@ password the service knows must never become `feed`.
 or `401` for a wrong proof and an unknown owner alike; an account in form
 `secret` answers a proof with `401` too. **A body with `secret` instead of
 `proof` is refused with `401` for a moved account without being stretched,
-compared or logged**; for an account whose password the operator set it
+compared or logged**. "Logged" means the password: the refusal itself is
+logged like every refusal, without it. For an account whose password the
+operator set it
 answers `428`, and no token comes from that password; for an account that has
 not moved it is the sign in of version 5, unchanged.
 
@@ -120,7 +122,9 @@ of the password in force, or, for an account in form `secret`, that password
 itself (`secret`): the old password once per account, which is the move to
 version 6, or the one the operator set. The device picks the new salt at
 random. After it: the new proof is the only
-one that signs in, **every other token of the owner is withdrawn**, and a
+one that signs in, **every other token of the owner is withdrawn**, the
+earlier tokens of the asking device included (it holds only the one this
+answer brings), and a
 request with one of them answers `401` with `X-Maer-Refusal: password-changed`,
 so the device can say why instead of asking as if nothing happened. A wrong
 `current` is `401`, a `new` the service cannot read (salt not 16 bytes, rounds
@@ -131,6 +135,13 @@ below 600000, proof not 32 bytes) is `400`.
 unknown names counted the same, and the next one is answered `429` with
 `Retry-After: <seconds>`, before any stretching. The device says when to try
 again; it does not retry by itself.
+
+**What counts.** A failed attempt is a `401` on `/v1/token` or
+`/v1/password`, whatever its reason. `400`, `413`, `428` and `429` are not
+attempts. A token, or the `428` for a password the operator set, clears the
+count for that owner and address. The fifteen minutes run from the first
+failed attempt; after the tenth the pair is held until they end. The count
+may live in memory only, so a restart clears it.
 
 **The service cannot see a password, so it cannot judge one.** The rule for a
 new password, at least twelve characters, lives in every client, before the

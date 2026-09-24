@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 /// Der Digest des Vertrags, wie er in beiden Repos steht. Eine Aenderung hier
 /// ist eine Aenderung am Vertrag und damit ein Schritt auf `main` mit dem
 /// App-Nachzug im selben Zug, nie ein Commit auf einem Bau-Zweig.
-pub const DIGEST: &str = "83633083c02368e6a16e00316cf86aa8e97589b2493f0b2a967c174aec46a6b8";
+pub const DIGEST: &str = "283761495f6fd0abc669ca30ab97fc02370addf3a7353e0fc770acfe32143b55";
 
 /// Die Fassung, die dieser Bau bedient.
 pub const VERSION: &str = "6";

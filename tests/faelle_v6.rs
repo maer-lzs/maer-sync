@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 const DATEI: &str = "vektoren/faelle-v6.json";
 /// Der Stand der Datei, der uebernommen wurde. Eine neue Fassung der Datei ist
 /// eine neue Lieferung und wird hier bewusst eingetragen, nicht still gelesen.
-const DATEI_DIGEST: &str = "6f8a37923cc6a622d68106a2a5a87fa2fb88cd0d9d7b86404b92c0d1967d8d12";
+const DATEI_DIGEST: &str = "57b1c873dbaa6fe9158b1b5562999af69aec0235ec9ddf11fe8de5d4344cc657";
 const QUELLE: &str = "203.0.113.7:40000";
 
 /// Wie die Datei die Konten beschreibt (`anwendungen.v6`).
@@ -221,7 +221,7 @@ fn die_datei_ist_die_uebernommene_und_gehoert_zu_diesem_vertrag() {
     assert_eq!(d["vertrag_sha256"].as_str(), Some(maer_sync::contract::DIGEST),
                "die Faelle sind aus einem anderen Vertrag geschrieben");
     assert_eq!(d["faelle"].as_array().unwrap().len(), 25, "Faelle");
-    assert_eq!(d["ablaeufe"].as_array().unwrap().len(), 6, "Ablaeufe");
+    assert_eq!(d["ablaeufe"].as_array().unwrap().len(), 9, "Ablaeufe");
     for f in d["faelle"].as_array().unwrap() {
         assert!(!f["vertrag"].as_str().unwrap_or("").trim().is_empty(), "ohne Vertragszeile: {}", f["name"]);
     }
