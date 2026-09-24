@@ -19,7 +19,7 @@ use maer_sync::frames::{pack, unpack};
 use maer_sync::handshake::HandshakeState;
 use maer_sync::identity::{fingerprint, public_of};
 use maer_sync::store::Store;
-use maer_sync::versuche::{adresse_aus, Versuche, FENSTER_S, GRENZE};
+use maer_sync::versuche::{adresse_aus, vertraute_aus, Versuche, FENSTER_S, GRENZE};
 use maer_sync::wege::{base64, base64_lesen, Anfrage, Antwort, App};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -498,16 +498,18 @@ fn ein_erfolg_setzt_das_paar_zurueck() {
 
 #[test]
 fn die_adresse_kommt_aus_x_real_ip_nur_hinter_der_schleife() {
-    assert_eq!(adresse_aus(Some("127.0.0.1:51234"), Some("203.0.113.5")), "203.0.113.5");
-    assert_eq!(adresse_aus(Some("[::1]:51234"), Some("203.0.113.5")), "203.0.113.5");
+    // Mit der Vorgabe-Liste, also dem Verhalten ohne `MAER_SYNC_TRUSTED_PROXIES`.
+    let v = vertraute_aus(None).unwrap();
+    assert_eq!(adresse_aus(Some("127.0.0.1:51234"), Some("203.0.113.5"), &v), "203.0.113.5");
+    assert_eq!(adresse_aus(Some("[::1]:51234"), Some("203.0.113.5"), &v), "203.0.113.5");
     // Von aussen direkt: die Kopfzeile schreibt der Rufer selbst, sie zaehlt nicht.
-    assert_eq!(adresse_aus(Some("198.51.100.2:4000"), Some("203.0.113.5")), "198.51.100.2");
+    assert_eq!(adresse_aus(Some("198.51.100.2:4000"), Some("203.0.113.5"), &v), "198.51.100.2");
     // Ohne Port, sonst waere jede Verbindung ein neues Paar.
-    assert_eq!(adresse_aus(Some("198.51.100.2:4000"), None), "198.51.100.2");
-    assert_eq!(adresse_aus(Some("[2001:db8::1]:4000"), None), "2001:db8::1");
-    assert_eq!(adresse_aus(None, None), "-");
+    assert_eq!(adresse_aus(Some("198.51.100.2:4000"), None, &v), "198.51.100.2");
+    assert_eq!(adresse_aus(Some("[2001:db8::1]:4000"), None, &v), "2001:db8::1");
+    assert_eq!(adresse_aus(None, None, &v), "-");
     // Hinter der Schleife ohne Kopfzeile: die Schleife selbst.
-    assert_eq!(adresse_aus(Some("127.0.0.1:5"), None), "127.0.0.1");
+    assert_eq!(adresse_aus(Some("127.0.0.1:5"), None, &v), "127.0.0.1");
 }
 
 #[test]

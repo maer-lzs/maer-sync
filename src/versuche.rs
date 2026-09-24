@@ -100,33 +100,67 @@ impl Versuche {
     fn aufraeumen(&mut self, jetzt: f64) {
         self.paare.retain(|_, s| jetzt < s.beginn + FENSTER_S);
         if self.paare.len() >= DECKEL {
-            let mut nach_alter: Vec<((String, String), f64)> = self.paare.iter()
-                .map(|(k, s)| (k.clone(), s.beginn)).collect();
-            nach_alter.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            // Ungesperrte vor gesperrten, und je die aeltesten zuerst. Ein
+            // gesperrtes Paar ist fast immer das aelteste; ginge es zuerst,
+            // kaeme ein Gesperrter frei, indem er den Deckel mit neuen Namen
+            // fuellt.
+            let mut nach_alter: Vec<((String, String), bool, f64)> = self.paare.iter()
+                .map(|(k, s)| (k.clone(), s.fehler >= GRENZE, s.beginn)).collect();
+            nach_alter.sort_by(|a, b| a.1.cmp(&b.1)
+                .then(a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)));
             let weg = self.paare.len() - DECKEL / 2;
-            for (k, _) in nach_alter.into_iter().take(weg) {
+            for (k, _, _) in nach_alter.into_iter().take(weg) {
                 self.paare.remove(&k);
             }
         }
     }
 }
 
+/// Welchen Gegenstellen `X-Real-IP` geglaubt wird, wenn niemand etwas sagt:
+/// der Schleife, also genau dem Proxy auf demselben Wirt.
+pub const VERTRAUT_VORGABE: &str = "127.0.0.1,::1";
+
+/// Wie der Betreiber die Liste nennt.
+pub const VERTRAUT_VAR: &str = "MAER_SYNC_TRUSTED_PROXIES";
+
+/// Die Liste der vertrauten Proxys aus dem Wert der Umgebungsvariablen.
+///
+/// **Ein Eintrag, der keine Adresse ist, ist ein Fehler und kein Weglassen.**
+/// Eine Liste, die still kuerzer wird, glaubt einem Proxy nicht mehr, und die
+/// Grenze zaehlt dann wieder alle Geraete unter einer Adresse; das sieht von
+/// innen gesund aus. Deshalb bricht der Start ab und nennt den Eintrag. Ein
+/// leerer Eintrag zaehlt ebenso als unlesbar, und Netze (`10.0.0.0/8`) gibt es
+/// mit Absicht nicht: vertraut wird einer Maschine, keinem Bereich.
+pub fn vertraute_aus(wert: Option<&str>) -> Result<Vec<std::net::IpAddr>, String> {
+    let text = wert.unwrap_or(VERTRAUT_VORGABE);
+    text.split(',')
+        .map(|teil| {
+            let t = teil.trim();
+            t.parse::<std::net::IpAddr>()
+                .map_err(|_| format!("{VERTRAUT_VAR}: '{t}' is not an address"))
+        })
+        .collect()
+}
+
 /// Die Adresse, fuer die gezaehlt wird.
 ///
-/// Hinter dem Proxy ist die Gegenstelle immer die Schleife (`127.0.0.1` mit
-/// wechselndem Port), und eine Grenze darauf griffe nie oder fuer alle
-/// zugleich. Der Proxy setzt `X-Real-IP`. **Geglaubt wird die Kopfzeile nur,
-/// wenn die Gegenstelle die Schleife IST**: kaeme die Anfrage von aussen
-/// direkt, koennte sie sich mit der Kopfzeile jede Adresse geben und die
-/// Grenze nach Belieben zuruecksetzen.
+/// Hinter dem Proxy ist die Gegenstelle der Proxy selbst: auf demselben Wirt
+/// die Schleife, vor einem Container das Tor seiner Bruecke. Eine Grenze auf
+/// dieser Adresse griffe fuer alle zugleich. Der Proxy setzt `X-Real-IP`.
+/// **Geglaubt wird die Kopfzeile nur, wenn die Gegenstelle in `vertraut`
+/// steht**: kaeme die Anfrage von woanders, koennte sie sich mit der
+/// Kopfzeile jede Adresse geben und die Grenze nach Belieben zuruecksetzen.
 ///
 /// Die Gegenstelle kommt als `ip:port`; gezaehlt wird ohne Port, sonst waere
 /// jede neue Verbindung ein neues Paar.
-pub fn adresse_aus(gegenstelle: Option<&str>, real_ip: Option<&str>) -> String {
+pub fn adresse_aus(gegenstelle: Option<&str>, real_ip: Option<&str>,
+                   vertraut: &[std::net::IpAddr]) -> String {
     let ohne_port = gegenstelle.map(ohne_port).unwrap_or_default();
-    let schleife = ohne_port == "127.0.0.1" || ohne_port == "::1";
+    let geglaubt = ohne_port.parse::<std::net::IpAddr>()
+        .map(|ip| vertraut.contains(&ip))
+        .unwrap_or(false);
     match real_ip.map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        Some(ip) if schleife => ip.to_string(),
+        Some(ip) if geglaubt => ip.to_string(),
         _ => if ohne_port.is_empty() { "-".to_string() } else { ohne_port },
     }
 }

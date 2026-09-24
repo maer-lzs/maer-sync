@@ -214,6 +214,17 @@ account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]
 
     let wo = std::env::var("MAER_SYNC_DB").unwrap_or_else(|_| "maer-sync.sqlite".into());
     let adresse = std::env::var("MAER_SYNC_BIND").unwrap_or_else(|_| "127.0.0.1:8081".into());
+    // Vor allem anderen: eine unlesbare Liste haelt den Start an, statt still
+    // kuerzer zu werden (siehe `versuche::vertraute_aus`).
+    let vertraut = match maer_sync::versuche::vertraute_aus(
+        std::env::var(maer_sync::versuche::VERTRAUT_VAR).ok().as_deref())
+    {
+        Ok(v) => v,
+        Err(satz) => {
+            eprintln!("{satz}");
+            return std::process::ExitCode::from(6);
+        }
+    };
 
     let mut laden = match Store::open(&wo, DEFAULT_KEEP, None) {
         Ok(l) => l,
@@ -236,7 +247,10 @@ account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]
         }
     };
 
-    let app = App::neu(laden).mit_kennung(privat, &abdruck);
+    let mut app = App::neu(laden).mit_kennung(privat, &abdruck);
+    eprintln!("trusting X-Real-IP from: {}",
+              vertraut.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", "));
+    app.vertraute_proxys = vertraut;
     let dienst = Arc::new(Dienst {
         app: Mutex::new(app),
         draehte: Mutex::new(HashMap::new()),

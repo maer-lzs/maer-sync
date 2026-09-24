@@ -195,6 +195,9 @@ pub struct App {
     pub protokoll: Vec<Zeile>,
     /// Die Fehlversuche an den Anmeldewegen, je Konto und Adresse.
     pub versuche: crate::versuche::Versuche,
+    /// Welchen Gegenstellen `X-Real-IP` geglaubt wird. Die Vorgabe ist die
+    /// Schleife; `main` setzt die Liste aus `MAER_SYNC_TRUSTED_PROXIES`.
+    pub vertraute_proxys: Vec<std::net::IpAddr>,
     /// Die Uhr der Versuchsgrenze, als Sekunden. Von aussen, damit ein Zeuge
     /// ein Fenster ablaufen lassen kann, ohne zu warten.
     pub uhr: Box<dyn Fn() -> f64 + Send>,
@@ -220,6 +223,8 @@ impl App {
             max_body_bytes: grenze_aus(std::env::var(GRENZE).ok()),
             protokoll: Vec::new(),
             versuche: crate::versuche::Versuche::neu(),
+            vertraute_proxys: crate::versuche::vertraute_aus(None)
+                .expect("die Vorgabe ist lesbar"),
             uhr: Box::new(wanduhr),
         }
     }
@@ -230,7 +235,8 @@ impl App {
     /// Die Adresse, fuer die gezaehlt wird. Siehe `Anfrage::adresse`.
     fn adresse_von(&self, a: &Anfrage) -> String {
         a.adresse.clone().unwrap_or_else(|| crate::versuche::adresse_aus(
-            a.client.as_deref(), a.headers.get("x-real-ip").map(|s| s.as_str())))
+            a.client.as_deref(), a.headers.get("x-real-ip").map(|s| s.as_str()),
+            &self.vertraute_proxys))
     }
 
     pub fn mit_kennung(mut self, private: [u8; 32], abdruck: &str) -> Self {

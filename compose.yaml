@@ -45,6 +45,12 @@ services:
     environment:
       MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
       MAER_SYNC_BIND: 0.0.0.0:8099
+      # Wem der Dienst `X-Real-IP` glaubt. Im Container ist die Gegenstelle
+      # NICHT die Schleife, sondern das Tor der Bruecke unten: gemessen am
+      # 24.09.2026, ohne diesen Eintrag zaehlte die Versuchsgrenze jedes Geraet
+      # unter dieser einen Adresse, und zehn Fehlversuche eines Fremden sperrten
+      # den Besitzer. Die Schleife bleibt drin fuer den Health-Check von innen.
+      MAER_SYNC_TRUSTED_PROXIES: "127.0.0.1,::1,${MAER_SYNC_GATEWAY:-10.89.12.1}"
 
     # Das Abbild traegt kein curl und kein Python, also fragt das Binary sich
     # selbst: `health` fragt /v1/health und endet mit 0 oder 1.
@@ -74,3 +80,15 @@ services:
 
 volumes:
   maer-sync-store:
+
+# Ein festes Netz, damit das Tor eine bekannte Adresse hat, der die Liste oben
+# glauben kann. Ausserhalb der Adressbereiche, aus denen Docker selbst Netze
+# vergibt (`172.17` bis `172.31`, `192.168`), damit kein anderes Projekt es
+# vorher belegt. Kollidiert es auf einem Wirt mit einem vorhandenen Netz, beide
+# Variablen zusammen setzen: MAER_SYNC_SUBNET und MAER_SYNC_GATEWAY.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${MAER_SYNC_SUBNET:-10.89.12.0/29}
+          gateway: ${MAER_SYNC_GATEWAY:-10.89.12.1}

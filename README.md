@@ -214,11 +214,20 @@ machine this author set up; the proof after it is what matters.
 **`X-Real-IP` is not decoration.** Guessing has a limit: ten failed sign ins
 for one owner name from one address within fifteen minutes, and the next one
 answers `429`. The service takes the address from `X-Real-IP` **only when the
-connection comes from its own host**, which is where the proxy sits; from
-anywhere else it takes the peer and ignores the header, so nobody can choose
-the address they are counted under. Without the line every device behind the
-proxy is one address, and one person guessing a name locks out everyone who
-signs in under it.
+connection comes from a proxy it trusts**: by default its own host
+(`127.0.0.1` and `::1`), which is where the proxy sits. From anywhere else it
+takes the peer and ignores the header, so nobody can choose the address they
+are counted under. Without the line every device behind the proxy is one
+address, and one person guessing a name locks out everyone who signs in under
+it.
+
+**A proxy somewhere else has to be named.** `MAER_SYNC_TRUSTED_PROXIES` is a
+comma separated list of addresses, one machine each and no ranges. The service
+prints the list it trusts when it starts (`trusting X-Real-IP from: …`), and
+an entry it cannot read stops the start with exit code 6 and names the entry,
+because a list that quietly grew shorter would count every device as one
+again. The container sets this for you; see below.
+
 **The proof, and run it against the PROXY, not against 127.0.0.1:**
 
     $ curl -s -o /dev/null -w '%{http_code}\n' -N \
@@ -362,6 +371,7 @@ Measured by counting occurrences in the source, not from memory.
 | **`MAER_SYNC_BIND`** | **`127.0.0.1:8081`** |
 | `MAER_SYNC_PLAIN_WAYS` | on |
 | `MAER_SYNC_MAX_BODY_BYTES` | 67108864 (64 MiB) |
+| `MAER_SYNC_TRUSTED_PROXIES` | `127.0.0.1,::1`: whose `X-Real-IP` is believed, see step 7 |
 
 **`MAER_SYNC_BIND` is the trap.** The earlier Python build read
 `MAER_SYNC_HOST` and `MAER_SYNC_PORT`; this one reads neither, zero
@@ -526,6 +536,17 @@ and outside only on `127.0.0.1`.** Inside a container the published port
 reaches the service only if it listens beyond loopback; what is reachable from
 outside the host is decided by the port line and by the proxy from step 7,
 which is also what holds the certificate.
+
+**Behind the published port the peer is the gateway of the container's
+network, not `127.0.0.1`,** so the proxy on the host is not "its own host" to
+the service. Measured on 24.09.2026: without the gateway in
+`MAER_SYNC_TRUSTED_PROXIES`, ten failed sign ins from one address locked a
+second address out too, because both were counted under the gateway. The
+compose file therefore puts its network on a fixed subnet (`10.89.12.0/29`,
+outside the ranges Docker hands out by itself) and trusts its gateway
+(`10.89.12.1`); measured with it, the two addresses counted apart. If that
+subnet collides with a network on your host, set `MAER_SYNC_SUBNET` and
+`MAER_SYNC_GATEWAY` together.
 
 **The health check asks the binary itself.** The image carries no curl and no
 shell, so `/maer-sync health` asks `/v1/health` and exits 0 or 1. Its red probe was run: with the service stopped, `docker compose run --rm
