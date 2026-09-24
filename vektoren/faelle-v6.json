@@ -2,7 +2,7 @@
   "was": "Die erwarteten Antworten der Fassung 6, aus dem Vertragstext geschrieben, nicht aus dem Dienst. Jeder Fall nennt seine Vertragszeile.",
   "vertrag_sha256": "83633083c02368e6a16e00316cf86aa8e97589b2493f0b2a967c174aec46a6b8",
   "anwendungen": {
-    "v6": "Fassung 6 mit Schluessel; Konten: anna6 (Fassung 6, Passwort und Salz aus Vektor 1), berta (nicht umgezogen, Passwort BERTA_OLD in faelle_v6.py), carla (vom Betreiber gesetzt, Einmal-Passwort CARLA_OTP). Jeder Fall und jeder Ablauf auf frischem Stand, ohne Versuchszaehler.",
+    "v6": "Fassung 6 mit Schluessel; Konten: anna6 (Fassung 6, Passwort und Salz aus Vektor 1), berta (nicht umgezogen, Passwort BERTA_OLD in faelle_v6.py), carla (vom Betreiber gesetzt; das Einmal-Passwort wuerfelt der Dienst, in den Faellen steht <einmal_passwort>). Jeder Fall und jeder Ablauf auf frischem Stand, ohne Versuchszaehler; ein Fall mit gleich_wie oder salt_ungleich_wie teilt seinen Stand mit dem genannten Fall, der unmittelbar davor laeuft.",
     "v6_ohne_kennung": "Fassung 6 ohne statischen Schluessel"
   },
   "erweiterungen": {
@@ -10,12 +10,13 @@
     "innen": "true: die Anfrage reist versiegelt in einer Sitzung (wie in wege.json)",
     "felder_gleich": "diese Felder des JSON-Koerpers haben genau diese Werte; die uebrigen muessen nur da sein",
     "salt_bytes": "das Feld salt ist base64 und dekodiert auf so viele Bytes",
-    "gleich_wie": "der Koerper ist Byte fuer Byte der des genannten Falls",
-    "salt_ungleich_wie": "das Feld salt ist ein anderes als das des genannten Falls",
+    "gleich_wie": "der Koerper ist Byte fuer Byte der des genannten Falls; beide auf demselben Stand, der genannte unmittelbar davor (das Schein-Salz haengt an einem Geheimnis je Stand)",
+    "salt_ungleich_wie": "das Feld salt ist ein anderes als das des genannten Falls; beide auf demselben Stand, der genannte unmittelbar davor",
     "ablaeufe": "Schritte in Folge auf EINEM frischen Stand",
     "merke": "das Feld token dieser Antwort heisst fuer die folgenden Schritte <name>",
     "wiederhole": "der Schritt laeuft so oft, jedes Mal mit derselben Erwartung",
-    "<sekunden>": "eine ganze Zahl groesser 0"
+    "<sekunden>": "eine ganze Zahl groesser 0",
+    "<einmal_passwort>": "das Einmal-Passwort, das der Dienst fuer carla gewuerfelt hat; der Pruefstand setzt es ein (wie <zeichen> in wege.rs). Es steht im DEKODIERTEN Koerper: koerper_b64 dekodieren, ersetzen, neu kodieren; in drei Anfragen, alle carla"
   },
   "nicht_im_vertrag": [
     "keine Saetze (grund): der Vertrag nennt fuer die neuen Wege keinen Wortlaut",
@@ -329,7 +330,7 @@
       "anfrage": {
         "method": "POST",
         "path": "/v1/token",
-        "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJzZWNyZXQiOiAiRUlOTUFMUEFTU1dPUlRBQkNERUZHSElKIiwgImRldmljZSI6ICJnMSJ9",
+        "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJzZWNyZXQiOiAiPGVpbm1hbF9wYXNzd29ydD4iLCAiZGV2aWNlIjogImcxIn0=",
         "innen": true
       },
       "erwartet": {
@@ -575,7 +576,7 @@
           "anfrage": {
             "method": "POST",
             "path": "/v1/password",
-            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsic2VjcmV0IjogIkVJTk1BTFBBU1NXT1JUQUJDREVGR0hJSiJ9LCAibmV3IjogeyJwcm9vZiI6ICJUellDeHJ0UGVOTVZWUTRIcnFKMGo4U2V1NzEzYkNqODFKWC9OV1BuRTM0PSIsICJzYWx0IjogIm9LR2lvNlNscHFlb3FhcXJySzJ1cnc9PSIsICJrZGYiOiAicGJrZGYyLWhtYWMtc2hhMjU2IiwgInJvdW5kcyI6IDYwMDAwMH19",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJkZXZpY2UiOiAiZzEiLCAiY3VycmVudCI6IHsic2VjcmV0IjogIjxlaW5tYWxfcGFzc3dvcnQ+In0sICJuZXciOiB7InByb29mIjogIlR6WUN4cnRQZU5NVlZRNEhycUowajhTZXU3MTNiQ2o4MUpYL05XUG5FMzQ9IiwgInNhbHQiOiAib0tHaW82U2xwcWVvcWFxcnJLMnVydz09IiwgImtkZiI6ICJwYmtkZjItaG1hYy1zaGEyNTYiLCAicm91bmRzIjogNjAwMDAwfX0=",
             "innen": true
           },
           "erwartet": {
@@ -592,7 +593,7 @@
           "anfrage": {
             "method": "POST",
             "path": "/v1/token",
-            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJzZWNyZXQiOiAiRUlOTUFMUEFTU1dPUlRBQkNERUZHSElKIiwgImRldmljZSI6ICJnMSJ9",
+            "koerper_b64": "eyJvd25lciI6ICJjYXJsYSIsICJzZWNyZXQiOiAiPGVpbm1hbF9wYXNzd29ydD4iLCAiZGV2aWNlIjogImcxIn0=",
             "innen": true
           },
           "erwartet": {

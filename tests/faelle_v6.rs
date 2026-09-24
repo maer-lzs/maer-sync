@@ -13,18 +13,18 @@
 //! baut, schreibt diese Datei nicht und aendert sie nicht; weicht der Dienst
 //! ab, ist das ein Befund, keine Datei zum Nachziehen.
 //!
-//! Zwei Lesarten der Datei, beide benannt und nicht still getroffen:
+//! Zwei Regeln der Datei, die sie selbst ausspricht (seit ihrer dritten
+//! Fassung; vorher waren es Lesarten dieses Zeugen):
 //!
-//! - **Das Einmal-Passwort von `carla`** steht in der Datei als fester Wert.
-//!   Der Dienst wuerfelt es (`reset`), und eine Tuer, durch die man es setzen
-//!   koennte, gibt es mit Absicht nicht. Der Zeuge ersetzt deshalb genau diesen
-//!   einen Wert in den Anfragekoerpern durch das tatsaechlich erzeugte, wie
-//!   `wege.rs` das echte Zeichen fuer `<zeichen>` einsetzt.
-//! - **`gleich_wie`** ("the same on every question") ist eine Aussage ueber
-//!   EINEN Dienst. Das Schein-Salz haengt an einem Geheimnis, das jeder Laden
-//!   bei seiner Anlage selbst zieht; auf zwei frischen Staenden sind die Salze
-//!   also mit Absicht verschieden. Der verwiesene Fall laeuft deshalb auf
-//!   demselben Stand unmittelbar davor.
+//! - **Das Einmal-Passwort von `carla`** steht als Platzhalter
+//!   `<einmal_passwort>` im dekodierten Koerper. Der Dienst wuerfelt es
+//!   (`reset`), und eine Tuer, durch die man es setzen koennte, gibt es mit
+//!   Absicht nicht. Der Zeuge setzt das tatsaechlich erzeugte ein, wie
+//!   `wege.rs` das echte Zeichen fuer `<zeichen>`, und haelt an, wenn ein
+//!   Platzhalter uebrig bleibt.
+//! - **`gleich_wie` und `salt_ungleich_wie`** laufen auf DEMSELBEN Stand wie
+//!   der genannte Fall, unmittelbar nach ihm: das Schein-Salz haengt an einem
+//!   Geheimnis, das jeder Laden bei seiner Anlage selbst zieht.
 
 use std::collections::BTreeMap;
 
@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 const DATEI: &str = "vektoren/faelle-v6.json";
 /// Der Stand der Datei, der uebernommen wurde. Eine neue Fassung der Datei ist
 /// eine neue Lieferung und wird hier bewusst eingetragen, nicht still gelesen.
-const DATEI_DIGEST: &str = "26fbaf469ef626506d722f636f4a4f14e118c2a037e8508236cb88968d76b8d4";
+const DATEI_DIGEST: &str = "6f8a37923cc6a622d68106a2a5a87fa2fb88cd0d9d7b86404b92c0d1967d8d12";
 const QUELLE: &str = "203.0.113.7:40000";
 
 /// Wie die Datei die Konten beschreibt (`anwendungen.v6`).
@@ -47,7 +47,7 @@ const ANNA_AUFBAU: &str = "ein passwort nur fuer den aufbau dieses zeugen";
 const BERTA: &str = "berta";
 const BERTA_ALT: &str = "ein hinreichend langes geheimnis";
 const CARLA: &str = "carla";
-const CARLA_IN_DER_DATEI: &str = "EINMALPASSWORTABCDEFGHIJ";
+const CARLA_IN_DER_DATEI: &str = "<einmal_passwort>";
 
 /// Was ein `erwartet`-Block tragen darf. Eine Pruefart, die hier nicht steht,
 /// ist rot: sonst ginge eine neue Erweiterung der Datei still durch.
@@ -140,8 +140,10 @@ fn anfrage(an: &Value, st: &Stand, gemerkt: &BTreeMap<String, String>) -> Anfrag
     }
     if let Some(b) = an.get("koerper_b64").and_then(|x| x.as_str()) {
         let roh = base64_lesen(b).expect("koerper_b64");
-        let text = String::from_utf8(roh).expect("UTF-8");
-        a = a.mit_koerper(text.replace(CARLA_IN_DER_DATEI, &st.carla_einmal).as_bytes());
+        let text = String::from_utf8(roh).expect("UTF-8")
+            .replace(CARLA_IN_DER_DATEI, &st.carla_einmal);
+        assert!(!text.contains(CARLA_IN_DER_DATEI), "Platzhalter blieb im Koerper");
+        a = a.mit_koerper(text.as_bytes());
     }
     if an.get("innen").and_then(|x| x.as_bool()).unwrap_or(false) {
         a = a.von_innen();
