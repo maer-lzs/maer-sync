@@ -3,32 +3,33 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-# Mär Sync Service als Container: zwei Stufen, und im Ergebnis NUR das Binary.
+# Mär Sync Service as a container: two stages, and the result holds ONLY the binary.
 #
-# Stufe 1 baut das Binary in DERSELBEN Umgebung wie `werkzeug/bau.sh`: das
-# Grundabbild am Index-Digest, `musl-dev` in der gepinnten Fassung, das Ziel
-# ausdruecklich gesetzt und `+crt-static` NUR fuer das Ziel (sonst bricht der
-# Bau am Proc-Macro ab, siehe `werkzeug/README.md`). Die beiden Pins stehen hier
-# ein zweites Mal, weil ein Dockerfile kein anderes einbinden kann; der Zeuge
-# `tests/abbild.rs` haelt sie gegen `werkzeug/Dockerfile`, damit sie nicht
-# auseinanderlaufen.
+# Stage 1 builds the binary in THE SAME environment as `werkzeug/bau.sh`: the
+# base image at its index digest, `musl-dev` at its pinned version, the target
+# set explicitly and `+crt-static` ONLY for the target (otherwise the build
+# breaks at the proc macro, see `werkzeug/README.md`). The two pins stand here a
+# second time because one Dockerfile cannot include another; the witness
+# `tests/abbild.rs` holds them against `werkzeug/Dockerfile` so they cannot
+# drift apart.
 #
-# Stufe 2 ist leer (`FROM scratch`): kein Shell, keine libc, kein Paket. Das
-# Binary ist statisch und braucht nichts davon. Was darin liegt, ist das
-# Binary, das Datenverzeichnis fuer die UID 10001 und die zwei Lizenztexte.
+# Stage 2 is empty (`FROM scratch`): no shell, no libc, no package. The binary
+# is static and needs none of them. What it holds is the binary, the data
+# directory for uid 10001 and the two license texts.
 FROM rust@sha256:4333721398de61f53ccbe53b0b855bcc4bb49e55828e8f652d7a8ac33dd0c118 AS bau
 RUN apk add --no-cache musl-dev=1.2.5-r11
 WORKDIR /bau
-# Dieselben Pfade wie `bau.sh`: die Pfade der Quellen stehen im Binary (in den
-# Meldungen einer Panik), und mit anderen Pfaden waere das Binary im Abbild ein
-# anderes als das, das ein Wirt per Kopie bekommt.
+# The same paths as `bau.sh`: the paths of the sources stand in the binary (in
+# the messages of a panic), and with other paths the binary in the image would
+# be another one than the one a host gets by copy.
 ENV CARGO_HOME=/bau/ziel/cargo-home \
     CARGO_TARGET_DIR=/bau/ziel/abbau
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-# Das Ziel je Bauwirt, wie in `werkzeug/bau.sh`: der Tiny baut x86_64, der Pi
-# aarch64, und gekreuzt wird nicht. `--locked`: das Lockfile ist die Zusage,
-# und ein Bau, der es aendern wollte, soll abbrechen statt still aufzuloesen.
+# The target per build host, as in `werkzeug/bau.sh`: an x86_64 host builds
+# x86_64, an aarch64 host builds aarch64, and nothing is cross compiled.
+# `--locked`: the lockfile is the promise, and a build that wanted to change it
+# should stop instead of quietly resolving.
 RUN set -eu; \
     case "$(uname -m)" in \
       x86_64)  ziel=x86_64-unknown-linux-musl;  schalter=CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;; \
@@ -41,22 +42,22 @@ RUN set -eu; \
 
 FROM scratch
 COPY --from=bau /maer-sync /maer-sync
-# Ein /tmp, weil `backup` seine Rueckspielprobe dort oeffnet
-# (`std::env::temp_dir()` in `src/befehle.rs`). Ohne es endete jede Sicherung im
-# Container mit `not measured … Permission denied`: gemessen am 24.09.2026, und
-# richtig gemeldet, weil die Probe dann nicht »fits« sagt. Es gehoert der UID
-# des Dienstes: ein `chmod 1777` in der Baustufe kam beim ersten Versuch NICHT
-# im Abbild an (`docker export` zeigte `drwxr-xr-x root`), die Eigentuemerschaft
-# traegt dagegen nachweislich, wie beim Datenverzeichnis darunter.
+# A /tmp, because `backup` opens its restore rehearsal there
+# (`std::env::temp_dir()` in `src/befehle.rs`). Without it every backup in the
+# container ended in `not measured … Permission denied`: measured on 24.09.2026,
+# and reported correctly, because the rehearsal then does not say "fits". It
+# belongs to the service's uid: a `chmod 1777` in the build stage did NOT arrive
+# in the image on the first attempt (`docker export` showed `drwxr-xr-x root`),
+# while the ownership demonstrably does, as for the data directory below.
 COPY --from=bau --chown=10001:10001 /leer/tmp /tmp
-# Das Datenverzeichnis gehoert der festen UID, denn das Volume gehoert einer
-# UID, und die muss jeden Neubau des Abbilds ueberleben.
+# The data directory belongs to the fixed uid, because the volume belongs to a
+# uid, and that uid has to survive every rebuild of the image.
 COPY --from=bau --chown=10001:10001 /leer/var/lib/maer-sync /var/lib/maer-sync
 COPY LICENSE LICENSE-ADDITIONAL-TERMS /
 
-# Die Rust-Fassung liest EINE Adresse, `MAER_SYNC_BIND`, und kennt
-# `MAER_SYNC_HOST` und `MAER_SYNC_PORT` nicht (null Vorkommen in `src/`).
-# Gesetzt wie die frueheren zwei: alle Adressen im Container, Port 8099.
+# The Rust build reads ONE address, `MAER_SYNC_BIND`, and does not know
+# `MAER_SYNC_HOST` or `MAER_SYNC_PORT` (no occurrence in `src/`).
+# Set like the earlier two: every address in the container, port 8099.
 ENV MAER_SYNC_DB=/var/lib/maer-sync/store.sqlite \
     MAER_SYNC_BIND=0.0.0.0:8099
 

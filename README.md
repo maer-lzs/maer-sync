@@ -23,6 +23,93 @@ leaves the device (see *Signing in* below and `CONTRACT.md`). The takeover end
 to end (a locked, playing device stops when the other starts) needs two
 devices and is measured in the device test.
 
+## Quick start with Docker
+
+**NOT YET RUN AS WRITTEN on a fresh host.** This section is a draft: every
+command below still has to be run on a fresh host, and its output put beside
+it, before it is published.
+
+You need a Linux host with Docker (with Compose) and git, and a name that
+points at it, here `sync.example.com`. Six steps from nothing to a signed in
+device:
+
+**1. Fetch it and start it.** The first start builds the image, which takes
+a few minutes and needs the network.
+
+    git clone https://codeberg.org/LzS/maer-sync.git
+    cd maer-sync
+    docker compose up -d --build
+    docker compose exec maer-sync /maer-sync health
+
+    healthy: 127.0.0.1:8099
+
+**2. Note the key, and keep a copy of it.** The first start makes the key of
+this service and says so in the log. Every device pins it on first contact;
+losing the key means every device has to trust the service again.
+
+    docker compose logs maer-sync | grep 'answers as'
+    docker compose cp maer-sync:/var/lib/maer-sync/identity.key ./identity.key
+
+    this service now answers as M2KZ-6KRX-4CTH-KR3K-65ZK-J3EM
+
+Put `identity.key` somewhere safe, away from this host.
+
+**3. Lay down an account.** The password comes in on stdin, never on the
+command line. It only opens the first sign in: the first device sets a new
+one in the same step.
+
+    printf '%s' "$SECRET" | docker compose exec -T maer-sync /maer-sync account someone
+
+    account someone laid down
+
+**4. Put a proxy with TLS in front.** It has to pass the WebSocket upgrade
+through, and it has to send `X-Real-IP`. With Caddy, which fetches the
+certificate and passes the upgrade by itself:
+
+    sync.example.com {
+        reverse_proxy 127.0.0.1:8099 {
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+With nginx, inside the `server` block that already holds the certificate for
+the name:
+
+    location /v1/changes {
+        proxy_pass http://127.0.0.1:8099;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+    location / {
+        proxy_pass http://127.0.0.1:8099;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+**5. Prove the socket through the proxy.** Without a token the service
+answers the upgrade with `403`: the upgrade got through. A `404` means the
+proxy dropped it, and the push will be missing while everything else looks
+fine.
+
+    curl -s -o /dev/null -w '%{http_code}\n' -N \
+      -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+      -H 'Sec-WebSocket-Version: 13' \
+      -H "Sec-WebSocket-Key: $(head -c16 /dev/urandom | base64)" \
+      https://sync.example.com/v1/changes
+
+    403
+
+**6. Point the app at it.** In Mär: Settings, the Mär Sync Service section.
+The address with its scheme (`https://sync.example.com`), the owner
+(`someone`) and the password from step 3. The app asks for a new password at
+once, at least twelve characters.
+
+Backups, updates and the way back are below: *Back it up* (step 9),
+*Updating a running host*, and *More on the container*. The way without
+Docker, by hand, is *Setting it up*.
+
 ## One implementation, one contract
 
 The service is written in Rust and lives under `src/`. `CONTRACT.md` beside
@@ -460,7 +547,10 @@ This is a workaround, not a feature, and it is listed here because the
 alternative, extending `/v1/health`, is forbidden by the contract: that route
 answers a status and nothing else.
 
-## Or run it in a container
+## More on the container
+
+The steps are in the *Quick start* at the top. This section says what the
+image and the compose file decide, and why.
 
 **Everything in this section was built and run on a Debian host on
 24.09.2026**, against a copy of a live store with 78 documents, not written

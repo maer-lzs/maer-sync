@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-# Mär Sync Service — Betrieb als Container.
+# Mär Sync Service, run as a container.
 #
-# Diese Datei ersetzt Schritt 7 der Anleitung: `restart: unless-stopped` ist der
-# Autostart. Es gibt dann keine systemd-Unit, keinen eigenen Systemnutzer und
-# keine Rechte, die man am Speicherort von Hand richten muss.
+# This file replaces the step of the guide that lets the service start by
+# itself: `restart: unless-stopped` is the autostart. There is then no systemd
+# unit, no system user of its own and no permissions to fix by hand on the
+# store.
 name: maer-sync
 
 services:
@@ -17,43 +18,43 @@ services:
     container_name: maer-sync
     restart: unless-stopped
 
-    # Nur lokal. Was von aussen erreichbar sein soll, entscheidet die Vorschaltung
-    # aus Schritt 6 — und die ist es, die TLS terminiert und den WebSocket-Aufstieg
-    # durchreichen muss.
+    # Local only. What is reachable from outside is decided by the proxy in
+    # front (the proxy step of the guide), and it is the proxy that terminates
+    # TLS and has to pass the WebSocket upgrade through.
     #
-    # Der HOST-Port ist einstellbar, der Dienst-Port nicht: innen bleibt es 8099,
-    # nach aussen legt ihn jeder Wirt dorthin, wo bei ihm Platz ist. Wer 8099 schon
-    # belegt hat, setzt MAER_SYNC_HOST_PORT und laesst die Datei in Ruhe.
+    # The HOST port can be set, the service port cannot: inside it stays 8099,
+    # and outside every host puts it where it has room. If 8099 is taken, set
+    # MAER_SYNC_HOST_PORT and leave the file alone.
     #
-    # Warum eine Variable und keine zweite compose-Datei: eine Override-Datei
-    # ERSETZT die Portliste nicht, sie FUEHRT SIE ZUSAMMEN. Der zweite Eintrag
-    # tritt neben den ersten, der Container versucht beide zu binden und scheitert
-    # an dem, der belegt ist — also genau an dem Port, dem man ausweichen wollte.
-    # (`ports: !override` koennte das ab Compose 2.24, verlangt aber wieder eine
-    # zweite Datei fuer etwas, das eine Stelle in dieser hier loest.)
+    # Why a variable and not a second compose file: an override file does not
+    # REPLACE the port list, it MERGES it. The second entry joins the first, the
+    # container tries to bind both and fails on the one that is taken, which is
+    # exactly the port you wanted to avoid. (`ports: !override` could do it from
+    # Compose 2.24 on, but it again needs a second file for something one place
+    # in this one settles.)
     ports:
       - "127.0.0.1:${MAER_SYNC_HOST_PORT:-8099}:8099"
 
-    # BENANNTES Volume, kein Pfad im Abbild und kein bind mount: die Ablage
-    # überlebt damit jedes neue Abbild, und sie gehört der UID aus dem Dockerfile.
+    # A NAMED volume, no path in the image and no bind mount: the store survives
+    # every new image this way, and it belongs to the uid from the Dockerfile.
     volumes:
       - maer-sync-store:/var/lib/maer-sync
 
-    # EINE Adresse, `MAER_SYNC_BIND`: die Rust-Fassung kennt `MAER_SYNC_HOST`
-    # und `MAER_SYNC_PORT` nicht, und wer sie setzt, bekommt keinen Fehler,
-    # sondern einen Dienst auf dem Vorgabeport 8081, den niemand fragt.
+    # ONE address, `MAER_SYNC_BIND`: the Rust build does not know
+    # `MAER_SYNC_HOST` or `MAER_SYNC_PORT`, and setting them gives no error but a
+    # service on the default port 8081 that nobody asks.
     environment:
       MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
       MAER_SYNC_BIND: 0.0.0.0:8099
-      # Wem der Dienst `X-Real-IP` glaubt. Im Container ist die Gegenstelle
-      # NICHT die Schleife, sondern das Tor der Bruecke unten: gemessen am
-      # 24.09.2026, ohne diesen Eintrag zaehlte die Versuchsgrenze jedes Geraet
-      # unter dieser einen Adresse, und zehn Fehlversuche eines Fremden sperrten
-      # den Besitzer. Die Schleife bleibt drin fuer den Health-Check von innen.
+      # Whose `X-Real-IP` the service believes. In the container the peer is
+      # NOT the loopback but the gateway of the bridge below: measured on
+      # 24.09.2026, without this entry the attempt limit counted every device
+      # under that one address, and ten failed attempts by a stranger locked
+      # out the owner. The loopback stays in for the health check from inside.
       MAER_SYNC_TRUSTED_PROXIES: "127.0.0.1,::1,${MAER_SYNC_GATEWAY:-10.89.12.1}"
 
-    # Das Abbild traegt kein curl und kein Python, also fragt das Binary sich
-    # selbst: `health` fragt /v1/health und endet mit 0 oder 1.
+    # The image carries no curl and no Python, so the binary asks itself:
+    # `health` asks /v1/health and exits with 0 or 1.
     healthcheck:
       test: ["CMD", "/maer-sync", "health"]
       interval: 30s
@@ -61,31 +62,31 @@ services:
       retries: 3
       start_period: 10s
 
-    # Ein Init vor dem Dienst. Im Container ist der Dienst sonst PID 1, und fuer
-    # PID 1 gilt kein Vorgabe-Verhalten eines Signals: SIGTERM verpufft, und
-    # jeder `stop` und jeder `restart` wartete zehn Sekunden und endete mit
-    # SIGKILL, Ausgang 137 (gemessen am 24.09.2026). Das Init ist das von Docker
-    # mitgelieferte, keine weitere Abhaengigkeit im Abbild.
+    # An init in front of the service. Otherwise the service is PID 1 in the
+    # container, and PID 1 has no default action for a signal: SIGTERM does
+    # nothing, and every `stop` and every `restart` waited ten seconds and ended
+    # in SIGKILL, exit code 137 (measured on 24.09.2026). The init is the one
+    # Docker ships, no further dependency in the image.
     init: true
 
     security_opt:
       - no-new-privileges:true
-    # Gemessen am 24.09.2026 gegen eine Kopie eines echten Bestands (78
-    # Dokumente): 8 MB im Lauf, Spitze 14 MB mit Sicherung (Fassung 5), 17 MB
-    # mit Fassung 6. Die Grenze bleibt
-    # trotzdem hoch, weil ein einzelner Schrieb bis MAER_SYNC_MAX_BODY_BYTES
-    # (64 MiB) gross sein darf und im Speicher liegt, bevor er geprueft wird.
+    # Measured on 24.09.2026 against a copy of a real store (78 documents):
+    # 8 MB while running, a peak of 14 MB with a backup (version 5), 17 MB with
+    # version 6. The limit stays high anyway, because a single write may be as
+    # large as MAER_SYNC_MAX_BODY_BYTES (64 MiB) and is held in memory before it
+    # is judged.
     mem_limit: 256m
     pids_limit: 128
 
 volumes:
   maer-sync-store:
 
-# Ein festes Netz, damit das Tor eine bekannte Adresse hat, der die Liste oben
-# glauben kann. Ausserhalb der Adressbereiche, aus denen Docker selbst Netze
-# vergibt (`172.17` bis `172.31`, `192.168`), damit kein anderes Projekt es
-# vorher belegt. Kollidiert es auf einem Wirt mit einem vorhandenen Netz, beide
-# Variablen zusammen setzen: MAER_SYNC_SUBNET und MAER_SYNC_GATEWAY.
+# A fixed network, so the gateway has a known address the list above can
+# believe. Outside the ranges Docker hands out networks from by itself
+# (`172.17` to `172.31`, `192.168`), so no other project takes it first. If it
+# collides with an existing network on a host, set both variables together:
+# MAER_SYNC_SUBNET and MAER_SYNC_GATEWAY.
 networks:
   default:
     ipam:
