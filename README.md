@@ -25,16 +25,20 @@ devices and is measured in the device test.
 
 ## Quick start with Docker
 
-**NOT YET RUN AS WRITTEN on a fresh host.** This section is a draft: every
-command below still has to be run on a fresh host, and its output put beside
-it, before it is published.
+**Steps 1 to 3 were run on a Debian host (x86_64) on 08.11.2026**, from a
+fresh clone with its own project name and port, and the output beside each
+command is the one that came back. Step 2 was run without `--no-log-prefix`,
+which only drops the `maer-sync  | ` in front of the line. **The proxy and the
+app (steps 4 to 6) were not run in that probe**; the proxy lines are written
+from the service's requirements, and step 5 is how you prove them.
 
 You need a Linux host with Docker (with Compose) and git, and a name that
 points at it, here `sync.example.com`. Six steps from nothing to a signed in
 device:
 
-**1. Fetch it and start it.** The first start builds the image, which takes
-a few minutes and needs the network.
+**1. Fetch it and start it.** The first start builds the image and needs the
+network; it took 67 seconds for build and start on the measured host, and
+takes longer on a slower one.
 
     git clone https://codeberg.org/LzS/maer-sync.git
     cd maer-sync
@@ -47,12 +51,17 @@ a few minutes and needs the network.
 this service and says so in the log. Every device pins it on first contact;
 losing the key means every device has to trust the service again.
 
-    docker compose logs maer-sync | grep 'answers as'
-    docker compose cp maer-sync:/var/lib/maer-sync/identity.key ./identity.key
+    docker compose logs --no-log-prefix maer-sync | grep 'answers as'
 
     this service now answers as M2KZ-6KRX-4CTH-KR3K-65ZK-J3EM
 
-Put `identity.key` somewhere safe, away from this host.
+    docker compose cp maer-sync:/var/lib/maer-sync/identity.key ./identity.key
+
+     maer-sync Copying maer-sync:/var/lib/maer-sync/identity.key to ./identity.key
+     maer-sync Copied maer-sync:/var/lib/maer-sync/identity.key to ./identity.key
+
+The key file is 45 bytes. Put `identity.key` somewhere safe, away from this
+host.
 
 **3. Lay down an account.** The password comes in on stdin, never on the
 command line. It only opens the first sign in: the first device sets a new
@@ -61,6 +70,15 @@ one in the same step.
     printf '%s' "$SECRET" | docker compose exec -T maer-sync /maer-sync account someone
 
     account someone laid down
+
+    docker compose exec maer-sync /maer-sync devices someone
+
+    account someone: form=secret set-by-operator=no moved-at=not yet
+    no device has signed in since version 6
+
+An account that is already there is refused, and the command exits 1:
+
+    refused: an account named 'someone' is already here
 
 **4. Put a proxy with TLS in front.** It has to pass the WebSocket upgrade
 through, and it has to send `X-Real-IP`. With Caddy, which fetches the
