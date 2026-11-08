@@ -604,6 +604,16 @@ image to the patch, because the base image was runtime. Here there is none:
 the last stage is empty, and the build stage is pinned by digest and never
 shipped.
 
+**What is pinned, and what is not.** The build stage's base image, with its
+Rust toolchain, is pinned by digest. The one package added to it, `musl-dev`,
+is held to its version, `1.2.5`, and not to a revision: Alpine keeps only the
+newest revision of a version, and a pin on one revision (`1.2.5-r11`) broke
+every build on 08.11.2026, when the index had moved on to `1.2.5-r12`. A
+revision is a fix of the same version, so two hosts on two days may build with
+two revisions, never with two versions. If `1.2.5` leaves the index, the build
+stops instead of taking another version. `tests/abbild.rs` holds both
+Dockerfiles to the same version.
+
 **The store is a named volume, never a path inside the image.** This is the
 line that costs data if it is wrong: a store inside the image is gone with the
 next build, and nothing about that is visible while reading the file.

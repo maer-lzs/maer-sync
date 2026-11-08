@@ -6,7 +6,8 @@
 # Mär Sync Service as a container: two stages, and the result holds ONLY the binary.
 #
 # Stage 1 builds the binary in THE SAME environment as `werkzeug/bau.sh`: the
-# base image at its index digest, `musl-dev` at its pinned version, the target
+# base image at its index digest, `musl-dev` held to its version (any
+# revision, because Alpine keeps only the newest one of a version), the target
 # set explicitly and `+crt-static` ONLY for the target (otherwise the build
 # breaks at the proc macro, see `werkzeug/README.md`). The two pins stand here a
 # second time because one Dockerfile cannot include another; the witness
@@ -17,7 +18,7 @@
 # is static and needs none of them. What it holds is the binary, the data
 # directory for uid 10001 and the two license texts.
 FROM rust@sha256:4333721398de61f53ccbe53b0b855bcc4bb49e55828e8f652d7a8ac33dd0c118 AS bau
-RUN apk add --no-cache musl-dev=1.2.5-r11
+RUN apk add --no-cache musl-dev~1.2.5
 WORKDIR /bau
 # The same paths as `bau.sh`: the paths of the sources stand in the binary (in
 # the messages of a panic), and with other paths the binary in the image would

@@ -31,9 +31,17 @@ fn digest(text: &str, woher: &str) -> String {
 fn musl_pin(text: &str, woher: &str) -> String {
     // Nur die RUN-Zeile: ein Kommentar, der die Fassung zitiert, ist keine
     // Angabe (der erste Lauf las genau so eine Zeile mit einem Backtick dahinter).
-    let zeile = text.lines().find(|z| z.trim_start().starts_with("RUN ") && z.contains("musl-dev="))
-        .unwrap_or_else(|| panic!("{woher}: keine gepinnte musl-dev-Fassung"));
-    zeile.split("musl-dev=").nth(1).unwrap().split_whitespace().next().unwrap().to_string()
+    // Gepinnt ist die Fassung mit `~`, nicht die Revision mit `=`: Alpine haelt
+    // je Fassung nur die neueste Revision, und ein Pin auf eine Revision brach
+    // am 08.11.2026 jeden Bau.
+    let zeile = text.lines().find(|z| z.trim_start().starts_with("RUN ") && z.contains("musl-dev"))
+        .unwrap_or_else(|| panic!("{woher}: keine musl-dev-Zeile"));
+    assert!(!zeile.contains("musl-dev="), "{woher}: musl-dev ist auf eine Revision gepinnt, die Alpine nicht vorhaelt");
+    let fassung = zeile.split("musl-dev~").nth(1)
+        .unwrap_or_else(|| panic!("{woher}: musl-dev ohne Fassung"))
+        .split_whitespace().next().unwrap().to_string();
+    assert!(!fassung.contains("-r"), "{woher}: die Fassung traegt eine Revision: {fassung}");
+    fassung
 }
 
 #[test]

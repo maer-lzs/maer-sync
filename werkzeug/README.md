@@ -28,10 +28,18 @@ kein Crate-Problem. `bau.sh` baut die Schicht beim ersten Aufruf selbst.
 **Die Schicht ist die zweite bewegliche Angabe, und sie ist gepinnt.** Der
 frueheste Satz hier behauptete, ihre Paketfassungen haengen am Digest des
 Grundabbilds; das war falsch. `apk add` liest den Index zur Bauzeit aus dem
-Netz. Gemessen: im Abbild liegt `musl 1.2.5-r9`, der Index bietet heute
+Netz. Gemessen: im Abbild liegt `musl 1.2.5-r9`, der Index bot am 24.09.2026
 `1.2.5-r11`. Deshalb steht die Fassung im `Dockerfile`, fail-closed, und ein
 Wechsel ist ein Commit mit Grund, wie beim Digest. Nebenwirkung, benannt:
-`musl-dev=1.2.5-r11` hebt `musl` selbst von r9 auf r11.
+`musl-dev` hebt `musl` selbst auf seine Revision.
+
+**Gepinnt ist die Fassung, nicht die Revision** (`musl-dev~1.2.5`). Alpine
+haelt je Fassung nur die neueste Revision im Index. Der Pin auf `1.2.5-r11`
+brach am 08.11.2026 jeden Bau, auch den oeffentlichen Weg, weil der Index nur
+noch `1.2.5-r12` fuehrte. Eine Revision ist eine Korrektur derselben Fassung;
+zwei Wirte koennen also zwei Revisionen bekommen, nie zwei Fassungen. Fest am
+Digest bleibt das Grundabbild mit seiner Rust-Kette. `tests/abbild.rs` haelt
+beide Dockerfiles gleich und weist einen Pin mit `=` ab.
 
 **Statisch heisst: Ziel setzen UND `+crt-static`.** Gemessen, und der frueheste
 Stand dieses Skripts hatte es anders begruendet: ohne gesetztes Ziel gilt der
