@@ -1,7 +1,64 @@
-#!/bin/sh
+#!/bin/bash
 # Mär — an audio player for self-hosted open ecosystems
 # Copyright (C) 2026 Laurenz Schröder
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
-# Empty shell until the rules are built; the witnesses fail on behaviour.
+#
+# pre-push: every push goes through werkzeug/push.sh. Refused always, also
+# through the script: another remote than origin, main, a tag, a deletion and
+# anything that is no fast forward. A branch needs the note of a green run
+# at the pushed commit, for the same tree and with more than zero cases.
+# Every commit of the push keeps the rules of the commit message. At the end
+# each local ref must still point at the commit that was checked.
+# The script is known by LAUF_PUSH=1; that can be set by hand (named limit).
+set -u
+HOOKS="$(cd "$(dirname "$0")" && pwd)"
+remote_name="$1"
+zero=0000000000000000000000000000000000000000
+refuse() { echo "pre-push: $*" >&2; exit 1; }
+command -v python3 >/dev/null || refuse "no python3 to check the messages"
+
+[ "${LAUF_PUSH:-}" = 1 ] || refuse "push only through werkzeug/push.sh <branch>"
+[ "$remote_name" = origin ] || refuse "only to origin, not to $remote_name"
+
+checked=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -n "${local_ref:-}" ] || continue
+    [ "$local_sha" = "$zero" ] && refuse "no deletion: $remote_ref"
+    case "$remote_ref" in
+        refs/tags/*) refuse "no tag: $remote_ref";;
+        refs/heads/main) refuse "main moves only through a release";;
+    esac
+    if [ "$remote_sha" != "$zero" ]; then
+        git cat-file -e "$remote_sha" 2>/dev/null && git merge-base --is-ancestor "$remote_sha" "$local_sha" \
+            || refuse "no fast forward on $remote_ref: history is not rewritten"
+    fi
+    checked+=("$local_ref $local_sha")
+    [ "$remote_ref" = refs/notes/lauf ] && continue
+    case "$remote_ref" in
+        refs/heads/*) ;;
+        *) refuse "only branches and the notes of the runs: $remote_ref";;
+    esac
+    tree="$(git rev-parse "$local_sha^{tree}")"
+    note="$(git notes --ref=lauf show "$local_sha" 2>/dev/null)"
+    cases="$(printf '%s\n' "$note" | sed -n 's/.*cases=\([0-9][0-9]*\).*/\1/p' | head -1)"
+    printf '%s\n' "$note" | grep "kind=final" | grep "result=green" | grep -q "tree=$tree" && [ "${cases:-0}" -gt 0 ] \
+        || refuse "$remote_ref needs the note of a green run at $(git rev-parse --short "$local_sha")"
+    if [ "$remote_sha" = "$zero" ]; then range=("$local_sha" --not --remotes=origin); else range=("$remote_sha..$local_sha"); fi
+    for commit in $(git rev-list "${range[@]}"); do
+        message="$(mktemp)"
+        git log -1 --format=%B "$commit" > "$message"
+        why="$(python3 -I "$HOOKS/rules.py" msg "$message" 2>&1)"; rc=$?
+        rm -f "$message"
+        [ $rc -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the message: $why"
+    done
+done
+
+# The refs may have moved while the checks ran: what was checked must still
+# be what the local ref names.
+for entry in "${checked[@]+"${checked[@]}"}"; do
+    ref="${entry% *}"; sha="${entry#* }"
+    now="$(git rev-parse --verify -q "$ref^{}" 2>/dev/null)" || refuse "the local ref $ref cannot be read"
+    [ "$now" = "$sha" ] || refuse "the local ref $ref moved from $(git rev-parse --short "$sha") to $(git rev-parse --short "$now") during the push"
+done
 exit 0
