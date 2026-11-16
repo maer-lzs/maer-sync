@@ -53,6 +53,15 @@ ROOT_FILES = ("Dockerfile", "compose.yaml", "Cargo.toml")
 
 #: Exempt, each with the reason at the entry — not in a list elsewhere.
 EXEMPT = {
+    "werkzeug/haken/commit-msg": "a git hook, whose name git fixes without a suffix; it carries the header, "
+                                 "the collection only knows suffixes",
+    "werkzeug/haken/pre-commit": "a git hook, whose name git fixes without a suffix; it carries the header, "
+                                 "the collection only knows suffixes",
+    "werkzeug/haken/pre-push": "a git hook, whose name git fixes without a suffix; it carries the header, "
+                               "the collection only knows suffixes",
+    "werkzeug/haken/crates.txt": "a list the hooks read; it carries the header as comment lines",
+    "tests/role-names.txt": "a list the hooks and the name fence read; it carries the header as comment lines",
+    "tests/role-names-allowed.txt": "a list the name fence reads; it carries the header as comment lines",
     ".gitignore": "a list of patterns, and comments in it would be read as patterns",
     "README.md": "prose about the service; the LICENSE file covers the repository",
     "CONTRACT.md": "byte-identical in both repositories with a fence on each side, "

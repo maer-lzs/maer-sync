@@ -1,0 +1,17 @@
+# Mär — an audio player for self-hosted open ecosystems
+# Copyright (C) 2026 Laurenz Schröder
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+# The names of roles and people that stay out of this repository: commit
+# messages, comments and documents. One name per line, matched as a whole
+# word and without regard to case. The hooks in werkzeug/haken and the fence
+# tests/test_role_names.py read this file and nothing else.
+laurenz
+momo
+pie
+takt
+wache
+fable
+lechonk
+chonk
+kreide
