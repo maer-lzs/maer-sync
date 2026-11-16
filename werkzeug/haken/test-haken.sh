@@ -134,7 +134,8 @@ printf '\n[[package]]\nname = "some-unlisted-crate"\nversion = "0.1.0"\n' >> Car
 if "$GIT" commit -q -m "Adds a dependency" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
 verdict refuse "$got" "I15 a crate that is not on the list"
 "$GIT" reset -q --hard origin/dev
-sed -i 's/version = "1.0.0"/version = "1.0.1"/' Cargo.lock && "$GIT" add Cargo.lock
+# Edited through a copy: in-place editing in sed takes different arguments on BSD and GNU.
+sed 's/version = "1.0.0"/version = "1.0.1"/' Cargo.lock > Cargo.lock.new && mv Cargo.lock.new Cargo.lock && "$GIT" add Cargo.lock
 if "$GIT" commit -q -m "Moves a dependency to its next version" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
 verdict pass "$got" "I16 a listed crate in another version"
 "$GIT" reset -q --hard origin/dev
@@ -142,7 +143,7 @@ verdict pass "$got" "I16 a listed crate in another version"
 # I17: an existing German comment stays, another line of the file changes.
 mkdir -p src && printf '// Die alte Zeile bleibt stehen\nfn a() {}\n' > src/m.rs
 "$GIT" add src/m.rs && "$GIT" commit -q -m "An older file" --no-verify
-sed -i 's/fn a() {}/fn a() -> u8 { 1 }/' src/m.rs && "$GIT" add src/m.rs
+sed 's/fn a() {}/fn a() -> u8 { 1 }/' src/m.rs > src/m.rs.new && mv src/m.rs.new src/m.rs && "$GIT" add src/m.rs
 if "$GIT" commit -q -m "Returns one" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
 verdict pass "$got" "I17 an unchanged older comment does not refuse"
 "$GIT" reset -q --hard origin/dev
