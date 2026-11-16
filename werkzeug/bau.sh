@@ -66,8 +66,8 @@ docker image inspect "$ABBILD" >/dev/null 2>&1 || {
     || { echo "bau: die Schicht liess sich nicht bauen" >&2; exit 1; }
 }
 
-# Ziel je Wirt: der Tiny ist x86_64, der Pi ist aarch64, jedes Ziel hat also
-# einen eigenen Bauwirt und es gibt keine Kreuzkompilierung.
+# One target per host architecture: x86_64 and aarch64 each build on a host
+# of their own, so there is no cross compilation.
 case "$(uname -m)" in
   x86_64)  ZIEL=x86_64-unknown-linux-musl;  SCHALTER=CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;;
   aarch64) ZIEL=aarch64-unknown-linux-musl; SCHALTER=CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS ;;

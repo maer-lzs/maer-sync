@@ -111,7 +111,7 @@ beschreibt der Satz nur, was die Vektoren zeigen.
 ## Wie die Zeugen gefahren werden
 
 **Auf dem Wirt liegt weiterhin keine Rust-Werkzeugkette**, weder `cargo` noch
-`rustc`, auf Pi und Tiny geprueft. Das ist ein Entscheid und kein Mangel: gebaut
+`rustc`, auf beiden Bauwirten (x86_64 und aarch64) geprueft. Das ist ein Entscheid und kein Mangel: gebaut
 wird im gepinnten Abbild ueber `werkzeug/bau.sh`, und auf dem Wirt bleibt
 nichts liegen.
 

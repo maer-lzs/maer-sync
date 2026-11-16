@@ -9,8 +9,8 @@
 **Warum im Container.** Das Lieferstueck ist ein statisches Binary, und Debian
 13 hat keine Rust-Standardbibliothek fuer musl (gemessen an `apt-cache`:
 `libstd-rust-dev` ohne musl-Ziel). Das Abbild `rust:1.85-alpine` bringt musl
-nativ mit, sein Vorgabe-Ziel ist `x86_64-unknown-linux-musl` auf dem Tiny und
-`aarch64-unknown-linux-musl` auf dem Pi. Beide Wirte bleiben ohne
+nativ mit, sein Vorgabe-Ziel ist `x86_64-unknown-linux-musl` auf dem x86_64-Wirt und
+`aarch64-unknown-linux-musl` auf dem aarch64-Wirt. Beide Wirte bleiben ohne
 Werkzeugkette, und der Rueckweg heisst Abbild wegwerfen.
 
 **Gepinnt am Index-Digest**, nicht am Etikett, und fail-closed: liegt das
