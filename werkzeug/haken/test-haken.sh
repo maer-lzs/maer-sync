@@ -205,6 +205,16 @@ if PUSH_RUN="$green" PUSH_AFTER_RUN='git commit -q --allow-empty -m "A late comm
 verdict pass "$got" "P11 the remote holds exactly the measured commit"
 "$GIT" reset -q --hard origin/dev
 
+# P13: the run measures the tree as it is committed, so a tree with changes
+# that are not committed refuses before any run.
+"$GIT" commit -q --allow-empty -m "A commit with a dirty tree behind it"
+printf 'not committed\n' >> docs/base.md
+verdict refuse "$(run_push "$green")" "P13 push from a tree with uncommitted changes"
+printf 'untracked\n' > docs/untracked.md && "$GIT" checkout -q docs/base.md
+verdict refuse "$(run_push "$green")" "P13 push from a tree with an untracked file"
+rm -f docs/untracked.md
+"$GIT" reset -q --hard origin/dev
+
 # P12: the notes only move forward. Without notes on the remote there is
 # nothing to move, and the case counts as not measured.
 if "$GIT" ls-remote --exit-code origin refs/notes/lauf >/dev/null 2>&1; then :; else
