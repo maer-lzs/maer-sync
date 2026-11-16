@@ -42,6 +42,8 @@ cp "$SOURCE/tests/role-names.txt" "$SOURCE/tests/role-names-allowed.txt" tests/
 cp "$HAKEN/crates.txt" werkzeug/haken/
 printf '[[package]]\nname = "serde"\nversion = "1.0.0"\n' > Cargo.lock
 echo "base" > docs/base.md
+# Build output and the log of a failed run stay out of the tree, as in this repository.
+printf 'ziel/\n' > .gitignore
 "$GIT" add -A && "$GIT" commit -q -m "Base of the witness repository" --no-verify
 "$GIT" push -q origin dev --no-verify
 "$GIT" branch -q main && "$GIT" push -q origin main --no-verify
