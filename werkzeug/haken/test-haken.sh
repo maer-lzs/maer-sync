@@ -111,6 +111,12 @@ expect refuse "I10 new markdown line with a dash"  docs/f.md "The store – one 
 expect pass   "I10 new markdown line without a dash" docs/f.md "The store, one file" "A line in the docs"
 expect pass   "I11 German text in a string literal" src/k.rs 'const REPLY: &str = "Die Sitzung ist abgelaufen";' "A test vector in the source"
 
+# I18: paths with a space or an umlaut are read like any other path.
+expect refuse "I18 German comment in a path with a space"  "src/a b.rs" "// Die Sitzung wird nicht mehr gehalten" "A comment in the source"
+expect refuse "I18 German comment in a path with an umlaut" "src/märchen.rs" "// Die Sitzung wird nicht mehr gehalten" "A comment in the source"
+expect refuse "I18 access value in a path with a space"   "src/c d.rs" 'let token = "abcdef0123456789abcdef0123";' "A constant in the source"
+expect pass   "I18 English comment in a path with a space" "src/e f.rs" "// The session ends after one hour" "A comment in the source"
+
 # I12: a tree in a temporary path without the mark is refused.
 "$GIT" rm -q .wegwerf && "$GIT" commit -q -m "Drop the mark" --no-verify
 expect refuse "I12 tree in a temporary path without the mark" docs/g.md "one" "A line in a temporary tree"
