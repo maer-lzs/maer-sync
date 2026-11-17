@@ -117,6 +117,18 @@ expect refuse "I18 German comment in a path with an umlaut" "src/märchen.rs" "/
 expect refuse "I18 access value in a path with a space"   "src/c d.rs" 'let token = "abcdef0123456789abcdef0123";' "A constant in the source"
 expect pass   "I18 English comment in a path with a space" "src/e f.rs" "// The session ends after one hour" "A comment in the source"
 
+# I19: a pure rename carries no added line; a rename with a new line is read.
+mkdir -p src && printf '// Die alte Zeile bleibt stehen\nfn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\n' > src/alt.rs
+"$GIT" add src/alt.rs && "$GIT" commit -q -m "An older file" --no-verify
+"$GIT" mv src/alt.rs src/neu.rs
+if "$GIT" commit -q -m "Moves the older file" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict pass "$got" "I19 pure rename of a file with an older German comment"
+printf '// Die neue Zeile wird nicht mehr gezeigt\n' >> src/neu.rs && "$GIT" add src/neu.rs
+"$GIT" mv src/neu.rs src/weiter.rs
+if "$GIT" commit -q -m "Moves the file again and adds a line" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict refuse "$got" "I19 rename with a new German comment"
+"$GIT" reset -q --hard origin/dev
+
 # I12: a tree in a temporary path without the mark is refused.
 "$GIT" rm -q .wegwerf && "$GIT" commit -q -m "Drop the mark" --no-verify
 expect refuse "I12 tree in a temporary path without the mark" docs/g.md "one" "A line in a temporary tree"
