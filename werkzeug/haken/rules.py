@@ -124,19 +124,32 @@ def check_message(text):
 
 def staged_paths():
     """The staged paths as git stores them, NUL separated, so a space or a
-    non ASCII character arrives unquoted and whole."""
-    rc, out = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
+    non ASCII character arrives unquoted and whole. A renamed or copied file
+    comes with its source, so only what changed against it counts as added."""
+    rc, out = git("diff", "--cached", "--name-status", "-M", "--diff-filter=ACMR", "-z")
     if rc != 0:
         raise SystemExit("rules.py: the staged paths cannot be read")
-    return [p for p in out.split("\0") if p]
+    fields = [f for f in out.split("\0") if f]
+    paths = []
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        if status[:1] in ("R", "C"):
+            paths.append((fields[i + 2], fields[i + 1]))
+            i += 3
+        else:
+            paths.append((fields[i + 1], None))
+            i += 2
+    return paths
 
 
 def added_lines():
     """The added lines of the index, per path. The path comes from the list
     of staged paths, not from the header of the diff, which git quotes or
     pads for unusual names."""
-    for path in staged_paths():
-        rc, diff = git("diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--", path)
+    for path, source in staged_paths():
+        both = [source, path] if source else [path]
+        rc, diff = git("diff", "--cached", "-M", "-U0", "--no-color", "--no-ext-diff", "--", *both)
         if rc != 0:
             raise SystemExit(f"rules.py: the staged change of {path} cannot be read")
         in_hunk = False
