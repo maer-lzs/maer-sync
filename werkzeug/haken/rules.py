@@ -122,16 +122,29 @@ def check_message(text):
     return found
 
 
-def added_lines():
-    rc, diff = git("diff", "--cached", "-U0", "--no-color", "--no-ext-diff")
+def staged_paths():
+    """The staged paths as git stores them, NUL separated, so a space or a
+    non ASCII character arrives unquoted and whole."""
+    rc, out = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
     if rc != 0:
-        raise SystemExit("rules.py: the staged change cannot be read")
-    path = None
-    for line in diff.split("\n"):
-        if line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else None
-        elif line.startswith("+") and path is not None:
-            yield path, line[1:]
+        raise SystemExit("rules.py: the staged paths cannot be read")
+    return [p for p in out.split("\0") if p]
+
+
+def added_lines():
+    """The added lines of the index, per path. The path comes from the list
+    of staged paths, not from the header of the diff, which git quotes or
+    pads for unusual names."""
+    for path in staged_paths():
+        rc, diff = git("diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--", path)
+        if rc != 0:
+            raise SystemExit(f"rules.py: the staged change of {path} cannot be read")
+        in_hunk = False
+        for line in diff.split("\n"):
+            if line.startswith("@@"):
+                in_hunk = True
+            elif in_hunk and line.startswith("+"):
+                yield path, line[1:]
 
 
 def comment_of(path, line):
