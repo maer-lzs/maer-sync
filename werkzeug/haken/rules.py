@@ -122,11 +122,21 @@ def check_message(text):
     return found
 
 
+def kind_of(path):
+    """The kind of a file as the rules read it: its ending, or its name for a
+    file that has none of its own, such as a Dockerfile."""
+    name = os.path.basename(path)
+    return name if name in ("Dockerfile",) else os.path.splitext(name)[1]
+
+
 def staged_paths():
     """The staged paths as git stores them, NUL separated, so a space or a
     non ASCII character arrives unquoted and whole. A renamed or copied file
-    comes with its source, so only what changed against it counts as added."""
-    rc, out = git("diff", "--cached", "--name-status", "-M", "--diff-filter=ACMR", "-z")
+    comes with its source, so only what changed against it counts as added,
+    unless its kind changed: then all its lines meet the rules of the new kind
+    for the first time and it counts as new. A change of type, a file that
+    becomes a symbolic link, is read like any other change."""
+    rc, out = git("diff", "--cached", "--name-status", "-M", "--diff-filter=ACMRT", "-z")
     if rc != 0:
         raise SystemExit("rules.py: the staged paths cannot be read")
     fields = [f for f in out.split("\0") if f]
@@ -135,7 +145,8 @@ def staged_paths():
     while i < len(fields):
         status = fields[i]
         if status[:1] in ("R", "C"):
-            paths.append((fields[i + 2], fields[i + 1]))
+            source, path = fields[i + 1], fields[i + 2]
+            paths.append((path, source if kind_of(source) == kind_of(path) else None))
             i += 3
         else:
             paths.append((fields[i + 1], None))
