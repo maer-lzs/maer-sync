@@ -129,6 +129,47 @@ if "$GIT" commit -q -m "Moves the file again and adds a line" >/dev/null 2>"$WOR
 verdict refuse "$got" "I19 rename with a new German comment"
 "$GIT" reset -q --hard origin/dev
 
+# lever <status letter> <name>: the staged change really has that status, so a
+# case below cannot pass or fail for a change that never happened.
+lever() {
+    local got
+    got="$("$GIT" diff --cached --name-status -M | cut -c1)"
+    [ "$got" = "$1" ] || { echo "not measured: $2 staged as '$got', not $1"; failures=$((failures + 1)); }
+}
+
+# I20: a file renamed to another ending is read as a new file, since its
+# lines meet the rules of the new kind for the first time.
+mkdir -p src && printf '// Die Zeile ist hier nur Text\nfn a() {}\n' > src/daten.txt
+"$GIT" add src/daten.txt && "$GIT" commit -q -m "A text file" --no-verify
+"$GIT" mv src/daten.txt src/geheim.rs
+lever R "I20 rename to a new ending"
+if "$GIT" commit -q -m "Turns the text into source" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict refuse "$got" "I20 rename to a new ending carries an old German line into a comment"
+"$GIT" reset -q --hard origin/dev
+mkdir -p src && printf '// Die Zeile ist hier nur Text\nfn a() {}\n' > src/daten.txt
+"$GIT" add src/daten.txt && "$GIT" commit -q -m "A text file" --no-verify
+"$GIT" mv src/daten.txt src/notiz.txt
+lever R "I20 rename with the same ending"
+if "$GIT" commit -q -m "Moves the text file" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict pass "$got" "I20 rename with the same ending stays a rename"
+"$GIT" reset -q --hard origin/dev
+
+# I21: a file that becomes a symbolic link is read like any other change.
+mkdir -p docs && printf 'plain\n' > docs/wechsel.md
+"$GIT" add docs/wechsel.md && "$GIT" commit -q -m "A plain page" --no-verify
+rm docs/wechsel.md && ln -s 'The store – one file' docs/wechsel.md && "$GIT" add docs/wechsel.md
+lever T "I21 type change to a link with a dash"
+if "$GIT" commit -q -m "Turns the page into a link" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict refuse "$got" "I21 type change to a link whose target carries a dash"
+"$GIT" reset -q --hard origin/dev
+mkdir -p docs && printf 'plain\n' > docs/wechsel.md
+"$GIT" add docs/wechsel.md && "$GIT" commit -q -m "A plain page" --no-verify
+rm docs/wechsel.md && ln -s base.md docs/wechsel.md && "$GIT" add docs/wechsel.md
+lever T "I21 type change to a plain link"
+if "$GIT" commit -q -m "Turns the page into a link" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict pass "$got" "I21 type change to a plain link"
+"$GIT" reset -q --hard origin/dev
+
 # I12: a tree in a temporary path without the mark is refused.
 "$GIT" rm -q .wegwerf && "$GIT" commit -q -m "Drop the mark" --no-verify
 expect refuse "I12 tree in a temporary path without the mark" docs/g.md "one" "A line in a temporary tree"
