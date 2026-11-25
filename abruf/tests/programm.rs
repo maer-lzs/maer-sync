@@ -61,7 +61,7 @@ fn commons_or_radio(a: &Anfrage, p: &BTreeMap<String, String>) -> Option<Result<
         }
         let id = if p["gcmtitle"] == "Category:Musopen" { 1 } else { 2 };
         return Some(ok(json!({"query": {"pages": [{"pageid": id, "ns": 6, "title": "File:A - I. B.ogg",
-            "videoinfo": [{"url": "https://upload.wikimedia.org/a.ogg", "extmetadata": {"License": {"value": "pd"}}}]}]}})));
+            "videoinfo": [{"url": "https://upload.wikimedia.org/a.ogg", "mime": "application/ogg", "derivatives": [{"src": "https://upload.wikimedia.org/t/a.ogg.mp3", "type": "audio/mpeg", "transcodekey": "mp3"}], "extmetadata": {"License": {"value": "pd"}}}]}]}})));
     }
     if a.url.contains(".api.radio-browser.info/") {
         if a.url.contains("/json/stats") { return Some(ok(json!({"stations": 1, "stations_broken": 0}))); }

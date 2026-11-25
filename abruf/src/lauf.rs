@@ -246,7 +246,7 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
         let mut weiter: Option<String> = None;
         loop {
             let mut p = vec![("generator", "categorymembers"), ("gcmtitle", cat), ("gcmtype", "file"),
-                             ("gcmlimit", limit.as_str()), ("prop", "videoinfo"), ("viprop", "url|size|mime|extmetadata")];
+                             ("gcmlimit", limit.as_str()), ("prop", "videoinfo"), ("viprop", "url|size|mime|derivatives|extmetadata")];
             if let Some(w) = weiter.as_deref() { p.push(("gcmcontinue", w)); }
             let a = netz.get(&commons_url(&p))?;
             let s = musopen::rows_from_answer(&a.koerper)?;
