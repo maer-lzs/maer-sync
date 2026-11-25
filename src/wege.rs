@@ -34,7 +34,7 @@ use crate::authorization::caller_for;
 use crate::frames::{pack, request_of, unpack};
 use crate::identity::public_of;
 use crate::listeners::Listeners;
-use crate::paths::{parse_document_path, parse_listing_path, valid_scope};
+use crate::paths::{parse_document_path, parse_katalog_path, parse_listing_path, valid_scope, KATALOG_PATH};
 use crate::sessions::Limits;
 use crate::protokoll::{sitzung_kurz, woher, Zeile};
 use crate::sitzungsladen::{SessionStore, SitzungsFehler};
@@ -165,6 +165,26 @@ fn leer(status: u16) -> Antwort {
     antwort(status, "application/json", Vec::new(), vec![])
 }
 
+/// One catalog row on the wire (contract version 7): a deletion mark in a
+/// delta carries exactly `id` and `geloescht`; a live row all its fields,
+/// and in a delta `"geloescht": false`.
+fn katalog_zeile(s: &crate::katalog::Stored, delta: bool) -> Value {
+    if s.geloescht {
+        return json!({ "id": s.row.id, "geloescht": true });
+    }
+    let r = &s.row;
+    let tief = r.tief.as_deref().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null);
+    let mut z = json!({
+        "id": r.id, "art": r.art, "titel": r.titel, "urheber": r.urheber, "sprache": r.sprache,
+        "jahr": r.jahr, "rechte": { "kennung": r.rechte_kennung, "url": r.rechte_url },
+        "laden": r.laden, "reihen": r.reihen, "auch": r.auch, "tief": tief,
+    });
+    if delta {
+        z["geloescht"] = json!(false);
+    }
+    z
+}
+
 fn falsche_methode(method: &str) -> Antwort {
     grund(405, &format!("{method} is not what this path is for"))
 }
@@ -247,8 +267,84 @@ impl App {
         self
     }
     pub fn ohne_alte_wege(mut self) -> Self { self.plain_ways = false; self }
-    /// K3d. Signature only until its witnesses are red.
-    pub fn mit_katalog(mut self, pfad: &str) -> Self { let _ = pfad; self.katalog = None; self }
+
+    /// The catalog paths (contract version 7), behind the gate and the token.
+    /// Reads the catalog file only, opened per request so a restart of the
+    /// fetch program never holds the service; touches no user data, and its
+    /// log line names neither the account nor the token.
+    fn katalog_weg(&mut self, a: &Anfrage) -> Antwort {
+        use crate::katalog::{Katalog, Since, KATALOG_FORMAT, MAX_PAGE};
+        let Some(pfad) = self.katalog.clone() else { return grund(404, "no such path") };
+        let Some(quelle) = parse_katalog_path(&a.path) else { return grund(404, "no such path") };
+        if a.method != "GET" {
+            return falsche_methode(&a.method);
+        }
+        let frage = frage_lesen(&a.query);
+        let anzahl = match frage.get("anzahl") {
+            None => MAX_PAGE,
+            Some(n) => match n.parse::<usize>() {
+                Ok(n) if (1..=MAX_PAGE).contains(&n) => n,
+                _ => return grund(400, "anzahl is not between 1 and 5000"),
+            },
+        };
+        let seit = match frage.get("seit") {
+            None => None,
+            Some(v) => match v.parse::<i64>() {
+                Ok(v) if v >= 0 => Some(v),
+                _ => return grund(400, "seit is not a version"),
+            },
+        };
+        let nach = frage.get("nach").map(|s| s.as_str());
+        let art = if seit.is_some() { "delta" } else { "voll" };
+        let zeile = |status: u16| Zeile::hinweis(format!("katalog quelle={quelle} art={art} status={status}"));
+        let k = match Katalog::open_read(&pfad) {
+            Ok(k) => k,
+            Err(e) => {
+                self.protokoll.push(Zeile::warnung(format!("katalog quelle={quelle} unreadable: {e}")));
+                return als_json(503, json!({ "reason": "the catalog cannot be read right now" }),
+                                vec![("retry-after".into(), "300".into())]);
+            }
+        };
+        let (page, delta) = match seit {
+            None => match k.full(&quelle, nach, anzahl) {
+                Ok(p) => (p, false),
+                Err(e) => return self.katalog_fehler(&quelle, e),
+            },
+            Some(v) => match k.since(&quelle, v, nach, anzahl) {
+                Ok(Since::Page(p)) => (p, true),
+                Ok(Since::TooOld { .. }) => {
+                    self.protokoll.push(zeile(410));
+                    return als_json(410, json!({ "reason": "seit is older than this service answers a delta for",
+                                                 "voll": format!("{KATALOG_PATH}/{quelle}") }), vec![]);
+                }
+                Ok(Since::Unknown { .. }) => {
+                    self.protokoll.push(zeile(400));
+                    return grund(400, "seit is above the version of the catalog");
+                }
+                Err(e) => return self.katalog_fehler(&quelle, e),
+            },
+        };
+        let etag = format!("\"{KATALOG_FORMAT}-{quelle}-{}\"", page.version);
+        if a.headers.get("if-none-match").map(|v| v.trim()) == Some(etag.as_str()) {
+            self.protokoll.push(zeile(304));
+            // No body; the contract fence reads statuses behind the answer helpers.
+            return als_bytes(304, Vec::new(), vec![("etag".into(), etag)]);
+        }
+        let zeilen: Vec<Value> = page.zeilen.iter().map(|s| katalog_zeile(s, delta)).collect();
+        self.protokoll.push(zeile(200));
+        als_json(200, json!({
+            "katalog_format": KATALOG_FORMAT, "quelle": quelle, "version": page.version,
+            "zeilen": zeilen, "weiter": page.weiter,
+        }), vec![("etag".into(), etag)])
+    }
+
+    fn katalog_fehler(&mut self, quelle: &str, e: crate::katalog::KatalogError) -> Antwort {
+        self.protokoll.push(Zeile::warnung(format!("katalog quelle={quelle} unreadable: {e}")));
+        als_json(503, json!({ "reason": "the catalog cannot be read right now" }),
+                 vec![("retry-after".into(), "300".into())])
+    }
+    /// The catalog file this service reads (read only), if it carries one.
+    pub fn mit_katalog(mut self, pfad: &str) -> Self { self.katalog = Some(pfad.to_string()); self }
     pub fn mit_grenzen(mut self, limits: Limits) -> Self {
         self.sessions = SessionStore::mit(limits, Box::new(|| 0.0));
         self
@@ -354,6 +450,9 @@ impl App {
         }
         let owner = caller.owner.unwrap();
 
+        if a.path == KATALOG_PATH || a.path.starts_with(&format!("{KATALOG_PATH}/")) {
+            return self.katalog_weg(a);
+        }
         if let Some(sorte) = parse_listing_path(&a.path) {
             if a.method != "GET" { return falsche_methode(&a.method); }
             return self.liste(&owner, &sorte);

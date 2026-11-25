@@ -248,6 +248,11 @@ account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]
     };
 
     let mut app = App::neu(laden).mit_kennung(privat, &abdruck);
+    // The catalog of contract version 7, read only; without the variable the
+    // service carries none and answers its paths with 404.
+    if let Some(k) = std::env::var("MAER_SYNC_KATALOG").ok().filter(|k| !k.is_empty()) {
+        app = app.mit_katalog(&k);
+    }
     eprintln!("trusting X-Real-IP from: {}",
               vertraut.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", "));
     app.vertraute_proxys = vertraut;

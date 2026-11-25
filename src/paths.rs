@@ -66,3 +66,15 @@ pub fn parse_listing_path(path: &str) -> Option<String> {
 pub fn valid_scope(scope: Option<&str>) -> bool {
     ist_bereich(scope.unwrap_or(""))
 }
+
+/// The catalog path of contract version 7: `/v1/katalog/<source>` for a
+/// source the catalog knows, else None (a 404).
+pub const KATALOG_PATH: &str = "/v1/katalog";
+
+pub fn parse_katalog_path(path: &str) -> Option<String> {
+    let parts = teile(path);
+    if parts.len() != 3 || parts[0] != VERSION || parts[1] != "katalog" {
+        return None;
+    }
+    crate::katalog::SOURCES.contains(&parts[2]).then(|| parts[2].to_string())
+}

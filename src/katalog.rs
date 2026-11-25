@@ -351,8 +351,11 @@ impl Katalog {
         let mut db = Connection::open(path)?;
         let laid_down = check_file(&db)?;
         db.busy_timeout(Duration::from_millis(DEFAULT_WAIT_MS))?;
+        // WAL while the writer runs, at every open: a clean close switches to
+        // DELETE (`close_clean`), so a reader without any write right finds
+        // no side files it would have to create.
+        db.pragma_update(None, "journal_mode", "WAL")?;
         if !laid_down {
-            db.pragma_update(None, "journal_mode", "WAL")?;
             let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
             // Another writer may have laid it down while this one waited.
             if !has_table(&tx, "meta")? {
@@ -496,8 +499,21 @@ impl Katalog {
         }
     }
 
-    /// K3d. Signature only until its witnesses are red.
-    pub fn close_clean(self) -> Result<(), KatalogError> { todo!("K3d") }
+    /// Close as the fetch program does at a clean end: switch the file to
+    /// `journal_mode=DELETE`, so no `-wal` and `-shm` are left and the
+    /// service, which mounts the catalog read only and cannot create them,
+    /// still opens it. Measured 25.11.2026 (K3a-4): after a crash the side
+    /// files stay and a read-only reader still reads the last committed
+    /// state; the next writer open cleans up. A reader just drops.
+    pub fn close_clean(self) -> Result<(), KatalogError> {
+        if !self.read_only {
+            let mode: String = self.db.query_row("PRAGMA journal_mode=DELETE", [], |r| r.get(0))?;
+            if !mode.eq_ignore_ascii_case("delete") {
+                return Err(KatalogError::Invalid(format!("journal_mode stayed {mode}")));
+            }
+        }
+        Ok(())
+    }
 
     fn writable(&self) -> Result<(), KatalogError> {
         if self.read_only { Err(KatalogError::Invalid("opened for reading".into())) } else { Ok(()) }
