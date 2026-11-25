@@ -296,12 +296,11 @@ fn den_stand_zeigen_aendert_nichts() {
 
 #[test]
 fn der_private_schluessel_steht_nicht_im_speicher_und_nicht_in_seiner_kopie() {
-    // Der Entscheid dieser Scheibe, gemessen statt behauptet. Jeder andere
-    // Fall dieser Datei bestünde auch, wenn der private Schlüssel als Zeile
-    // in der Datenbank läge. Dieser hier ist der Grund, warum er es nicht
-    // tut: `backup` reicht die Datenbank dorthin, wo Sicherungen hingehen,
-    // und ein privater Schlüssel darin lässt jeden, der eine alte Kopie hat,
-    // als dieser Dienst antworten.
+    // The point of the identity key, measured rather than claimed. Every
+    // other case of this file would pass with the private key stored as a
+    // row in the database. This one is why it is not: `backup` hands the
+    // database to wherever backups go, and a private key in it would let
+    // anyone holding an old copy answer as this service.
     let w = Wegwerf::neu("nicht-in-der-db");
     let kopie = w.ordner.join("kopie.sqlite").to_string_lossy().into_owned();
     let (privat, abdruck) = {

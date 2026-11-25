@@ -22,10 +22,9 @@
 //!   BESITZER kommt aus der Antwort des Speichers und aus nichts, was der
 //!   Rufer geschrieben hat.
 //!
-//! Die scrypt-Rechnung selbst liegt noch NICHT hier: ihre Crate ist ein
-//! eigener Entscheid. Deshalb nimmt `secret_matches_with` die Ableitung als
-//! Argument. Alles davor und alle Abweisungen sind damit schon messbar, und
-//! das ist der groessere Teil.
+//! The scrypt derivation lives further down (`ableiten`, `secret_matches`);
+//! `secret_matches_with` takes the derivation as an argument, so every check
+//! before it and every refusal can be measured without the cost of scrypt.
 
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;

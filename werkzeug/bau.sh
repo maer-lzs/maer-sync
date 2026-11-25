@@ -9,7 +9,7 @@
 # Gepinnt wird der INDEX-Digest, nicht das Etikett: `rust:1.85-alpine` wandert
 # mit der naechsten Punktfassung, der Digest nicht. Der Index deckt
 # linux/amd64 und linux/arm64/v8, also beide Wirte mit einer Angabe. Ein
-# Wechsel des Digests ist ein neuer Abbild-Entscheid (Regel 4).
+# A new digest is a new dependency and goes through the same gate as a crate.
 #
 # Das Ziel wird AUSDRUECKLICH gesetzt, und der frueheste Stand dieses Skripts
 # begruendete das Gegenteil. Gemessen: ohne `--target` gilt
