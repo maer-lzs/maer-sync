@@ -70,27 +70,22 @@ fn the_container_is_built_like_the_service() {
 #[test]
 fn the_service_mounts_the_catalog_read_only() {
     let compose = read("../compose.yaml");
+    // A service block runs from its name to the first line indented by less
+    // than four spaces (the next service, its comment, or a top-level key).
     let block = |name: &str| -> String {
-        let start = compose.find(&format!("\n  {name}:\n")).unwrap_or_else(|| panic!("no service {name}"));
-        let rest = &compose[start + 1..];
-        let end = rest[3..].find("\n  ").map(|i| i + 3).unwrap_or(rest.len());
+        let head = format!("  {name}:");
+        let mut lines = compose.lines().skip_while(|l| *l != head);
         let mut out = String::new();
-        for l in rest.lines() {
-            if out.len() > end { break; }
-            out.push_str(l); out.push('\n');
-            if l.trim().is_empty() && out.len() > 10 { }
+        out.push_str(lines.next().unwrap_or_else(|| panic!("no service {name}")));
+        out.push('\n');
+        for l in lines {
+            if !l.trim().is_empty() && !l.starts_with("    ") {
+                break;
+            }
+            out.push_str(l);
+            out.push('\n');
         }
-        let next = rest[1..].find("\n  ").map(|i| i + 1);
-        let mut s = rest.to_string();
-        // the block ends where the next service of the same depth begins
-        let mut cut = s.len();
-        for (i, _) in s.match_indices("\n  ") {
-            let after = &s[i + 3..];
-            if i > 0 && !after.starts_with(' ') && !after.starts_with('#') { cut = i; break; }
-        }
-        let _ = next;
-        s.truncate(cut);
-        s
+        out
     };
     let sync = block("maer-sync");
     let abruf = block("maer-sync-abruf");

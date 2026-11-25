@@ -30,6 +30,9 @@ fn agent(https_only: bool) -> Agent {
         .http_status_as_error(false)
         .https_only(https_only)
         .save_redirect_history(false)
+        // ureq takes ALL_PROXY, HTTPS_PROXY and HTTP_PROXY from the environment by
+        // default; a container's environment must not turn the fetch aside.
+        .proxy(None)
         .build();
     Agent::new_with_config(config)
 }
@@ -50,8 +53,10 @@ impl UreqHoler {
         !self.agent.config().tls_config().disable_verification()
     }
 
-    /// Signature only until its witness is red.
-    pub fn follows_a_proxy(&self) -> bool { true }
+    /// Whether a proxy is set (never: see `agent`).
+    pub fn follows_a_proxy(&self) -> bool {
+        self.agent.config().proxy().is_some()
+    }
 
     pub fn https_only(&self) -> bool {
         self.agent.config().https_only()

@@ -39,6 +39,10 @@ services:
     # every new image this way, and it belongs to the uid from the Dockerfile.
     volumes:
       - maer-sync-store:/var/lib/maer-sync
+      # The catalog of the fetch program, READ ONLY: the service holds the
+      # sign-ins and gets no write right on the catalog (measured 25.11.2026,
+      # it reads a cleanly closed catalog from a read-only mount).
+      - maer-sync-katalog:/var/lib/maer-sync-katalog:ro
 
     # ONE address, `MAER_SYNC_BIND`: the Rust build does not know
     # `MAER_SYNC_HOST` or `MAER_SYNC_PORT`, and setting them gives no error but a
@@ -46,6 +50,7 @@ services:
     environment:
       MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
       MAER_SYNC_BIND: 0.0.0.0:8099
+      MAER_SYNC_KATALOG: /var/lib/maer-sync-katalog/katalog.db
       # Whose `X-Real-IP` the service believes. In the container the peer is
       # NOT the loopback but the gateway of the bridge below: measured on
       # 24.09.2026, without this entry the attempt limit counted every device
@@ -79,7 +84,25 @@ services:
     mem_limit: 256m
     pids_limit: 128
 
+  # The fetch program of the catalog index: the only writer of the catalog,
+  # without a port, without the user store. Measured 25.11.2026: a full run of
+  # 190 000 rows peaked at 568 MB in a debug build, so 1 GB is the limit.
+  maer-sync-abruf:
+    build:
+      context: .
+      dockerfile: abruf/Dockerfile
+    image: maer-sync-abruf:local
+    container_name: maer-sync-abruf
+    restart: unless-stopped
+    volumes:
+      - maer-sync-katalog:/var/lib/maer-sync-katalog
+    environment:
+      MAER_SYNC_KATALOG: /var/lib/maer-sync-katalog/katalog.db
+    mem_limit: 1g
+    init: true
+
 volumes:
+  maer-sync-katalog:
   maer-sync-store:
 
 # A fixed network, so the gateway has a known address the list above can

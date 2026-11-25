@@ -36,7 +36,9 @@ use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
 use crate::netz::{encode, HolFehler, Holer, Netz, Uhr};
 use crate::plan::{Art, DELTA_S};
 
-/// K3c. The bound of the advanced search; signature only until its witness is red.
+/// The most records one query of the advanced search is read for. A delta
+/// and a shelf stay far below it (the largest shelf, jazz, has some 6 800); a
+/// query above it is refused rather than read short.
 pub const ADV_GRENZE: usize = 10_000;
 
 const ADV: &str = "https://archive.org/advancedsearch.php";
@@ -178,6 +180,9 @@ fn adv_all<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, q: &str, e: &E
     let mut page = 1;
     loop {
         let (n, body) = adv_page(netz, q, e.adv_rows, page)?;
+        if n > ADV_GRENZE {
+            return Err(LaufFehler::Quelle(format!("advancedsearch answers {n} records, more than {ADV_GRENZE} are not read")));
+        }
         let got = rows_from_answer(quelle, &body, e.kalenderjahr, shelf)?;
         let empty = got.is_empty();
         rows.extend(got);
@@ -220,6 +225,13 @@ fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstell
             break; // more than counted: the check below refuses it
         }
     }
+    // A record added while the pages were read: count again, and the pass
+    // stands if it matches the second count.
+    if rows.len() != n {
+        let (again, _) = adv_page(netz, q, 0, 1)?;
+        check_count(&rows, again)?;
+        return Ok(rows);
+    }
     check_count(&rows, n)?;
     Ok(rows)
 }
@@ -236,7 +248,20 @@ fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &st
         for s in regale_der_app() {
             parts.push(adv_all(netz, quelle, &format!("{}{since}", shelf_query(&s)), e, Some(&s))?);
         }
-        return Ok(merge_shelves(parts));
+        // A delta sees a record only on the shelves it was added to again; the
+        // shelves the catalog already knows for it stay (a full pass resets them).
+        let mut rows = merge_shelves(parts);
+        for r in rows.iter_mut() {
+            if let Ok(Some(old)) = katalog.stored(quelle, &r.id) {
+                for k in old.row.reihen {
+                    if !r.reihen.contains(&k) {
+                        r.reihen.push(k);
+                    }
+                }
+                r.reihen.sort();
+            }
+        }
+        return Ok(rows);
     }
     let q = base_query(quelle).ok_or_else(|| LaufFehler::Quelle(quelle.into()))?;
     adv_all(netz, quelle, &format!("{q}{since}"), e, None)

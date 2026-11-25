@@ -519,6 +519,12 @@ impl Katalog {
         if self.read_only { Err(KatalogError::Invalid("opened for reading".into())) } else { Ok(()) }
     }
 
+    /// One row as the file holds it, deletion marks included.
+    pub fn stored(&self, quelle: &str, id: &str) -> Result<Option<Stored>, KatalogError> {
+        Ok(read_rows(&self.db, &format!("SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND id=?2"),
+                     &[&quelle as &dyn rusqlite::ToSql, &id])?.into_iter().next())
+    }
+
     /// The live rows of a source in id order, one page after `nach`.
     pub fn full(&self, quelle: &str, nach: Option<&str>, anzahl: usize) -> Result<Page, KatalogError> {
         page_size(anzahl)?;
