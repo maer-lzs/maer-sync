@@ -112,3 +112,30 @@ fn the_default_compose_does_not_start_the_fetch() {
     assert!(readme.contains("docker compose --profile katalog up -d"));
     assert!(readme.contains("`MAER_SYNC_KATALOG`"));
 }
+
+/// The licence texts travel with the program (K3c-8): CDLA-Permissive-2.0 of
+/// webpki-roots asks only that its text goes with the data, and the other
+/// new licences ask the same of a binary. Every crate the list marks as built
+/// has its licence files under `abruf/lizenzen/<crate>-<version>/`, the image
+/// copies that folder, and the list points to it.
+#[test]
+fn every_built_fetch_crate_carries_its_licence_texts() {
+    let list = read("FREMDTEILE.md");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lizenzen");
+    let mut built = 0;
+    for l in list.lines().filter(|l| l.starts_with("| `")) {
+        let cells: Vec<&str> = l.split('|').map(str::trim).collect();
+        if cells[3] != "yes" { continue; }
+        built += 1;
+        let dir = root.join(cells[1].trim_matches('`').replace(' ', "-"));
+        let files: Vec<String> = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.to_uppercase().starts_with("LICENSE")).collect();
+        assert!(!files.is_empty(), "no licence file for {}", cells[1]);
+    }
+    assert_eq!(built, 17);
+    let cdla = std::fs::read_to_string(root.join("webpki-roots-1.0.12").join("LICENSE")).unwrap();
+    assert!(cdla.contains("Community Data License Agreement"), "the CDLA text of webpki-roots is missing");
+    assert!(read("Dockerfile").contains("COPY abruf/lizenzen /lizenzen"), "the image does not carry the licence texts");
+    assert!(list.contains("abruf/lizenzen/") && list.contains("/lizenzen"), "the list does not point to the texts");
+}
