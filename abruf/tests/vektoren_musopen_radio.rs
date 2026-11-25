@@ -221,6 +221,21 @@ fn musopen_a_malformed_answer_is_an_error() {
     assert_eq!((s.zeilen.len(), s.gesehen), (1, 2));
 }
 
+/// The app keeps the page of each recording on Commons
+/// (`MusopenCatalog.Recording.pageURL`, from `descriptionurl`).
+#[test]
+fn musopen_page_of_the_recording() {
+    let mut a: Value = serde_json::from_slice(&std::fs::read(root("musopen").join("normal-cc0").join("antwort.json")).unwrap()).unwrap();
+    let want = a["query"]["pages"][0]["videoinfo"][0]["descriptionurl"].as_str().unwrap().to_string();
+    let t = |a: &Value| -> Value {
+        let r = musopen::rows_from_answer(a.to_string().as_bytes()).unwrap().zeilen;
+        serde_json::from_str(r[0].tief.as_deref().unwrap()).unwrap()
+    };
+    assert_eq!(t(&a)["seite"], json!(want));
+    a["query"]["pages"][0]["videoinfo"][0].as_object_mut().unwrap().remove("descriptionurl");
+    assert_eq!(t(&a)["seite"], Value::Null, "no page stated, none in tief");
+}
+
 #[test]
 fn musopen_maxlag_postpones() {
     let a = json!({"error": {"code": "maxlag", "info": "Waiting for a database server", "lag": 7}});
@@ -238,7 +253,7 @@ fn musopen_continue_token() {
 #[test]
 fn radio_rows_match_the_vectors() {
     let all = cases("radio");
-    assert_eq!(all.len(), 8);
+    assert_eq!(all.len(), 9);
     for dir in all {
         let a = std::fs::read(dir.join("antwort.json")).unwrap();
         let want: Vec<Row> = read(&dir.join("erwartet.json"))["zeilen"].as_array().unwrap().iter().map(expected).collect();
@@ -275,4 +290,27 @@ fn radio_counts_the_raw_page_and_its_uuids() {
     let b = std::fs::read(root("radio").join("leerer-name").join("antwort.json")).unwrap();
     let s = radio::rows_from_page(&b).unwrap();
     assert_eq!((s.roh, s.uuids.len(), s.zeilen.len()), (1, 1, 0));
+}
+
+fn station(uuid: &str, name: &str, url: &str, resolved: &str) -> Value {
+    json!({"stationuuid": uuid, "name": name, "url": url, "url_resolved": resolved, "languagecodes": ""})
+}
+
+/// iOS `RadioMapping.stations`: name and address lose spaces and tabs at
+/// their ends, the address played is `url_resolved`, else `url`; an entry
+/// without a name or an address is dropped before the uuid counts as seen.
+#[test]
+fn radio_name_and_address_as_the_app() {
+    let page = |v: Value| radio::rows_from_page(v.to_string().as_bytes()).unwrap();
+    let s = page(json!([station("a", "\tBlasmusikradio mit Bernd ", " https://x/a\t", "")]));
+    assert_eq!(s.zeilen[0].titel.as_deref(), Some("Blasmusikradio mit Bernd"));
+    let t: Value = serde_json::from_str(s.zeilen[0].tief.as_deref().unwrap()).unwrap();
+    assert_eq!((t["url"].clone(), t["url_resolved"].clone()), (json!("https://x/a"), Value::Null));
+    assert_eq!(page(json!([station("b", "B", "", "https://x/b")])).zeilen.len(), 1, "url_resolved alone plays");
+    assert_eq!(page(json!([station("c", "C", " \t", "")])).zeilen.len(), 0, "an address of blanks is none");
+    assert_eq!(page(json!([station("d", " \t", "https://x/d", "")])).zeilen.len(), 0, "a name of blanks is none");
+    // The first entry of a uuid is unusable, the second is not: the app keeps the second.
+    let s = page(json!([station("e", "", "https://x/e", ""), station("e", "E", "https://x/e", "")]));
+    assert_eq!((s.zeilen.len(), s.uuids.len(), s.roh), (1, 1, 2));
+    assert_eq!(s.zeilen[0].titel.as_deref(), Some("E"));
 }
