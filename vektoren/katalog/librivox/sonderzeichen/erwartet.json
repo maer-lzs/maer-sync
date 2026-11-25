@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "librivox",
+   "id": "lva:100000banknote_jg_librivox",
+   "art": "hoerbuch",
+   "titel": "The £1,000,000 Bank-Note & other new stories",
+   "urheber": "Mark Twain",
+   "sprache": "eng",
+   "jahr": 2012,
+   "rechte": {
+    "kennung": "cc0",
+    "url": "http://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

@@ -1,0 +1,23 @@
+{
+ "zeilen": [
+  {
+   "quelle": "radio",
+   "id": "radio:rb:595687e1-9fa0-49d7-8cb7-d6ed63f6d8b3",
+   "art": "sender",
+   "titel": "Christmas FM Non-stop!",
+   "urheber": null,
+   "sprache": "italian",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "_hinweis": "ein Sender hat keine Lizenz im Sinne der Liste; laden ist fuer Sender gegenstandslos"
+}

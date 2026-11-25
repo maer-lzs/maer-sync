@@ -1,0 +1,83 @@
+{
+ "nach_vorher": [
+  {
+   "quelle": "netlabel",
+   "id": "lva:0-hz-immersion-into-wallbient",
+   "art": "musik",
+   "titel": "0 Hz – Immersion Into Wallbient [USC-RM-1807.0003]",
+   "urheber": "0 Hz",
+   "sprache": null,
+   "jahr": 2018,
+   "rechte": {
+    "kennung": "cc-by-sa",
+    "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  },
+  {
+   "quelle": "netlabel",
+   "id": "lva:00-ps-enough-records-radio-show-098",
+   "art": "musik",
+   "titel": "00 Ps Enough Records Radio Show 098",
+   "urheber": "ps",
+   "sprache": "eng",
+   "jahr": 2024,
+   "rechte": {
+    "kennung": "cc-by-nc-sa",
+    "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "nach_nachher": [
+  {
+   "quelle": "netlabel",
+   "id": "lva:0-hz-immersion-into-wallbient",
+   "art": "musik",
+   "titel": "0 Hz – Immersion Into Wallbient [USC-RM-1807.0003]",
+   "urheber": "0 Hz",
+   "sprache": null,
+   "jahr": 2018,
+   "rechte": {
+    "kennung": "cc-by-sa",
+    "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 2,
+   "geloescht": true
+  },
+  {
+   "quelle": "netlabel",
+   "id": "lva:00-ps-enough-records-radio-show-098",
+   "art": "musik",
+   "titel": "00 Ps Enough Records Radio Show 098",
+   "urheber": "ps",
+   "sprache": "eng",
+   "jahr": 2024,
+   "rechte": {
+    "kennung": "cc-by-nc-sa",
+    "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "_hinweis": "zwei Laeufe ueber katalog::write_run; die verschwundene Zeile bleibt als Loeschmarke mit Version 2"
+}

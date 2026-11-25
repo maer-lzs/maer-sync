@@ -1,0 +1,52 @@
+{
+ "items": [
+  {
+   "identifier": "0-hz-immersion-into-wallbient",
+   "collection": [
+    "romtid-musikk",
+    "netlabels",
+    "fav-ilikejerrygarcia",
+    "fav-jen496"
+   ],
+   "creator": "0 Hz",
+   "date": "2018-07-10T00:00:00Z",
+   "licenseurl": "https://creativecommons.org/licenses/by-sa/4.0/",
+   "subject": [
+    "lowercase",
+    "noise ambient",
+    "cinematic",
+    "experimental",
+    "sound art",
+    "sound research",
+    "soundscape",
+    "isolationism",
+    "sonic",
+    "minimalism"
+   ],
+   "title": "0 Hz – Immersion Into Wallbient [USC-RM-1807.0003]",
+   "publicdate": "2022-01-21T12:33:23Z",
+   "addeddate": "2022-01-21T12:33:23Z",
+   "year": 2018
+  },
+  {
+   "identifier": "00-ps-enough-records-radio-show-098",
+   "collection": [
+    "enough_records",
+    "netlabels",
+    "fav-semareit"
+   ],
+   "creator": "ps",
+   "date": "2024-04-09T00:00:00Z",
+   "language": "eng",
+   "licenseurl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+   "subject": "radioshow",
+   "title": "00 Ps Enough Records Radio Show 098",
+   "publicdate": "2024-04-09T14:37:33Z",
+   "addeddate": "2024-04-09T14:37:33Z",
+   "year": 2024
+  }
+ ],
+ "count": 2,
+ "total": 77285,
+ "_quelle": "echte Zeilen, Paar gebaut"
+}

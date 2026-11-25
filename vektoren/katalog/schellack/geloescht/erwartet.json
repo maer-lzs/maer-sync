@@ -1,0 +1,90 @@
+{
+ "nach_vorher": [
+  {
+   "quelle": "schellack",
+   "id": "lva:78_wenn-wir-uns-wiedersehn_willi-stanke-mit-seinem-tanzstreichorchester-issy-pat-und_gbia7036246b",
+   "art": "musik",
+   "titel": "Wenn wir uns wiederseh'n",
+   "urheber": "Willi Stanke mit seinem Tanzstreichorchester; Issy Pat und die Telestars; H. Deuringer; J. Reding; H. P. Lehmann",
+   "sprache": "German",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [
+    "shellac-tango"
+   ],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  },
+  {
+   "quelle": "schellack",
+   "id": "lva:78_hvis-du-har-taget-fejl-saa-sig-det-med-det-samme_sid-merrimans-danseorkester-gull_gbia0123234b",
+   "art": "musik",
+   "titel": "Hvis du har taget Fejl, saa sig det med det samme",
+   "urheber": "Sid Merriman's Danseorkester; Gull-Maj Norin; B. Bøhling Petersen; Asger Koch",
+   "sprache": "Danish",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [
+    "shellac-tango"
+   ],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "nach_nachher": [
+  {
+   "quelle": "schellack",
+   "id": "lva:78_wenn-wir-uns-wiedersehn_willi-stanke-mit-seinem-tanzstreichorchester-issy-pat-und_gbia7036246b",
+   "art": "musik",
+   "titel": "Wenn wir uns wiederseh'n",
+   "urheber": "Willi Stanke mit seinem Tanzstreichorchester; Issy Pat und die Telestars; H. Deuringer; J. Reding; H. P. Lehmann",
+   "sprache": "German",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [
+    "shellac-tango"
+   ],
+   "auch": [],
+   "tief": null,
+   "version": 2,
+   "geloescht": true
+  },
+  {
+   "quelle": "schellack",
+   "id": "lva:78_hvis-du-har-taget-fejl-saa-sig-det-med-det-samme_sid-merrimans-danseorkester-gull_gbia0123234b",
+   "art": "musik",
+   "titel": "Hvis du har taget Fejl, saa sig det med det samme",
+   "urheber": "Sid Merriman's Danseorkester; Gull-Maj Norin; B. Bøhling Petersen; Asger Koch",
+   "sprache": "Danish",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [
+    "shellac-tango"
+   ],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ]
+}

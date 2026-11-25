@@ -1,0 +1,34 @@
+{
+ "items": [
+  {
+   "identifier": "001JustForYou",
+   "collection": [
+    "oldtimeradio",
+    "radioprograms"
+   ],
+   "creator": "Robert Just",
+   "date": "2013-12-31T00:00:00Z",
+   "language": "eng",
+   "licenseurl": "http://creativecommons.org/publicdomain/mark/1.0/",
+   "subject": [
+    "Jut",
+    "for",
+    "you",
+    "robert",
+    "just",
+    "rumsey",
+    "retro",
+    "radio",
+    "old",
+    "time"
+   ],
+   "title": "Just For You",
+   "publicdate": "2014-09-14T18:36:41Z",
+   "addeddate": "2014-09-14T18:36:41Z",
+   "year": 2013
+  }
+ ],
+ "count": 1,
+ "total": 57502,
+ "_quelle": "archive.org/services/search/v1/scrape, gekuerzt auf eine Zeile, 25.11.2026"
+}

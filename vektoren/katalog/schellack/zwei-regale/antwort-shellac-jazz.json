@@ -1,0 +1,39 @@
+{
+ "response": {
+  "numFound": 1,
+  "start": 0,
+  "docs": [
+   {
+    "addeddate": "2017-06-13T22:35:11Z",
+    "collection": [
+     "78rpm",
+     "78rpm_thorpe",
+     "georgeblood",
+     "audio_music",
+     "fav-atekay",
+     "fav-kiddem"
+    ],
+    "creator": [
+     "Louis Prima and his Gleeby Rhythm Orchestra",
+     "Louis Prima",
+     "Grimes",
+     "Battle",
+     "Prima"
+    ],
+    "date": "1940-01-01T00:00:00Z",
+    "identifier": "78_gleeby-rhythm-is-born-el-ritmo-gleeby-nace_louis-prima-and-his-gleeby-rhythm-orch_gbia0008343b",
+    "language": "English",
+    "publicdate": "2017-06-13T22:36:58Z",
+    "subject": [
+     "78rpm",
+     "Jazz",
+     "Big Band",
+     "Swing"
+    ],
+    "title": "Gleeby Rhythm is Born (El Ritmo Gleeby Nace)",
+    "year": 1940
+   }
+  ]
+ },
+ "_quelle": "archive.org/advancedsearch.php, Titel aus subject:swing AND subject:jazz, hier als Antwort des Regals shellac-jazz"
+}

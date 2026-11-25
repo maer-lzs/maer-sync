@@ -1,0 +1,83 @@
+{
+ "nach_vorher": [
+  {
+   "quelle": "otr",
+   "id": "lva:00003efa-14d5-4a79-bced-010747d3e96c",
+   "art": "hoerspiel",
+   "titel": "Grand Ole Opry 1954-10-30 Love Me Now",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 1954,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  },
+  {
+   "quelle": "otr",
+   "id": "lva:0000d5c1-a07d-4fd8-8213-eed9a2c0edda",
+   "art": "hoerspiel",
+   "titel": "Bell Telephone Hour 1956-07-02 Leonard Warren",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 1956,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "nach_nachher": [
+  {
+   "quelle": "otr",
+   "id": "lva:00003efa-14d5-4a79-bced-010747d3e96c",
+   "art": "hoerspiel",
+   "titel": "Grand Ole Opry 1954-10-30 Love Me Now",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 1954,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 2,
+   "geloescht": true
+  },
+  {
+   "quelle": "otr",
+   "id": "lva:0000d5c1-a07d-4fd8-8213-eed9a2c0edda",
+   "art": "hoerspiel",
+   "titel": "Bell Telephone Hour 1956-07-02 Leonard Warren",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 1956,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "_hinweis": "zwei Laeufe ueber katalog::write_run; die verschwundene Zeile bleibt als Loeschmarke mit Version 2"
+}

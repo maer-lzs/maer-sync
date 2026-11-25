@@ -1,0 +1,44 @@
+{
+ "responseHeader": {
+  "status": 0,
+  "QTime": 170,
+  "params": {
+   "query": "collection:georgeblood AND mediatype:audio AND subject:&quot;classical&quot; AND year:1926",
+   "qin": "collection:georgeblood AND mediatype:(audio) AND subject:&quot;classical&quot; AND year:1926",
+   "fields": "identifier,title,creator,date,year,licenseurl,addeddate,publicdate,collection,language,subject",
+   "wt": "json",
+   "rows": 50,
+   "start": 0
+  }
+ },
+ "response": {
+  "numFound": 65,
+  "start": 0,
+  "docs": [
+   {
+    "addeddate": "2020-10-21T22:48:41Z",
+    "collection": [
+     "78rpm",
+     "78rpm_leif_druedahl",
+     "georgeblood",
+     "audio_music"
+    ],
+    "creator": [
+     "C. WHITAKER-WILSON",
+     "HANDEL"
+    ],
+    "date": "1926-01-01T00:00:00Z",
+    "identifier": "78_largo_c-whitaker-wilson-handel_gbia7002758a",
+    "language": "English",
+    "publicdate": "2020-10-21T22:41:30Z",
+    "subject": [
+     "78rpm",
+     "Classical"
+    ],
+    "title": "LARGO",
+    "year": 1926
+   }
+  ]
+ },
+ "_quelle": "archive.org/advancedsearch.php, collection:georgeblood AND mediatype:(audio) AND subject:\"classical\" AND year:1926, gekuerzt auf einen Titel, 25.11.2026"
+}

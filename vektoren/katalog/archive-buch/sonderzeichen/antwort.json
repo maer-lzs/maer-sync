@@ -1,0 +1,21 @@
+{
+ "items": [
+  {
+   "identifier": "0000_todays-essay",
+   "collection": [
+    "audiolibrary",
+    "folksoundomy",
+    "audio_bookspoetry",
+    "fav-alchemical"
+   ],
+   "date": "2013-01-01T00:00:00Z",
+   "title": "2013년 11월 9일 오늘의 단상 :",
+   "publicdate": "2013-11-09T07:02:24Z",
+   "addeddate": "2013-11-09T07:02:24Z",
+   "year": 2013
+  }
+ ],
+ "count": 1,
+ "total": 75677,
+ "_quelle": "archive.org/services/search/v1/scrape, gekuerzt auf eine Zeile, 25.11.2026"
+}

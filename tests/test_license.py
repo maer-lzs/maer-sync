@@ -46,10 +46,12 @@ LICENCE_FILES = ("LICENSE", "LICENSE-ADDITIONAL-TERMS")
 # JSON-Dateien daneben werden nicht eingesammelt (die Sammlung nimmt nur
 # .py, .rs, .sh und Dockerfile) und tragen ihre Ausnahme mit Grund.
 # `core`, `service` und `abdeckung` gingen am 24.09.2026 mit der Python-Fassung.
-SOURCE_DIRS = ("tests", "src", "werkzeug", "vektoren")
+# `abruf` since 25.11.2026: the fetch program of the catalog index, a package
+# of its own so its crates never enter the tree of the service.
+SOURCE_DIRS = ("tests", "src", "werkzeug", "vektoren", "abruf")
 
 #: Files at the root that are source too, each named on purpose.
-ROOT_FILES = ("Dockerfile", "compose.yaml", "Cargo.toml")
+ROOT_FILES = ("Dockerfile", "compose.yaml", "Cargo.toml", "abruf/Cargo.toml")
 
 #: Exempt, each with the reason at the entry — not in a list elsewhere.
 EXEMPT = {
@@ -68,6 +70,8 @@ EXEMPT = {
                    "so a header here is a change to the app's repository too",
     "Cargo.lock": "cargo writes this file; a header would be rewritten away, and the "
                   "pins it holds are checked by the fence on Cargo.toml instead",
+    "abruf/Cargo.lock": "cargo writes this file; a header would be rewritten away. It starts as a copy of "
+                        "the service's Cargo.lock, so the shared crates have the same versions",
     "LICENSE": "it is the licence",
     "LICENSE-ADDITIONAL-TERMS": "it is the additional terms",
     "vektoren/README.md": "prose about the vectors next to them; the LICENSE file covers it",
@@ -109,6 +113,16 @@ EXEMPT = {
     "vektoren/noise-nk.json": "somebody else's published numbers, copied verbatim; a "
                               "header would alter the bytes whose whole value is that "
                               "nobody touched them, and JSON has no comments to put one in",
+}
+
+#: Exempt by folder, each with the reason at the entry: a folder of recorded
+#: answers holds dozens of files of one kind, and listing each would hide the
+#: one reason they share.
+EXEMPT_UNDER = {
+    "vektoren/katalog/": "answers of the catalog sources, recorded and cut to one record, and the rows "
+                         "expected from them; JSON, RDF and CSV have no comment to put a header in, a "
+                         "header would alter recorded bytes, and where they come from is stated in "
+                         "vektoren/README.md and in each answer's _quelle",
 }
 
 SPDX = "SPDX-License-Identifier"
@@ -274,6 +288,7 @@ class EveryFileNamesItsLicence(unittest.TestCase):
             rel for rel in gitquery.tracked()
             if rel not in gathered
             and rel not in EXEMPT
+            and not any(rel.startswith(prefix) for prefix in EXEMPT_UNDER)
             and "__pycache__" not in rel)
         self.assertEqual([], unseen,
                          "tracked files in a source directory that are neither checked "
@@ -281,6 +296,6 @@ class EveryFileNamesItsLicence(unittest.TestCase):
                          + ", ".join(unseen))
 
     def test_every_exemption_carries_a_reason(self):
-        ohne_grund = sorted(name for name, grund in EXEMPT.items() if not grund.strip())
+        ohne_grund = sorted(name for name, grund in {**EXEMPT, **EXEMPT_UNDER}.items() if not grund.strip())
         self.assertEqual([], ohne_grund,
                          "exemptions without a reason at the entry: " + ", ".join(ohne_grund))

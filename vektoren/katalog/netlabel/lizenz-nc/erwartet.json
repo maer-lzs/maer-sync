@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "netlabel",
+   "id": "lva:00-ps-enough-records-radio-show-098",
+   "art": "musik",
+   "titel": "00 Ps Enough Records Radio Show 098",
+   "urheber": "ps",
+   "sprache": "eng",
+   "jahr": 2024,
+   "rechte": {
+    "kennung": "cc-by-nc-sa",
+    "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

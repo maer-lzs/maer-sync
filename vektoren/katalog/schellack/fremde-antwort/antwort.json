@@ -1,0 +1,58 @@
+{
+ "items": [
+  {
+   "identifier": "78_evening-brings-memories-of-you_bob-thomas-miller-brook_gbia0184969b",
+   "collection": [
+    "78rpm",
+    "78rpm_universityofillinoisaudioarchive",
+    "georgeblood",
+    "audio_music"
+   ],
+   "creator": [
+    "Bob Thomas",
+    "Miller",
+    "Brook"
+   ],
+   "language": "English",
+   "subject": [
+    "78rpm",
+    "Jazz"
+   ],
+   "title": "Evening Brings Memories Of You",
+   "publicdate": "2020-03-05T06:17:18Z",
+   "addeddate": "2020-03-05T06:42:03Z",
+   "date": "1925-06-01T00:00:00Z",
+   "year": 1925
+  },
+  {
+   "identifier": "78_i-miss-my-swiss-my-swiss-miss-misses-me_tennessee-happy-boys-authur-hall-l-wolfe_gbia0191931b",
+   "collection": [
+    "78rpm",
+    "78rpm_aldo-mancusi",
+    "georgeblood",
+    "audio_music",
+    "fav-frantse_",
+    "fav-jeremy_passarelli",
+    "fav-marysflowers"
+   ],
+   "creator": [
+    "TENNESSEE HAPPY BOYS",
+    "AUTHUR HALL",
+    "L. Wolfe Gilbert & Abel Baer"
+   ],
+   "language": "English",
+   "subject": [
+    "LP",
+    "Jazz"
+   ],
+   "title": "I MISS MY SWISS (MY SWISS MISS MISSES ME)",
+   "publicdate": "2020-06-06T19:11:53Z",
+   "addeddate": "2020-06-06T19:30:54Z",
+   "date": "1925-01-01T00:00:00Z",
+   "year": 1925
+  }
+ ],
+ "count": 2,
+ "total": 11,
+ "_quelle": "echte Antwort von services/search/v1/scrape auf subject:classical AND year:1926 (25.11.2026, 16:5x): archive.org lieferte die zwischengespeicherte Jazz-Antwort einer frueheren Abfrage mit gleichen fields und count"
+}

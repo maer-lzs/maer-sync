@@ -1,0 +1,27 @@
+{
+ "items": [
+  {
+   "identifier": "030305angelemarmotte",
+   "publicdate": "2004-09-06T21:53:55Z",
+   "creator": "Sylvain Piron",
+   "licenseurl": "http://creativecommons.org/licenses/publicdomain/",
+   "date": "2003-03-05T00:00:00Z",
+   "collection": [
+    "audio_bookspoetry"
+   ],
+   "title": "Angèle Marmotte",
+   "addeddate": "2004-09-06T12:38:35Z",
+   "subject": [
+    "Chanson",
+    "Classical",
+    "lyric poetry",
+    "Accordion",
+    "Traditional French"
+   ],
+   "year": 2003
+  }
+ ],
+ "count": 1,
+ "total": 75677,
+ "_quelle": "archive.org/services/search/v1/scrape, gekuerzt auf eine Zeile, 25.11.2026"
+}

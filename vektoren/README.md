@@ -201,3 +201,11 @@ des Textes, nicht im Verhalten.
 das hat einen Fehler in der Maskierung gefangen: ein LEERES Geheimnis stand
 als `<geheimnis>` da, und beim Abspielen wurde ein gueltiges eingesetzt, womit
 der Fall »leeres Geheimnis« das Gegenteil dessen prueft, wofuer er dasteht.
+
+## `katalog/`: Antworten der Katalog-Quellen (seit 25.11.2026)
+
+Nicht eingefroren, und nicht wie die Dateien oben gemessen an einer zweiten Umsetzung des Dienstes. Je Quelle und Fall ein Ordner: `antwort.json` (oder `antwort.rdf`, `katalogzeile.csv`) ist eine echte Antwort der Quelle vom 25.11.2026, gekuerzt auf einen Titel, ohne Kopfzeilen; wo eine Antwort gebaut ist (eine Loeschung als Paar `vorher`/`nachher`, eine leere oder kaputte Antwort, ein Titel auf zwei Regalen), sagt es ihr Feld `_quelle`. `fall.json` nennt Quelle, Kalenderjahr, Sammlung und Regal; `erwartet.json` die Zeilen des Index oder den Fehler.
+
+**Wer die Erwartungen geschrieben hat:** derselbe Autor wie die Leser, aus den entschiedenen Regeln (Format K2 mit den Entscheiden vom 25.11.2026), vor dem Code, gegengelesen im Kanal. Die Gegenprobe ist hier keine zweite Fassung des Dienstes, sondern die zwei Geraeteseiten (Swift, Kotlin), die dieselben Ordner lesen; die Musopen-Felder `komponist`, `werk`, `interpret` und `satz` liefert die Swift-Seite aus ihrem Code. Weicht eine Seite ab, ist das ein Befund fuer alle drei, keine Datei zum Nachziehen.
+
+`schellack/regale.json` ist die Liste der Themen-Regale aus der App (Schellack nur aus Regalen, nie die ganze Sammlung). Die Faelle `fremde-antwort` halten eine Antwort fest, die archive.org fuer eine andere Abfrage geliefert hat: am 25.11.2026 gab `services/search/v1/scrape` bei gleichem `fields` und `count` die zwischengespeicherte Antwort einer frueheren Abfrage zurueck, ohne Fehler. Der Leser prueft deshalb jede Antwort gegen ihre Abfrage (Sammlung, Regal).

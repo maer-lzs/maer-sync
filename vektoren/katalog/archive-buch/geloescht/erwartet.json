@@ -1,0 +1,83 @@
+{
+ "nach_vorher": [
+  {
+   "quelle": "archive-buch",
+   "id": "lva:0-oqS0cwGb8",
+   "art": "hoerbuch",
+   "titel": "0-oqS0cwGb8",
+   "urheber": null,
+   "sprache": null,
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  },
+  {
+   "quelle": "archive-buch",
+   "id": "lva:0000_todays-essay",
+   "art": "hoerbuch",
+   "titel": "2013년 11월 9일 오늘의 단상 :",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 2013,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "nach_nachher": [
+  {
+   "quelle": "archive-buch",
+   "id": "lva:0-oqS0cwGb8",
+   "art": "hoerbuch",
+   "titel": "0-oqS0cwGb8",
+   "urheber": null,
+   "sprache": null,
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 2,
+   "geloescht": true
+  },
+  {
+   "quelle": "archive-buch",
+   "id": "lva:0000_todays-essay",
+   "art": "hoerbuch",
+   "titel": "2013년 11월 9일 오늘의 단상 :",
+   "urheber": null,
+   "sprache": null,
+   "jahr": 2013,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "_hinweis": "zwei Laeufe ueber katalog::write_run; die verschwundene Zeile bleibt als Loeschmarke mit Version 2"
+}

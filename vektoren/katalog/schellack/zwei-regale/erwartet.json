@@ -1,0 +1,25 @@
+{
+ "zeilen": [
+  {
+   "quelle": "schellack",
+   "id": "lva:78_gleeby-rhythm-is-born-el-ritmo-gleeby-nace_louis-prima-and-his-gleeby-rhythm-orch_gbia0008343b",
+   "art": "musik",
+   "titel": "Gleeby Rhythm is Born (El Ritmo Gleeby Nace)",
+   "urheber": "Louis Prima and his Gleeby Rhythm Orchestra; Louis Prima; Grimes; Battle; Prima",
+   "sprache": "English",
+   "jahr": 1940,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [
+    "shellac-jazz",
+    "shellac-swing"
+   ],
+   "auch": [],
+   "tief": null
+  }
+ ],
+ "_hinweis": "ein Titel auf zwei Regalen ist eine Zeile mit beiden Regalen"
+}

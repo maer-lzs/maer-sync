@@ -1,0 +1,83 @@
+{
+ "nach_vorher": [
+  {
+   "quelle": "librivox",
+   "id": "lva:0_sense_and_sensibility_librivox",
+   "art": "hoerbuch",
+   "titel": "Sense and Sensibility",
+   "urheber": "Jane Austen",
+   "sprache": "eng",
+   "jahr": 2007,
+   "rechte": {
+    "kennung": "pd",
+    "url": "http://creativecommons.org/licenses/publicdomain/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  },
+  {
+   "quelle": "librivox",
+   "id": "lva:1-2pedro_reina_valera_1710_librivox",
+   "art": "hoerbuch",
+   "titel": "Bible (Reina Valera) NT 21-22: 1, 2 Pedro",
+   "urheber": "Reina-Valera",
+   "sprache": "spa",
+   "jahr": 2017,
+   "rechte": {
+    "kennung": "pdm",
+    "url": "http://creativecommons.org/publicdomain/mark/1.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "nach_nachher": [
+  {
+   "quelle": "librivox",
+   "id": "lva:0_sense_and_sensibility_librivox",
+   "art": "hoerbuch",
+   "titel": "Sense and Sensibility",
+   "urheber": "Jane Austen",
+   "sprache": "eng",
+   "jahr": 2007,
+   "rechte": {
+    "kennung": "pd",
+    "url": "http://creativecommons.org/licenses/publicdomain/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 2,
+   "geloescht": true
+  },
+  {
+   "quelle": "librivox",
+   "id": "lva:1-2pedro_reina_valera_1710_librivox",
+   "art": "hoerbuch",
+   "titel": "Bible (Reina Valera) NT 21-22: 1, 2 Pedro",
+   "urheber": "Reina-Valera",
+   "sprache": "spa",
+   "jahr": 2017,
+   "rechte": {
+    "kennung": "pdm",
+    "url": "http://creativecommons.org/publicdomain/mark/1.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null,
+   "version": 1,
+   "geloescht": false
+  }
+ ],
+ "_hinweis": "zwei Laeufe ueber katalog::write_run; die verschwundene Zeile bleibt als Loeschmarke mit Version 2"
+}

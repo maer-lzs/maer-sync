@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "otr",
+   "id": "lva:001JustForYou",
+   "art": "hoerspiel",
+   "titel": "Just For You",
+   "urheber": "Robert Just",
+   "sprache": "eng",
+   "jahr": 2013,
+   "rechte": {
+    "kennung": "pdm",
+    "url": "http://creativecommons.org/publicdomain/mark/1.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

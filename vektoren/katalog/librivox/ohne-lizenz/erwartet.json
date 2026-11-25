@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "librivox",
+   "id": "lva:100_great_poems_2210_librivox",
+   "art": "hoerbuch",
+   "titel": "A Hundred Great Poems",
+   "urheber": "Various",
+   "sprache": "eng",
+   "jahr": 2022,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

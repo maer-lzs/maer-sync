@@ -310,8 +310,8 @@ impl Katalog {
     }
 
     /// How long this writer waits for another one before `Busy`.
-    pub fn set_wait_ms(&mut self, ms: u64) {
-        let _ = self.db.busy_timeout(Duration::from_millis(ms));
+    pub fn set_wait_ms(&mut self, ms: u64) -> Result<(), KatalogError> {
+        Ok(self.db.busy_timeout(Duration::from_millis(ms))?)
     }
 
     /// The highest version a source has handed out; 0 before its first run.

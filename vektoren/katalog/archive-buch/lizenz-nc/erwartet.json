@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "archive-buch",
+   "id": "lva:001-Vvedeniye",
+   "art": "hoerbuch",
+   "titel": "001 Введение",
+   "urheber": "http://sites.google.com/site/wwjdru/",
+   "sprache": "Russian",
+   "jahr": null,
+   "rechte": {
+    "kennung": "cc-by-nc-sa",
+    "url": "http://creativecommons.org/licenses/by-nc-sa/3.0/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

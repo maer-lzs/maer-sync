@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "archive-buch",
+   "id": "lva:030305angelemarmotte",
+   "art": "hoerbuch",
+   "titel": "Angèle Marmotte",
+   "urheber": "Sylvain Piron",
+   "sprache": null,
+   "jahr": 2003,
+   "rechte": {
+    "kennung": "pd",
+    "url": "http://creativecommons.org/licenses/publicdomain/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+[
+ {
+  "stationuuid": "595687e1-9fa0-49d7-8cb7-d6ed63f6d8b3",
+  "name": "Christmas FM Non-stop!",
+  "url": "https://xmas-node1.zip.wf/live.aac",
+  "url_resolved": "https://xmas-node1.zip.wf/live.aac",
+  "homepage": "https://armisa.it/natale",
+  "favicon": "https://zip.wf/chfm.jpg",
+  "tags": "advent,canti natalizi,canzoni di natale,carols,chansons de noël,christmas,christmas carols,christmas choir,christmas classics,christmas hits,christmas instrumental,christmas jazz,christmas lounge,christmas music,christmas piano,christmas pop,christmas radio,christmas rock,christmas songs,festive music,happy holidays,holiday music,holiday radio,jingle bells,joulumusiikki,jul,kerstmis,lapland,laponia,lappi,lappland,last christmas,merry christmas,musica di natale,musica natalizia,musique de noël,música navideña,natal,natale,navidad,new year,noël,pop christmas,rovaniemi,santa claus,santa radio,seasonal music,silent night,traditional christmas,villancicos,weihnachten,weihnachtslieder,weihnachtsmusik,winter holidays,winter music,xmas,xmas music,xmas songs",
+  "country": "Finland",
+  "countrycode": "FI",
+  "language": "italian",
+  "codec": "AAC",
+  "bitrate": 128,
+  "lastcheckok": 1
+ }
+]

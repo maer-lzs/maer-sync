@@ -1,0 +1,23 @@
+{
+ "items": [
+  {
+   "identifier": "001-Vvedeniye",
+   "title": "001 Введение",
+   "creator": "http://sites.google.com/site/wwjdru/",
+   "subject": [
+    "Проповеди",
+    "Злачные пажити"
+   ],
+   "licenseurl": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+   "publicdate": "2010-06-09T13:12:19Z",
+   "addeddate": "2010-06-09T13:11:20Z",
+   "language": "Russian",
+   "collection": [
+    "audio_bookspoetry"
+   ]
+  }
+ ],
+ "count": 1,
+ "total": 75677,
+ "_quelle": "archive.org/services/search/v1/scrape, gekuerzt auf eine Zeile, 25.11.2026"
+}

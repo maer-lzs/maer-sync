@@ -551,7 +551,7 @@ fn a_second_writer_waits_or_fails_by_name() {
     let mut k = Katalog::open(&p).unwrap();
     k.write_run("otr", &rows("otr", 3), false).unwrap();
     let mut other = Katalog::open(&p).unwrap();
-    other.set_wait_ms(200);
+    other.set_wait_ms(200).expect("the wait is set");
     // The first writer holds its run open.
     let mut w = Connection::open(&p).unwrap();
     let tx = w.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate).unwrap();
@@ -565,4 +565,30 @@ fn a_second_writer_waits_or_fails_by_name() {
     drop(tx);
     assert_eq!(dump(&p), before, "a half run was left");
     assert_eq!(other.write_run("otr", &next, false).unwrap(), 2);
+}
+
+#[test]
+fn a_reordered_list_keeps_the_version() {
+    // The order of a list and the order of keys in the deep part carry no
+    // meaning; a run that only reorders them must not turn every ETag stale.
+    let p = scratch("reorder");
+    let mut k = Katalog::open(&p).unwrap();
+    let mut r = row("schellack", "lva:78_a", "t");
+    r.reihen = vec!["shellac-swing".into(), "shellac-jazz".into()];
+    r.auch = vec!["lv:2".into(), "lv:1".into()];
+    r.tief = Some(r#"{"satz": 2, "komponist": "X"}"#.into());
+    assert_eq!(k.write_run("schellack", &[r.clone()], false).unwrap(), 1);
+    let mut again = r.clone();
+    again.reihen = vec!["shellac-jazz".into(), "shellac-swing".into()];
+    again.auch = vec!["lv:1".into(), "lv:2".into(), "lv:1".into()];
+    again.tief = Some(r#"{"komponist":"X","satz":2}"#.into());
+    assert_eq!(k.write_run("schellack", &[again], false).unwrap(), 1);
+    let stored = &k.full("schellack", None, MAX_PAGE).unwrap().zeilen[0].row;
+    assert_eq!(stored.reihen, vec!["shellac-jazz".to_string(), "shellac-swing".to_string()]);
+    assert_eq!(stored.auch, vec!["lv:1".to_string(), "lv:2".to_string()]);
+    assert_eq!(stored.tief.as_deref(), Some(r#"{"komponist":"X","satz":2}"#));
+    // Deep text that is not JSON is refused, not stored.
+    let mut bad = r.clone();
+    bad.tief = Some("not json".into());
+    assert!(k.write_run("schellack", &[bad], false).is_err());
 }

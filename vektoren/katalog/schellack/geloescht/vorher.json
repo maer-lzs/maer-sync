@@ -1,0 +1,57 @@
+{
+ "response": {
+  "numFound": 2,
+  "start": 0,
+  "docs": [
+   {
+    "addeddate": "2023-08-04T05:52:05Z",
+    "collection": [
+     "78rpm",
+     "78rpm_leif_druedahl",
+     "georgeblood",
+     "audio_music",
+     "fav-trkrii-x"
+    ],
+    "creator": [
+     "Willi Stanke mit seinem Tanzstreichorchester",
+     "Issy Pat und die Telestars",
+     "H. Deuringer",
+     "J. Reding",
+     "H. P. Lehmann"
+    ],
+    "identifier": "78_wenn-wir-uns-wiedersehn_willi-stanke-mit-seinem-tanzstreichorchester-issy-pat-und_gbia7036246b",
+    "language": "German",
+    "publicdate": "2023-08-04T05:49:10Z",
+    "subject": [
+     "78rpm",
+     "Tango"
+    ],
+    "title": "Wenn wir uns wiederseh'n"
+   },
+   {
+    "addeddate": "2019-10-02T06:30:14Z",
+    "collection": [
+     "78rpm",
+     "78rpm_leif_druedahl",
+     "georgeblood",
+     "audio_music"
+    ],
+    "creator": [
+     "Sid Merriman's Danseorkester",
+     "Gull-Maj Norin",
+     "B. Bøhling Petersen",
+     "Asger Koch"
+    ],
+    "identifier": "78_hvis-du-har-taget-fejl-saa-sig-det-med-det-samme_sid-merrimans-danseorkester-gull_gbia0123234b",
+    "language": "Danish",
+    "publicdate": "2019-10-02T06:30:30Z",
+    "subject": [
+     "78rpm",
+     "Tango"
+    ],
+    "title": "Hvis du har taget Fejl, saa sig det med det samme"
+   }
+  ]
+ },
+ "_quelle": "zwei echte Titel des Tango-Regals"
+}

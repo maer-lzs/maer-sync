@@ -1,0 +1,33 @@
+{
+ "items": [
+  {
+   "identifier": "00003efa-14d5-4a79-bced-010747d3e96c",
+   "collection": [
+    "radioindex",
+    "oldtimeradio",
+    "radioprograms"
+   ],
+   "date": "1954-10-30T00:00:00Z",
+   "title": "Grand Ole Opry 1954-10-30 Love Me Now",
+   "publicdate": "2026-11-07T00:19:06Z",
+   "addeddate": "2026-11-07T00:19:06Z",
+   "year": 1954
+  },
+  {
+   "identifier": "0000d5c1-a07d-4fd8-8213-eed9a2c0edda",
+   "collection": [
+    "radioindex",
+    "oldtimeradio",
+    "radioprograms"
+   ],
+   "date": "1956-07-02T00:00:00Z",
+   "title": "Bell Telephone Hour 1956-07-02 Leonard Warren",
+   "publicdate": "2026-10-29T09:26:46Z",
+   "addeddate": "2026-10-29T09:26:46Z",
+   "year": 1956
+  }
+ ],
+ "count": 2,
+ "total": 57502,
+ "_quelle": "echte Zeilen, Paar gebaut"
+}

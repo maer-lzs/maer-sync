@@ -1,0 +1,42 @@
+{
+ "responseHeader": {
+  "status": 0,
+  "QTime": 165,
+  "params": {
+   "query": "collection:georgeblood AND mediatype:audio AND subject:&quot;jazz&quot; AND NOT year:[* TO *]",
+   "qin": "collection:georgeblood AND mediatype:(audio) AND subject:&quot;jazz&quot; AND NOT year:[* TO *]",
+   "fields": "identifier,title,creator,date,year,licenseurl,addeddate,publicdate,collection,language,subject",
+   "wt": "json",
+   "rows": 50,
+   "start": 0
+  }
+ },
+ "response": {
+  "numFound": 1938,
+  "start": 0,
+  "docs": [
+   {
+    "addeddate": "2024-01-26T20:46:25Z",
+    "collection": [
+     "78rpm",
+     "78rpm_nsfa",
+     "georgeblood",
+     "audio_music"
+    ],
+    "creator": [
+     "ERIC WINSTONE AND HIS ORCHESTRA",
+     "R. Dollimore"
+    ],
+    "identifier": "78_anticipation_eric-winstone-and-his-orchestra-r-dollimore_gbia3026478a",
+    "language": "English",
+    "publicdate": "2024-01-25T05:07:24Z",
+    "subject": [
+     "78rpm",
+     "Jazz"
+    ],
+    "title": "ANTICIPATION"
+   }
+  ]
+ },
+ "_quelle": "archive.org/advancedsearch.php, collection:georgeblood AND mediatype:(audio) AND subject:\"jazz\" AND NOT year:[* TO *], gekuerzt auf einen Titel, 25.11.2026"
+}

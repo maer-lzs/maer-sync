@@ -1,0 +1,51 @@
+{
+ "_quelle": "maer iOS dev 8319e1c0, Sources/Models/ArchiveMusicCollection.swift, shellacShelves; Entscheid 25.10.2026: nur Themen-Regale, nie die ganze Sammlung",
+ "sammlung": "georgeblood",
+ "regale": [
+  {
+   "schluessel": "shellac-jazz",
+   "schlagwort": "jazz",
+   "abfrage": "collection:georgeblood AND subject:\"jazz\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-opera",
+   "schlagwort": "opera",
+   "abfrage": "collection:georgeblood AND subject:\"opera\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "free-classical",
+   "schlagwort": "classical",
+   "abfrage": "collection:georgeblood AND subject:\"classical\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-folk",
+   "schlagwort": "folk",
+   "abfrage": "collection:georgeblood AND subject:\"folk\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-blues",
+   "schlagwort": "blues",
+   "abfrage": "collection:georgeblood AND subject:\"blues\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-country",
+   "schlagwort": "country",
+   "abfrage": "collection:georgeblood AND subject:\"country\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-tango",
+   "schlagwort": "tango",
+   "abfrage": "collection:georgeblood AND subject:\"tango\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-swing",
+   "schlagwort": "swing",
+   "abfrage": "collection:georgeblood AND subject:\"swing\" AND mediatype:(audio)"
+  },
+  {
+   "schluessel": "shellac-gospel",
+   "schlagwort": "gospel",
+   "abfrage": "collection:georgeblood AND subject:\"gospel\" AND mediatype:(audio)"
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+{
+ "items": [
+  {
+   "identifier": "00003efa-14d5-4a79-bced-010747d3e96c",
+   "collection": [
+    "radioindex",
+    "oldtimeradio",
+    "radioprograms"
+   ],
+   "date": "1954-10-30T00:00:00Z",
+   "title": "Grand Ole Opry 1954-10-30 Love Me Now",
+   "publicdate": "2026-11-07T00:19:06Z",
+   "addeddate": "2026-11-07T00:19:06Z",
+   "year": 1954
+  }
+ ],
+ "count": 1,
+ "total": 57502,
+ "_quelle": "archive.org/services/search/v1/scrape, gekuerzt auf eine Zeile, 25.11.2026"
+}

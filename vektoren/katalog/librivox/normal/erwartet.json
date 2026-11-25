@@ -1,0 +1,21 @@
+{
+ "zeilen": [
+  {
+   "quelle": "librivox",
+   "id": "lva:0_sense_and_sensibility_librivox",
+   "art": "hoerbuch",
+   "titel": "Sense and Sensibility",
+   "urheber": "Jane Austen",
+   "sprache": "eng",
+   "jahr": 2007,
+   "rechte": {
+    "kennung": "pd",
+    "url": "http://creativecommons.org/licenses/publicdomain/"
+   },
+   "laden": true,
+   "reihen": [],
+   "auch": [],
+   "tief": null
+  }
+ ]
+}
