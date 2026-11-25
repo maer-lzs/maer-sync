@@ -216,7 +216,9 @@ version the service still answers a delta for is 410 with
 is 400.
 
 **`ETag: "<katalog_format>-<source>-<version>"`** stands on every page, the
-delta's too; `If-None-Match` with that value is 304 without a body. A source
+delta's too; `If-None-Match` with that value is 304 without a body. The tag
+holds for the address it came with: a device sends it back only with the same
+source, `seit`, `nach` and `anzahl`, never with another page or another delta. A source
 before its first run answers 200 with `version` 0, `zeilen` empty and `weiter`
 `null`, and a delta `?seit=0` against it the same. A catalog the service cannot
 read right now is 503 with `Retry-After`.
