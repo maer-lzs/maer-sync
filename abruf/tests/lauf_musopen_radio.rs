@@ -243,6 +243,25 @@ fn radio_falls_back_to_the_next_server_of_the_list() {
     assert!(hosts[1..].iter().all(|h| h == "nl1.api.radio-browser.info"), "{hosts:?}");
 }
 
+/// When every server of the list fails, the run is refused and the stations
+/// of the last good run stay as they were (measured 25.11.2026: nl1 and at1
+/// answered with a self-signed certificate, so de1 stood alone).
+#[test]
+fn radio_all_servers_fail_and_the_catalog_stays() {
+    let st = Rc::new(RefCell::new((0..3).map(station).collect::<Vec<_>>()));
+    let stats = Rc::new(RefCell::new((3, 0)));
+    let (mut n, _) = net(radio_api(st.clone(), stats.clone(), vec![]));
+    let mut k = katalog("radio-all-down");
+    assert_eq!(lauf(&mut n, &mut k, "radio", Art::Voll, &e(3)).ausgang, Ok(()));
+    let (mut down, log) = net(radio_api(st, stats, vec!["de1.", "nl1.", "at1."]));
+    let b = lauf(&mut down, &mut k, "radio", Art::Voll, &e(3));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Holen(_))), "{:?}", b.ausgang);
+    let hosts: Vec<String> = log.borrow().iter().map(|a| a.url.split('/').nth(2).unwrap().to_string()).collect();
+    assert_eq!(hosts, ["de1.api.radio-browser.info", "nl1.api.radio-browser.info", "at1.api.radio-browser.info"]);
+    assert_eq!(k.version("radio").unwrap(), 1, "a refused run wrote");
+    assert_eq!(live(&k, "radio").len(), 3, "the stations of the last run are gone");
+}
+
 #[test]
 fn a_delta_of_radio_is_a_full_pass() {
     let st = Rc::new(RefCell::new((0..4).map(station).collect::<Vec<_>>()));
