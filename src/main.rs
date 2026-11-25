@@ -248,7 +248,7 @@ account-remove <owner>|reset <owner>|devices <owner>|health|key [--adopt|--new]]
     };
 
     let mut app = App::neu(laden).mit_kennung(privat, &abdruck);
-    // The catalog of contract version 7, read only; without the variable the
+    // The catalog (addition katalog-1 to contract version 6), read only; without the variable the
     // service carries none and answers its paths with 404.
     if let Some(k) = std::env::var("MAER_SYNC_KATALOG").ok().filter(|k| !k.is_empty()) {
         app = app.mit_katalog(&k);

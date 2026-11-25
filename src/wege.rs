@@ -165,7 +165,7 @@ fn leer(status: u16) -> Antwort {
     antwort(status, "application/json", Vec::new(), vec![])
 }
 
-/// One catalog row on the wire (contract version 7): a deletion mark in a
+/// One catalog row on the wire (addition katalog-1): a deletion mark in a
 /// delta carries exactly `id` and `geloescht`; a live row all its fields,
 /// and in a delta `"geloescht": false`.
 fn katalog_zeile(s: &crate::katalog::Stored, delta: bool) -> Value {
@@ -268,7 +268,7 @@ impl App {
     }
     pub fn ohne_alte_wege(mut self) -> Self { self.plain_ways = false; self }
 
-    /// The catalog paths (contract version 7), behind the gate and the token.
+    /// The catalog paths (addition katalog-1), behind the gate and the token.
     /// Reads the catalog file only, opened per request so a restart of the
     /// fetch program never holds the service; touches no user data, and its
     /// log line names neither the account nor the token.

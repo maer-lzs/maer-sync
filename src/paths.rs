@@ -67,7 +67,7 @@ pub fn valid_scope(scope: Option<&str>) -> bool {
     ist_bereich(scope.unwrap_or(""))
 }
 
-/// The catalog path of contract version 7: `/v1/katalog/<source>` for a
+/// The catalog path of the addition katalog-1 to contract version 6: `/v1/katalog/<source>` for a
 /// source the catalog knows, else None (a 404).
 pub const KATALOG_PATH: &str = "/v1/katalog";
 
