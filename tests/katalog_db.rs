@@ -1,0 +1,568 @@
+// Mär — an audio player for self-hosted open ecosystems
+// Copyright (C) 2026 Laurenz Schröder
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
+//! K3a: the catalog file `katalog.db`.
+//!
+//! The catalog is rebuildable from its sources and lives in a file of its
+//! own, next to the user store and never inside it. One writer (the fetch
+//! program) applies whole runs; the service only reads. These witnesses fix
+//! the shape, the checks of the table, what a run writes (versions and
+//! deletion marks), how a reader pages, and the separation from the user
+//! store.
+
+use maer_sync::katalog::{Katalog, KatalogError, Row, Since, MASS_DELETE_MIN_ROWS, MAX_PAGE};
+use maer_sync::store::Store;
+use rusqlite::Connection;
+
+fn scratch(name: &str) -> String {
+    let p = std::env::temp_dir().join(format!("maer-sync-katalog-{name}-{}", std::process::id()));
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", p.to_string_lossy()));
+    }
+    p.to_string_lossy().into_owned()
+}
+
+fn row(quelle: &str, id: &str, titel: &str) -> Row {
+    Row {
+        quelle: quelle.into(),
+        id: id.into(),
+        art: "hoerbuch".into(),
+        titel: Some(titel.into()),
+        urheber: None,
+        sprache: Some("en".into()),
+        jahr: None,
+        rechte_kennung: "pd".into(),
+        rechte_url: None,
+        laden: true,
+        reihen: vec![],
+        auch: vec![],
+        tief: None,
+    }
+}
+
+fn rows(quelle: &str, n: usize) -> Vec<Row> {
+    (0..n).map(|i| row(quelle, &format!("lva:item-{i:04}"), &format!("Title {i}"))).collect()
+}
+
+/// Every row of the file as text, in a fixed order: "byte-identical" is
+/// measured on the content, not on the file (WAL changes the file).
+fn dump(path: &str) -> Vec<String> {
+    let c = Connection::open(path).unwrap();
+    let mut out = vec![];
+    for t in ["meta", "stand", "eintrag", "cover"] {
+        let mut s = c.prepare(&format!("SELECT * FROM {t} ORDER BY 1, 2")).unwrap();
+        let n = s.column_count();
+        let mut q = s.query([]).unwrap();
+        while let Some(r) = q.next().unwrap() {
+            let cells: Vec<String> = (0..n)
+                .map(|i| format!("{:?}", r.get_ref(i).unwrap()))
+                .collect();
+            out.push(format!("{t}|{}", cells.join("|")));
+        }
+    }
+    out
+}
+
+fn tables(path: &str) -> Vec<String> {
+    let c = Connection::open(path).unwrap();
+    let mut s = c.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','index') ORDER BY name").unwrap();
+    let names: Vec<String> = s.query_map([], |r| r.get(0)).unwrap().map(|x| x.unwrap()).collect();
+    names
+}
+
+fn ids(page: &[maer_sync::katalog::Stored]) -> Vec<String> {
+    page.iter().map(|s| s.row.id.clone()).collect()
+}
+
+// ---------------------------------------------------------------- shape
+
+#[test]
+fn a_fresh_catalog_carries_its_shape() {
+    let p = scratch("shape");
+    let _k = Katalog::open(&p).expect("open");
+    let t = tables(&p);
+    for name in ["meta", "stand", "eintrag", "cover", "eintrag_delta"] {
+        assert!(t.contains(&name.to_string()), "{name} missing in {t:?}");
+    }
+    let c = Connection::open(&p).unwrap();
+    let format: String = c.query_row("SELECT value FROM meta WHERE key='katalog_format'", [], |r| r.get(0)).unwrap();
+    assert_eq!(format, "1");
+    let mode: String = c.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+    assert_eq!(mode.to_lowercase(), "wal");
+}
+
+#[test]
+fn opening_again_keeps_the_rows() {
+    let p = scratch("again");
+    {
+        let mut k = Katalog::open(&p).unwrap();
+        k.write_run("librivox", &rows("librivox", 3), false).unwrap();
+    }
+    let before = dump(&p);
+    let _k = Katalog::open(&p).unwrap();
+    assert_eq!(dump(&p), before);
+}
+
+#[test]
+fn an_unknown_format_is_refused() {
+    let p = scratch("format");
+    drop(Katalog::open(&p).unwrap());
+    Connection::open(&p).unwrap()
+        .execute("UPDATE meta SET value='2' WHERE key='katalog_format'", []).unwrap();
+    let before = dump(&p);
+    match Katalog::open(&p) {
+        Err(KatalogError::UnknownFormat(found)) => assert_eq!(found, "2"),
+        Err(e) => panic!("wrong error: {e:?}"),
+        Ok(_) => panic!("a catalog of format 2 was opened"),
+    }
+    assert_eq!(dump(&p), before);
+}
+
+#[test]
+fn the_user_store_is_refused_as_catalog() {
+    let p = scratch("userstore");
+    drop(Store::open(&p, 10, None).unwrap());
+    let before = tables(&p);
+    match Katalog::open(&p) {
+        Err(KatalogError::UserStore) => {}
+        Err(e) => panic!("wrong error: {e:?}"),
+        Ok(_) => panic!("the user store was opened as catalog"),
+    }
+    assert_eq!(tables(&p), before, "the user store was written to");
+}
+
+// ---------------------------------------------------------------- checks of the table
+
+#[test]
+fn only_known_sources() {
+    let p = scratch("sources");
+    let mut k = Katalog::open(&p).unwrap();
+    for q in ["librivox", "archive-buch", "netlabel", "schellack", "otr", "gutenberg", "musopen", "radio", "hoerspiel-feed"] {
+        k.write_run(q, &[row(q, "x:1", "t")], false).unwrap_or_else(|e| panic!("{q} refused: {e:?}"));
+    }
+    for q in ["jamendo", ""] {
+        assert!(k.write_run(q, &[row(q, "x:1", "t")], false).is_err(), "{q:?} accepted");
+    }
+    // The table itself refuses it too, not only the code in front of it.
+    let c = Connection::open(&p).unwrap();
+    let raw = c.execute(
+        "INSERT INTO eintrag (quelle,id,art,rechte_kennung,laden,version) VALUES ('jamendo','j:1','musik','pd',1,1)", []);
+    assert!(raw.is_err(), "the table took an unknown source");
+}
+
+#[test]
+fn only_known_kinds_and_flags() {
+    let p = scratch("kinds");
+    let mut k = Katalog::open(&p).unwrap();
+    let mut bad = row("librivox", "lva:a", "t");
+    bad.art = "film".into();
+    assert!(k.write_run("librivox", &[bad], false).is_err());
+    let c = Connection::open(&p).unwrap();
+    for sql in [
+        "INSERT INTO eintrag (quelle,id,art,rechte_kennung,laden,version) VALUES ('librivox','a','film','pd',1,1)",
+        "INSERT INTO eintrag (quelle,id,art,rechte_kennung,laden,version) VALUES ('librivox','b','hoerbuch','pd',2,1)",
+        "INSERT INTO eintrag (quelle,id,art,rechte_kennung,laden,version,geloescht) VALUES ('librivox','c','hoerbuch','pd',1,1,5)",
+    ] {
+        assert!(c.execute(sql, []).is_err(), "the table took: {sql}");
+    }
+}
+
+#[test]
+fn one_row_per_source_and_id() {
+    let p = scratch("unique");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &[row("librivox", "lva:a", "one")], false).unwrap();
+    k.write_run("librivox", &[row("librivox", "lva:a", "two")], false).unwrap();
+    let c = Connection::open(&p).unwrap();
+    let n: i64 = c.query_row("SELECT count(*) FROM eintrag WHERE quelle='librivox' AND id='lva:a'", [], |r| r.get(0)).unwrap();
+    assert_eq!(n, 1);
+    let raw = c.execute(
+        "INSERT INTO eintrag (quelle,id,art,rechte_kennung,laden,version) VALUES ('librivox','lva:a','hoerbuch','pd',1,9)", []);
+    assert!(raw.is_err(), "a second row for the same key");
+    // The same id twice within one run is ambiguous and refused.
+    assert!(k.write_run("librivox", &[row("librivox", "lva:b", "x"), row("librivox", "lva:b", "y")], false).is_err());
+}
+
+// ---------------------------------------------------------------- a run
+
+#[test]
+fn a_run_raises_the_version_once() {
+    let p = scratch("once");
+    let mut k = Katalog::open(&p).unwrap();
+    assert_eq!(k.version("librivox").unwrap(), 0);
+    assert_eq!(k.write_run("librivox", &rows("librivox", 7), false).unwrap(), 1);
+    let mut next = rows("librivox", 7);
+    next[0].titel = Some("changed".into());
+    next[5].titel = Some("changed too".into());
+    assert_eq!(k.write_run("librivox", &next, false).unwrap(), 2);
+    assert_eq!(k.version("librivox").unwrap(), 2);
+}
+
+#[test]
+fn a_run_without_change_keeps_the_version() {
+    // Raising the version on a run that changed nothing would turn every
+    // device's ETag stale every day for nothing.
+    let p = scratch("nochange");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 4), false).unwrap();
+    let before = dump(&p);
+    assert_eq!(k.write_run("librivox", &rows("librivox", 4), false).unwrap(), 1);
+    assert_eq!(dump(&p), before);
+}
+
+#[test]
+fn changed_rows_take_the_new_version_unchanged_keep_theirs() {
+    let p = scratch("changed");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 5), false).unwrap();
+    let mut next = rows("librivox", 5);
+    next[1].titel = Some("new title".into());
+    next[2].rechte_kennung = "cc0".into();
+    next[3].reihen = vec!["row:classics".into()];
+    next[4].auch = vec!["lv:123".into()];
+    k.write_run("librivox", &next, false).unwrap();
+    let all = k.since("librivox", 0, None, MAX_PAGE).unwrap();
+    let Since::Page(page) = all else { panic!("since 0 must answer a page") };
+    let v: Vec<(String, i64)> = page.zeilen.iter().map(|s| (s.row.id.clone(), s.version)).collect();
+    assert_eq!(v, vec![
+        ("lva:item-0000".into(), 1),
+        ("lva:item-0001".into(), 2),
+        ("lva:item-0002".into(), 2),
+        ("lva:item-0003".into(), 2),
+        ("lva:item-0004".into(), 2),
+    ]);
+}
+
+#[test]
+fn a_vanished_row_becomes_a_deletion_mark() {
+    let p = scratch("vanished");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 3), false).unwrap();
+    k.write_run("librivox", &rows("librivox", 3)[1..], false).unwrap();
+    let Since::Page(page) = k.since("librivox", 1, None, MAX_PAGE).unwrap() else { panic!() };
+    assert_eq!(page.zeilen.len(), 1);
+    assert_eq!(page.zeilen[0].row.id, "lva:item-0000");
+    assert!(page.zeilen[0].geloescht);
+    assert_eq!(page.zeilen[0].version, 2);
+    let c = Connection::open(&p).unwrap();
+    let n: i64 = c.query_row("SELECT count(*) FROM eintrag", [], |r| r.get(0)).unwrap();
+    assert_eq!(n, 3, "the mark was removed instead of kept");
+}
+
+#[test]
+fn a_returning_row_is_live_again() {
+    let p = scratch("returning");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 3), false).unwrap();
+    k.write_run("librivox", &rows("librivox", 3)[1..], false).unwrap();
+    k.write_run("librivox", &rows("librivox", 3), false).unwrap();
+    let Since::Page(page) = k.since("librivox", 2, None, MAX_PAGE).unwrap() else { panic!() };
+    assert_eq!(ids(&page.zeilen), vec!["lva:item-0000".to_string()]);
+    assert!(!page.zeilen[0].geloescht);
+    assert_eq!(page.zeilen[0].version, 3);
+}
+
+#[test]
+fn sources_count_apart() {
+    let p = scratch("apart");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 2), false).unwrap();
+    let before = k.full("librivox", None, MAX_PAGE).unwrap();
+    k.write_run("gutenberg", &rows("gutenberg", 2), false).unwrap();
+    k.write_run("gutenberg", &rows("gutenberg", 1), false).unwrap();
+    assert_eq!(k.version("librivox").unwrap(), 1);
+    assert_eq!(k.version("gutenberg").unwrap(), 2);
+    assert_eq!(k.full("librivox", None, MAX_PAGE).unwrap(), before);
+}
+
+#[test]
+fn a_failed_run_changes_nothing() {
+    let p = scratch("failed");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &rows("librivox", 4), false).unwrap();
+    let before = dump(&p);
+    let mut next = rows("librivox", 4);
+    next[0].titel = Some("would change".into());
+    next[2].art = "film".into();
+    assert!(k.write_run("librivox", &next, false).is_err());
+    assert_eq!(dump(&p), before);
+}
+
+#[test]
+fn an_empty_run_is_refused() {
+    let p = scratch("empty");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("hoerspiel-feed", &rows("hoerspiel-feed", 3), false).unwrap();
+    let before = dump(&p);
+    match k.write_run("hoerspiel-feed", &[], false) {
+        Err(KatalogError::EmptyRun) => {}
+        other => panic!("an empty run was not refused: {other:?}"),
+    }
+    assert_eq!(dump(&p), before);
+    // Only the caller's explicit sign lets a source become empty.
+    assert_eq!(k.write_run("hoerspiel-feed", &[], true).unwrap(), 2);
+    assert_eq!(k.full("hoerspiel-feed", None, MAX_PAGE).unwrap().zeilen.len(), 0);
+}
+
+#[test]
+fn a_mass_deletion_is_refused_at_its_bound() {
+    // More than a fifth of the live rows of a source at once looks like a
+    // run that broke off after its first page, not like the source.
+    let p = scratch("mass");
+    let mut k = Katalog::open(&p).unwrap();
+    let n = 100;
+    k.write_run("netlabel", &rows("netlabel", n), false).unwrap();
+    // Exactly a fifth: allowed.
+    k.write_run("netlabel", &rows("netlabel", n)[20..], false).unwrap();
+    // 80 live now; 17 would go (more than 16): refused, nothing changes.
+    let before = dump(&p);
+    match k.write_run("netlabel", &rows("netlabel", n)[37..], false) {
+        Err(KatalogError::MassDelete { would_delete, live }) => {
+            assert_eq!((would_delete, live), (17, 80));
+        }
+        other => panic!("a mass deletion was not refused: {other:?}"),
+    }
+    assert_eq!(dump(&p), before);
+    // The caller's explicit sign overrules it.
+    k.write_run("netlabel", &rows("netlabel", n)[37..], true).unwrap();
+    assert_eq!(k.full("netlabel", None, MAX_PAGE).unwrap().zeilen.len(), 63);
+}
+
+#[test]
+fn a_small_source_has_no_mass_bound() {
+    let p = scratch("small");
+    let mut k = Katalog::open(&p).unwrap();
+    let n = MASS_DELETE_MIN_ROWS - 1;
+    k.write_run("hoerspiel-feed", &rows("hoerspiel-feed", n), false).unwrap();
+    k.write_run("hoerspiel-feed", &rows("hoerspiel-feed", n)[..1], false).unwrap();
+    assert_eq!(k.full("hoerspiel-feed", None, MAX_PAGE).unwrap().zeilen.len(), 1);
+}
+
+#[test]
+fn a_row_of_another_source_is_refused() {
+    let p = scratch("foreign");
+    let mut k = Katalog::open(&p).unwrap();
+    assert!(k.write_run("librivox", &[row("gutenberg", "gut:1", "t")], false).is_err());
+}
+
+// ---------------------------------------------------------------- reading
+
+#[test]
+fn full_reads_live_rows_in_id_order_without_marks() {
+    let p = scratch("full");
+    let mut k = Katalog::open(&p).unwrap();
+    let mut r = rows("otr", 4);
+    r.reverse();
+    k.write_run("otr", &r, false).unwrap();
+    k.write_run("otr", &r[..3], false).unwrap();
+    let page = k.full("otr", None, MAX_PAGE).unwrap();
+    assert_eq!(ids(&page.zeilen), vec!["lva:item-0001", "lva:item-0002", "lva:item-0003"]);
+    assert!(page.zeilen.iter().all(|s| !s.geloescht));
+    assert_eq!(page.version, 2);
+    assert_eq!(page.weiter, None);
+}
+
+#[test]
+fn pages_cover_everything_once() {
+    let p = scratch("pages");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("schellack", &rows("schellack", 23), false).unwrap();
+    let whole = ids(&k.full("schellack", None, MAX_PAGE).unwrap().zeilen);
+    let mut seen = vec![];
+    let mut nach: Option<String> = None;
+    let mut pages = 0;
+    loop {
+        let page = k.full("schellack", nach.as_deref(), 5).unwrap();
+        pages += 1;
+        seen.extend(ids(&page.zeilen));
+        match page.weiter {
+            Some(w) => {
+                assert_eq!(Some(&w), seen.last(), "weiter is the last id of the page");
+                nach = Some(w);
+            }
+            None => break,
+        }
+        assert!(pages < 10, "paging does not end");
+    }
+    assert_eq!(seen, whole);
+    assert_eq!(pages, 5);
+}
+
+#[test]
+fn a_full_last_page_ends_paging() {
+    // A last page that is exactly full must still say it is the last.
+    let p = scratch("exact");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("schellack", &rows("schellack", 10), false).unwrap();
+    let first = k.full("schellack", None, 5).unwrap();
+    assert!(first.weiter.is_some());
+    let second = k.full("schellack", first.weiter.as_deref(), 5).unwrap();
+    assert_eq!(second.zeilen.len(), 5);
+    assert_eq!(second.weiter, None);
+}
+
+#[test]
+fn page_size_is_bounded() {
+    let p = scratch("size");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 1), false).unwrap();
+    for bad in [0, MAX_PAGE + 1] {
+        match k.full("otr", None, bad) {
+            Err(KatalogError::PageSize(n)) => assert_eq!(n, bad),
+            other => panic!("page size {bad} accepted: {other:?}"),
+        }
+        assert!(matches!(k.since("otr", 0, None, bad), Err(KatalogError::PageSize(_))));
+    }
+    assert_eq!(MAX_PAGE, 5000);
+    assert!(k.full("otr", None, MAX_PAGE).is_ok());
+}
+
+#[test]
+fn a_missing_after_id_continues_after_it() {
+    let p = scratch("missing");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 4), false).unwrap();
+    let page = k.full("otr", Some("lva:item-0001x"), MAX_PAGE).unwrap();
+    assert_eq!(ids(&page.zeilen), vec!["lva:item-0002", "lva:item-0003"]);
+}
+
+#[test]
+fn since_returns_newer_rows_with_marks() {
+    let p = scratch("since");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 4), false).unwrap();
+    let mut next = rows("otr", 4)[1..].to_vec();
+    next[2].titel = Some("changed".into());
+    k.write_run("otr", &next, false).unwrap();
+    let Since::Page(page) = k.since("otr", 1, None, MAX_PAGE).unwrap() else { panic!() };
+    let got: Vec<(String, bool, i64)> = page.zeilen.iter().map(|s| (s.row.id.clone(), s.geloescht, s.version)).collect();
+    assert_eq!(got, vec![("lva:item-0000".into(), true, 2), ("lva:item-0003".into(), false, 2)]);
+    let Since::Page(none) = k.since("otr", 2, None, MAX_PAGE).unwrap() else { panic!() };
+    assert!(none.zeilen.is_empty());
+    assert_eq!(none.version, 2);
+}
+
+#[test]
+fn since_below_the_floor_says_too_old() {
+    let p = scratch("floor");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    k.write_run("otr", &rows("otr", 3)[1..], false).unwrap();
+    k.write_run("otr", &rows("otr", 3)[2..], false).unwrap();
+    k.prune("otr", 2).unwrap();
+    assert!(matches!(k.since("otr", 1, None, MAX_PAGE).unwrap(), Since::TooOld { floor: 2 }));
+    assert!(matches!(k.since("otr", 2, None, MAX_PAGE).unwrap(), Since::Page(_)));
+    assert!(matches!(k.since("otr", 4, None, MAX_PAGE).unwrap(), Since::Unknown { version: 3 }));
+}
+
+#[test]
+fn prune_removes_only_marks_below_the_bound() {
+    let p = scratch("prune");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 4), false).unwrap(); // v1: 0..3 live
+    k.write_run("otr", &rows("otr", 4)[1..], false).unwrap(); // v2: 0 marked
+    k.write_run("otr", &rows("otr", 4)[2..], false).unwrap(); // v3: 1 marked
+    assert_eq!(k.prune("otr", 2).unwrap(), 1, "only the mark of version 2 goes");
+    let c = Connection::open(&p).unwrap();
+    let left: Vec<(String, i64, i64)> = c
+        .prepare("SELECT id, version, geloescht FROM eintrag WHERE quelle='otr' ORDER BY id").unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap()
+        .map(|x| x.unwrap()).collect();
+    assert_eq!(left, vec![
+        ("lva:item-0001".into(), 3, 1),
+        ("lva:item-0002".into(), 1, 0),
+        ("lva:item-0003".into(), 1, 0),
+    ], "a live row of an old version was removed, or the wrong mark");
+    let floor: i64 = c.query_row("SELECT voll_ab FROM stand WHERE quelle='otr'", [], |r| r.get(0)).unwrap();
+    assert_eq!(floor, 2);
+}
+
+#[test]
+fn lists_round_trip() {
+    let p = scratch("lists");
+    let mut k = Katalog::open(&p).unwrap();
+    let mut r = row("musopen", "mso:1", "Satz");
+    r.reihen = vec!["row:a".into(), "row:b".into()];
+    r.auch = vec!["lv:42".into()];
+    k.write_run("musopen", &[r.clone()], false).unwrap();
+    let got = k.full("musopen", None, MAX_PAGE).unwrap();
+    assert_eq!(got.zeilen[0].row, r);
+    assert_eq!(got.zeilen[0].row.tief, None);
+}
+
+// ---------------------------------------------------------------- separation and readers
+
+#[test]
+fn backup_of_the_user_store_carries_no_catalog() {
+    let dir = scratch("sep");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store_path = format!("{dir}/maer-sync.sqlite");
+    let katalog_path = format!("{dir}/katalog.db");
+    let copy = format!("{dir}/copy.sqlite");
+    let store = Store::open(&store_path, 10, None).unwrap();
+    let mut k = Katalog::open(&katalog_path).unwrap();
+    k.write_run("librivox", &rows("librivox", 3), false).unwrap();
+    let before = dump(&katalog_path);
+    store.backup(&copy).unwrap();
+    let t = tables(&copy);
+    for name in ["eintrag", "stand", "cover"] {
+        assert!(!t.contains(&name.to_string()), "{name} is in the user backup");
+    }
+    assert_eq!(dump(&katalog_path), before);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_reader_cannot_write() {
+    let p = scratch("reader");
+    drop(Katalog::open(&p).unwrap());
+    let mut r = Katalog::open_read(&p).unwrap();
+    assert!(r.write_run("librivox", &rows("librivox", 1), false).is_err());
+    assert!(r.prune("librivox", 1).is_err());
+    assert_eq!(Katalog::open(&p).unwrap().version("librivox").unwrap(), 0);
+}
+
+#[test]
+fn a_reader_sees_whole_runs() {
+    let p = scratch("whole");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    let reader = Katalog::open_read(&p).unwrap();
+    // A second connection holds a run half written: the version raised and
+    // one row changed, not yet committed.
+    let mut w = Connection::open(&p).unwrap();
+    let tx = w.transaction().unwrap();
+    tx.execute("UPDATE stand SET version = 2 WHERE quelle='otr'", []).unwrap();
+    tx.execute("UPDATE eintrag SET titel='half', version=2 WHERE id='lva:item-0000'", []).unwrap();
+    let during = reader.full("otr", None, MAX_PAGE).unwrap();
+    assert_eq!(during.version, 1);
+    assert!(during.zeilen.iter().all(|s| s.version == 1));
+    tx.commit().unwrap();
+    let after = reader.full("otr", None, MAX_PAGE).unwrap();
+    assert_eq!(after.version, 2);
+    assert_eq!(after.zeilen[0].row.titel.as_deref(), Some("half"));
+}
+
+#[test]
+fn a_second_writer_waits_or_fails_by_name() {
+    let p = scratch("writers");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    let mut other = Katalog::open(&p).unwrap();
+    other.set_wait_ms(200);
+    // The first writer holds its run open.
+    let mut w = Connection::open(&p).unwrap();
+    let tx = w.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate).unwrap();
+    let before = dump(&p);
+    let mut next = rows("otr", 3);
+    next[0].titel = Some("second writer".into());
+    match other.write_run("otr", &next, false) {
+        Err(KatalogError::Busy) => {}
+        other => panic!("a second writer was not refused by name: {other:?}"),
+    }
+    drop(tx);
+    assert_eq!(dump(&p), before, "a half run was left");
+    assert_eq!(other.write_run("otr", &next, false).unwrap(), 2);
+}

@@ -20,6 +20,7 @@ pub mod formats;
 pub mod frames;
 pub mod handshake;
 pub mod horcher;
+pub mod katalog;
 pub mod identity;
 pub mod kennung;
 pub mod listeners;
