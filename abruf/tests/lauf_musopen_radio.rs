@@ -170,7 +170,10 @@ fn station(i: usize) -> Value {
            "bitrate": 128, "codec": "MP3", "votes": 3, "languagecodes": "de", "state": "", "clickcount": 1, "lastcheckok": 1})
 }
 
-/// A Radio Browser server with `n` stations; `down` servers fail.
+/// A Radio Browser server; `down` servers fail. Its statistics as the real
+/// API states them: `stations` counts the stations that are not broken,
+/// exactly what the pages with `hidebroken=true` list, and `stations_broken`
+/// the others (de1, 25.11.2026: 53 393 listed, 53 393 stations, 330 broken).
 fn radio_api(stations: Rc<RefCell<Vec<Value>>>, stats: Rc<RefCell<(usize, usize)>>, down: Vec<&'static str>) -> Handler {
     Box::new(move |a, p| {
         let host = a.url.split('/').nth(2).unwrap_or("").to_string();
@@ -191,7 +194,7 @@ fn radio_api(stations: Rc<RefCell<Vec<Value>>>, stats: Rc<RefCell<(usize, usize)
 #[test]
 fn radio_pages_to_the_end_and_counts() {
     let st = Rc::new(RefCell::new((0..7).map(station).collect::<Vec<_>>()));
-    let (mut n, log) = net(radio_api(st, Rc::new(RefCell::new((8, 1))), vec![]));
+    let (mut n, log) = net(radio_api(st, Rc::new(RefCell::new((7, 330))), vec![]));
     let mut k = katalog("radio-pages");
     let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e(3));
     assert_eq!(b.ausgang, Ok(()));

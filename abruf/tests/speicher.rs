@@ -8,6 +8,10 @@
 //! prints the number for the report.
 
 use maer_sync::katalog::{Katalog, Row};
+use maer_sync_abruf::lauf::{lauf, Einstellungen};
+use maer_sync_abruf::plan::Art;
+use maer_sync_abruf::netz::{Netz, SystemUhr};
+use maer_sync_abruf::ureq_holer::UreqHoler;
 
 fn peak_kib() -> u64 {
     let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
@@ -37,4 +41,27 @@ fn memory_of_a_full_run() {
     for s in ["", "-wal", "-shm"] {
         let _ = std::fs::remove_file(format!("{}{s}", p.display()));
     }
+}
+
+/// A real full run of Radio Browser over the network, as the program makes
+/// it (pages of 10 000), against a throwaway catalog. By hand with
+/// `--ignored`; it prints the peak and the size of the file.
+#[test]
+#[ignore]
+fn memory_of_a_radio_run() {
+    let p = std::env::temp_dir().join(format!("maer-sync-abruf-radio-{}", std::process::id()));
+    let _ = std::fs::remove_file(&p);
+    let mut k = Katalog::open(p.to_str().unwrap()).unwrap();
+    let mut n = Netz::new(UreqHoler::new(), SystemUhr);
+    let e = Einstellungen { scrape_count: 10_000, adv_rows: 10_000, kalenderjahr: 2026 };
+    let before = peak_kib();
+    let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e);
+    let after = peak_kib();
+    k.close_clean().unwrap();
+    let bytes = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+    println!("MESSUNG {} peak_kib_vor={before} peak_kib_nach={after} datei_bytes={bytes}", b.zeile());
+    for s in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{s}", p.display()));
+    }
+    assert_eq!(b.ausgang, Ok(()));
 }
