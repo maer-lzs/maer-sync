@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! One run of one archive.org source (K3c).
+//! One run of one source.
 //!
 //! **Full pass:** first the number of records over the advanced search
 //! (`rows=0`, echo of the query checked), then the scrape pages with

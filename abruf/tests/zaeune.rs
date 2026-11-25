@@ -113,7 +113,7 @@ fn the_default_compose_does_not_start_the_fetch() {
     assert!(readme.contains("`MAER_SYNC_KATALOG`"));
 }
 
-/// The licence texts travel with the program (K3c-8): CDLA-Permissive-2.0 of
+/// The licence texts travel with the program: CDLA-Permissive-2.0 of
 /// webpki-roots asks only that its text goes with the data, and the other
 /// new licences ask the same of a binary. Every crate the list marks as built
 /// has its licence files under `abruf/lizenzen/<crate>-<version>/`, the image

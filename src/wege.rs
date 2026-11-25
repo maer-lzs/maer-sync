@@ -221,7 +221,7 @@ pub struct App {
     /// Die Uhr der Versuchsgrenze, als Sekunden. Von aussen, damit ein Zeuge
     /// ein Fenster ablaufen lassen kann, ohne zu warten.
     pub uhr: Box<dyn Fn() -> f64 + Send>,
-    /// K3d. The path of the catalog file, if this service carries one.
+    /// The path of the catalog file, if this service carries one.
     pub katalog: Option<String>,
 }
 

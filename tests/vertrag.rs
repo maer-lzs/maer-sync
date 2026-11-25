@@ -364,7 +364,7 @@ fn die_nachricht_des_sockets_ist_die_des_vertrags() {
 // ---------------------------------------------------------------- additions to version 6 (25.11.2026)
 
 /// The service speaks version 6 with the catalog: an addition never raises
-/// the number (operator's decision, Weg A), so every app in the field keeps
+/// the number, so every app in the field keeps
 /// signing in.
 #[test]
 fn the_service_speaks_version_6_with_its_additions() {
@@ -396,7 +396,7 @@ fn additions_do_not_touch_version_6() {
 }
 
 /// No text of this service calls the catalog "version 7" while the spoken
-/// version is 6: after the operator's decision (Weg A) the catalog is the
+/// version is 6: the catalog is the
 /// addition katalog-1, and a comment that says otherwise is the next wrong
 /// bump waiting to happen.
 #[test]

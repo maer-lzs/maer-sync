@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! Reader for Radio Browser (K3e): a page of `/json/stations` (asked with
+//! Reader for Radio Browser: a page of `/json/stations` (asked with
 //! `hidebroken=true`, as the app does) to catalog rows.
 //!
 //! As the app (`RadioMapping.stations`): an entry with an empty name or an

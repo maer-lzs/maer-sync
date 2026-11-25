@@ -4,8 +4,8 @@
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
 //! The tree of the service stays as it was. The fetch program (`abruf/`) is
-//! a package of its own; its crates were taken in only there (decision of
-//! 25.11.2026: `ureq`, `roxmltree`, `csv` only in the fetch program). This
+//! a package of its own, and the crates it needs to fetch (`ureq` and those
+//! that follow it) live only there. This
 //! witness asks cargo for the tree of the delivered package itself, for the
 //! target the delivery is built for, not only the manifest.
 

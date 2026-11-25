@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! When which source is due (K3c). Pure: the time is given in, so the
+//! When which source is due. Pure: the time is given in, so the
 //! witnesses need no clock.
 //!
 //! A source without a full pass gets one first. After that a delta is due a

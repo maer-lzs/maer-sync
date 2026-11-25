@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! The catalog file `katalog.db` (K3a).
+//! The catalog file `katalog.db`.
 //!
 //! The catalog index is built from public sources and can always be built
 //! again, so it lives in a file of its own next to the user store: it is not
@@ -502,7 +502,7 @@ impl Katalog {
     /// Close as the fetch program does at a clean end: switch the file to
     /// `journal_mode=DELETE`, so no `-wal` and `-shm` are left and the
     /// service, which mounts the catalog read only and cannot create them,
-    /// still opens it. Measured 25.11.2026 (K3a-4): after a crash the side
+    /// still opens it. Measured 25.11.2026: after a crash the side
     /// files stay and a read-only reader still reads the last committed
     /// state; the next writer open cleans up. A reader just drops.
     pub fn close_clean(self) -> Result<(), KatalogError> {

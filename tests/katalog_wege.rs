@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! K3d: the catalog paths of the addition katalog-1, against the text of
+//! The catalog paths of the addition katalog-1, against the text of
 //! `CONTRACT.md`. The service reads the catalog file only; the fetch
 //! program writes it. Every witness lays down its own throwaway catalog and
 //! user store.

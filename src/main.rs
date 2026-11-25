@@ -603,7 +603,7 @@ fn aufraeumen(dienst: &Dienst, horcher: &mut maer_sync::horcher::Horcher, id: &s
 /// UNTERSCHEIDBAR, und genau das soll dieser Bau nicht; ausserdem liest die
 /// App den Status heute gar nicht. Die bessere Auskunft ist nicht verworfen,
 /// sondern an die richtige Stelle verschoben: sie gehoert in den VERTRAG,
-/// dann machen es beide Seiten (Entscheid 18.09.2026).
+/// dann machen es beide Seiten.
 fn abgewiesener_aufstieg() -> Response<Voll> {
     // `content-length: 0` ist nicht Zierrat, sondern noetig: ohne sie waehlt
     // hyper `chunked` und schickt die Abschlussmarke, also fuenf Byte auf der

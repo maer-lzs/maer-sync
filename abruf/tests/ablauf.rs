@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! K3c: the fetch program against a fake network. No witness here reaches
+//! The fetch program against a fake network. No witness here reaches
 //! the network: the fake answers from what the witness gives it, records
 //! every request with the time of a fake clock, and panics on an address it
 //! does not know.

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! K3b-1: the archive.org reader against the shared vectors under
+//! The archive.org reader against the shared vectors under
 //! `vektoren/katalog/`. The same folders are read by Swift and Kotlin; what a
 //! case expects stands in its `erwartet.json`, not here.
 
@@ -252,7 +252,7 @@ fn shellac_years_by_calendar() {
 
 #[test]
 fn shellac_is_never_loaded() {
-    // Loading needs a declared licence (decision of 24.08.2026); the shellac
+    // Loading needs a declared licence; the shellac
     // collection declares none, whatever its year says.
     for (quelle, _) in ARCHIVE_SOURCES {
         if quelle != "schellack" {
@@ -366,7 +366,7 @@ fn a_record_of_another_collection_is_a_foreign_answer() {
             "a record that names no collection cannot prove it belongs");
 }
 
-// ---------------------------------------------------------------- 20: rows of K3b carry no rotation
+// ---------------------------------------------------------------- rows carry no rotation shelves yet
 
 #[test]
 fn rows_carry_no_rows_before_the_rotation() {

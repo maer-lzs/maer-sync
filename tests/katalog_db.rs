@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! K3a: the catalog file `katalog.db`.
+//! The catalog file `katalog.db`.
 //!
 //! The catalog is rebuildable from its sources and lives in a file of its
 //! own, next to the user store and never inside it. One writer (the fetch
@@ -593,7 +593,7 @@ fn a_reordered_list_keeps_the_version() {
     assert!(k.write_run("schellack", &[bad], false).is_err());
 }
 
-// ---------------------------------------------------------------- K3c: delta and run times
+// ---------------------------------------------------------------- delta and run times
 
 #[test]
 fn write_delta_keeps_absent_rows() {
@@ -647,7 +647,7 @@ fn run_times_survive_reopening() {
     assert_eq!(k.last_run("librivox", "voll").unwrap(), None);
 }
 
-// ---------------------------------------------------------------- K3d: the service reads without any write right
+// ---------------------------------------------------------------- the service reads without any write right
 
 #[test]
 fn a_clean_close_leaves_no_side_files() {

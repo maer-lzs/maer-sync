@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! The real `Holer` over `ureq` (K3c; decision of 25.11.2026, "ok ureq").
+//! The real `Holer` over `ureq`.
 //!
 //! It makes exactly one request and decides nothing a source could abuse:
 //! redirects are returned, not followed (`netz::Netz` follows them, https

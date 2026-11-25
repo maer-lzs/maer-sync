@@ -18,7 +18,7 @@ publish = false
 [dependencies]
 maer-sync = { path = ".." }
 serde_json = "=1.0.151"
-# HTTPS client of the fetch program only (decision of 25.11.2026, "ok ureq"):
+# HTTPS client of the fetch program only:
 # rustls with the compiled-in Mozilla roots (webpki-roots), gzip included.
 # Measured 25.11.2026: 18 new crates, builds with Rust 1.85, +1.76 MB.
 ureq = "=3.5.2"

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! Reader for Musopen on Wikimedia Commons (K3e).
+//! Reader for Musopen on Wikimedia Commons.
 //!
-//! Rights as the app (decision D4, iOS `MusopenCatalog.Licence`): the
+//! Rights as the app (iOS `MusopenCatalog.Licence`): the
 //! `License` field of the file page decides; `pd` and `cc0` give a row, an
 //! empty field with the short name exactly "PDM-owner" gives `pdm`, every
 //! other licence gives none. The short name alone decides nothing. A file

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! Reader for archive.org answers (K3b-1).
+//! Reader for archive.org answers.
 //!
 //! It reads the answer of the scrape API (`items`) and of the advanced
 //! search (`response.docs`) alike and turns each record into a catalog row
@@ -22,9 +22,9 @@
 //!
 //! **Shellac is never loaded.** Its collection declares no licence; a year
 //! up to the calendar year minus 101 gives the mark `pd` as a statement, but
-//! loading needs a declared licence (decision of 24.08.2026).
+//! loading needs a declared licence.
 //!
-//! **Shellac only from a shelf** (decision of 25.10.2026): the collection is
+//! **Shellac only from a shelf**: the collection is
 //! never read whole. A shellac answer is read only together with its shelf,
 //! and its rows carry that shelf in `reihen`; no other source has rows in
 //! `reihen` before the rotation comes.

@@ -10,7 +10,7 @@
 //! after it (`close_clean`, `journal_mode=DELETE`), so a stop while the
 //! program sleeps, which is nearly always, leaves no side files and the
 //! service, which mounts the catalog read only, always opens it. A stop in
-//! the middle of a run leaves the side files; measured 25.11.2026 (K3a-4),
+//! the middle of a run leaves the side files; measured 25.11.2026,
 //! the service then still reads the last committed state, and the next run
 //! cleans up. So the program needs no signal handling of its own.
 //!

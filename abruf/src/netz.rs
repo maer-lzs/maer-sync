@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! The network side of the fetch program (K3c).
+//! The network side of the fetch program.
 //!
 //! A `Holer` makes exactly one request and follows nothing; everything a
 //! source may do to the process is decided here, in front of it:
