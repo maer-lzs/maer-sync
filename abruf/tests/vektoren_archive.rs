@@ -231,9 +231,10 @@ fn shellac_years_by_calendar() {
         let r = &rows_from_answer("schellack", doc(extra).as_bytes(), year, Some(&jazz)).unwrap()[0];
         (r.jahr, r.rechte_kennung.clone(), r.laden, r.rechte_url.clone())
     };
-    assert_eq!(read(json!({"year": 1925}), 2026), (Some(1925), "pd".into(), true, None));
+    // Shellac states no licence, so it is never loaded; the year is only a statement.
+    assert_eq!(read(json!({"year": 1925}), 2026), (Some(1925), "pd".into(), false, None));
     assert_eq!(read(json!({"year": 1926}), 2026), (Some(1926), "unbekannt".into(), false, None));
-    assert_eq!(read(json!({"year": 1926}), 2027), (Some(1926), "pd".into(), true, None));
+    assert_eq!(read(json!({"year": 1926}), 2027), (Some(1926), "pd".into(), false, None));
     assert_eq!(read(json!({}), 2026), (None, "unbekannt".into(), false, None));
     assert_eq!(read(json!({"year": "1925"}), 2026).0, Some(1925));
     assert_eq!(read(json!({"year": "1925?"}), 2026).0, None);
@@ -248,6 +249,25 @@ fn shellac_years_by_calendar() {
 }
 
 // ---------------------------------------------------------------- 7, 8: fields and ids
+
+#[test]
+fn shellac_is_never_loaded() {
+    // Loading needs a declared licence (decision of 24.08.2026); the shellac
+    // collection declares none, whatever its year says.
+    for (quelle, _) in ARCHIVE_SOURCES {
+        if quelle != "schellack" {
+            continue;
+        }
+        for dir in cases(quelle) {
+            if dir.ends_with("geloescht") {
+                continue;
+            }
+            if let Ok(rows) = read_case(&dir) {
+                assert!(rows.iter().all(|r| !r.laden), "{}", dir.display());
+            }
+        }
+    }
+}
 
 #[test]
 fn several_creators_and_languages_join() {

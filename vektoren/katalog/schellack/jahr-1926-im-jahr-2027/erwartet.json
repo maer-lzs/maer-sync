@@ -12,12 +12,13 @@
     "kennung": "pd",
     "url": null
    },
-   "laden": true,
+   "laden": false,
    "reihen": [
     "free-classical"
    ],
    "auch": [],
    "tief": null
   }
- ]
+ ],
+ "_hinweis": "laden ist bei Schellack immer falsch: die Sammlung deklariert keine Lizenz; pd nach Jahr ist nur eine Angabe"
 }
