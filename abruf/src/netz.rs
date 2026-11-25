@@ -69,6 +69,14 @@ pub trait Uhr {
     fn schlafe_ms(&mut self, ms: i64);
 }
 
+/// The clock of the program. Signature only until its witness is red.
+pub struct SystemUhr;
+
+impl Uhr for SystemUhr {
+    fn jetzt_ms(&self) -> i64 { todo!("K3c clock") }
+    fn schlafe_ms(&mut self, _ms: i64) { todo!("K3c clock") }
+}
+
 pub struct Netz<H: Holer, U: Uhr> {
     pub holer: H,
     pub uhr: U,
