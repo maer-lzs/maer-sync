@@ -90,9 +90,25 @@ fn the_service_mounts_the_catalog_read_only() {
     let sync = block("maer-sync");
     let abruf = block("maer-sync-abruf");
     assert!(sync.contains("maer-sync-katalog:/var/lib/maer-sync-katalog:ro"), "the service mounts the catalog writable");
-    assert!(sync.contains("MAER_SYNC_KATALOG: /var/lib/maer-sync-katalog/katalog.db"));
+    // Off by default: the service names the catalog only when the operator sets it.
+    assert!(sync.contains("MAER_SYNC_KATALOG: ${MAER_SYNC_KATALOG:-}"), "the service names a catalog by default");
     assert!(abruf.contains("maer-sync-katalog:/var/lib/maer-sync-katalog\n") || abruf.contains("maer-sync-katalog:/var/lib/maer-sync-katalog:rw"));
     assert!(!abruf.contains("maer-sync-store"), "the fetch program sees the user store");
     assert!(abruf.contains("mem_limit: 1g"));
     assert!(abruf.contains("init: true"));
+}
+
+#[test]
+fn the_default_compose_does_not_start_the_fetch() {
+    // A plain `docker compose up -d` after an update must not begin to fetch
+    // from archive.org: the fetch program sits behind its own profile.
+    let compose = read("../compose.yaml");
+    let start = compose.find("\n  maer-sync-abruf:\n").expect("the fetch service");
+    let block: String = compose[start + 1..].lines().skip(1)
+        .take_while(|l| l.trim().is_empty() || l.starts_with("    ")).collect::<Vec<_>>().join("\n");
+    assert!(block.contains("profiles: [\"katalog\"]"), "the fetch program starts by default");
+    let readme = read("../README.md");
+    assert!(readme.contains("## Catalog index (optional)"), "the README does not say how to switch it on");
+    assert!(readme.contains("docker compose --profile katalog up -d"));
+    assert!(readme.contains("`MAER_SYNC_KATALOG`"));
 }
