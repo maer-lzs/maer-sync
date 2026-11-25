@@ -86,7 +86,7 @@ expect refuse "M4 message names a work-order code"  docs/b.md "five" "Builds the
 expect refuse "M4 message names a short order code" docs/b.md "six" "Takes in K3c and its fences"
 expect refuse "M5 message says decided"             docs/c.md "seven" "As decided, the catalog keeps version 6"
 expect refuse "M5 message names a decision"         docs/c.md "eight" "Keeps version 6 after the decision of the operator"
-expect pass   "M8 message names a file format"      docs/c.md "nine" "Reads MP3 and K2 titles, decides the order"
+expect pass   "M8 message names a file format"      docs/c.md "nine" "Reads MP3 and FLAC titles, decides the order"
 expect refuse "M6 message carries a dash"           docs/c.md "two" "The store — one file"
 expect refuse "M7 message is German"                docs/c.md "three" "Die Sitzung wird nicht mehr gehalten"
 expect pass   "M8 English message"                  docs/c.md "four" "Keeps the session for one hour"

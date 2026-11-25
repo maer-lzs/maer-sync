@@ -168,12 +168,18 @@ fn leer(status: u16) -> Antwort {
 /// One catalog row on the wire (addition katalog-1): a deletion mark in a
 /// delta carries exactly `id` and `geloescht`; a live row all its fields,
 /// and in a delta `"geloescht": false`.
-fn katalog_zeile(s: &crate::katalog::Stored, delta: bool) -> Value {
+/// `unlesbar` counts rows whose `tief` cannot be read: the writer checks it,
+/// so only a damaged file gets here; the row still goes out, `tief` null.
+fn katalog_zeile(s: &crate::katalog::Stored, delta: bool, unlesbar: &mut Vec<String>) -> Value {
     if s.geloescht {
         return json!({ "id": s.row.id, "geloescht": true });
     }
     let r = &s.row;
-    let tief = r.tief.as_deref().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null);
+    let tief = match r.tief.as_deref().map(serde_json::from_str::<Value>) {
+        None => Value::Null,
+        Some(Ok(v)) => v,
+        Some(Err(_)) => { unlesbar.push(r.id.clone()); Value::Null }
+    };
     let mut z = json!({
         "id": r.id, "art": r.art, "titel": r.titel, "urheber": r.urheber, "sprache": r.sprache,
         "jahr": r.jahr, "rechte": { "kennung": r.rechte_kennung, "url": r.rechte_url },
@@ -330,7 +336,12 @@ impl App {
             // No body; the contract fence reads statuses behind the answer helpers.
             return als_bytes(304, Vec::new(), vec![("etag".into(), etag)]);
         }
-        let zeilen: Vec<Value> = page.zeilen.iter().map(|s| katalog_zeile(s, delta)).collect();
+        let mut unlesbar = vec![];
+        let zeilen: Vec<Value> = page.zeilen.iter().map(|s| katalog_zeile(s, delta, &mut unlesbar)).collect();
+        if let Some(erste) = unlesbar.first() {
+            self.protokoll.push(Zeile::warnung(format!(
+                "katalog quelle={quelle}: tief unreadable in {} rows, first id={erste}; sent as null", unlesbar.len())));
+        }
         self.protokoll.push(zeile(200));
         als_json(200, json!({
             "katalog_format": KATALOG_FORMAT, "quelle": quelle, "version": page.version,
