@@ -11,4 +11,5 @@ pub mod archive;
 pub mod lauf;
 pub mod netz;
 pub mod plan;
+pub mod programm;
 pub mod ureq_holer;

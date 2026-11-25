@@ -36,6 +36,9 @@ use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
 use crate::netz::{encode, HolFehler, Holer, Netz, Uhr};
 use crate::plan::{Art, DELTA_S};
 
+/// K3c. The bound of the advanced search; signature only until its witness is red.
+pub const ADV_GRENZE: usize = 10_000;
+
 const ADV: &str = "https://archive.org/advancedsearch.php";
 const SCRAPE: &str = "https://archive.org/services/search/v1/scrape";
 const FIELDS: [&str; 11] = [

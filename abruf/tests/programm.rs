@@ -1,0 +1,256 @@
+// Mär — an audio player for self-hosted open ecosystems
+// Copyright (C) 2026 Laurenz Schröder
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+
+//! The fetch program as a program: one step runs the source that is due
+//! and answers how long to sleep. The catalog is open only during a run and
+//! closed cleanly after it, so a stop while the program sleeps leaves no
+//! side files. Against a fake network and a fake clock; no witness reaches
+//! the network.
+
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
+
+use maer_sync::katalog::{Katalog, MAX_PAGE};
+use maer_sync_abruf::lauf::{lauf, Einstellungen, LaufFehler};
+use maer_sync_abruf::netz::{decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr};
+use maer_sync_abruf::plan::{Art, BACKOFF_S};
+use maer_sync_abruf::programm::{Programm, QUELLEN};
+use serde_json::{json, Value};
+
+type Handler = Box<dyn FnMut(&Anfrage, &BTreeMap<String, String>) -> Result<Antwort, HolFehler>>;
+
+#[derive(Clone)]
+struct Clock(Rc<RefCell<i64>>);
+
+impl Uhr for Clock {
+    fn jetzt_ms(&self) -> i64 { *self.0.borrow() }
+    fn schlafe_ms(&mut self, ms: i64) { *self.0.borrow_mut() += ms.max(0); }
+}
+
+struct Fake {
+    clock: Clock,
+    handler: Rc<RefCell<Handler>>,
+}
+
+impl Holer for Fake {
+    fn hole(&mut self, a: &Anfrage) -> Result<Antwort, HolFehler> {
+        let p: BTreeMap<String, String> = decode_params(&a.url).into_iter().collect();
+        *self.clock.0.borrow_mut() += 50;
+        (self.handler.borrow_mut())(a, &p)
+    }
+}
+
+const T0_MS: i64 = 1_764_000_000_000; // 2025-11-24
+
+fn ok(v: Value) -> Result<Antwort, HolFehler> {
+    Ok(Antwort { status: 200, koerper: v.to_string().into_bytes(), ..Default::default() })
+}
+
+fn adv(q: &str, total: usize, docs: Vec<Value>) -> Value {
+    json!({"responseHeader": {"params": {"query": q}}, "response": {"numFound": total, "start": 0, "docs": docs}})
+}
+
+fn coll_of(q: &str) -> &'static str {
+    ["librivoxaudio", "audio_bookspoetry", "netlabels", "georgeblood", "oldtimeradio"].into_iter()
+        .find(|c| q.contains(&format!("collection:{c}"))).unwrap_or_else(|| panic!("the fake does not know {q}"))
+}
+
+/// Every archive collection with `n` records; shellac shelves with records
+/// carrying their own word as subject and a year.
+fn archive(n: usize, year: i64) -> Handler {
+    Box::new(move |a, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        let coll = coll_of(&q);
+        let word = q.split("subject:\"").nth(1).and_then(|r| r.split('"').next()).map(str::to_string);
+        let rec = |i: usize| {
+            let id = match &word { Some(w) => format!("78_{w}-{i}"), None => format!("{coll}-{i}") };
+            json!({"identifier": id, "title": id, "collection": [coll],
+                   "subject": ["78rpm", word.clone().unwrap_or_default()], "year": year})
+        };
+        if a.url.starts_with("https://archive.org/advancedsearch.php") {
+            let rows: usize = p["rows"].parse().unwrap();
+            let page: usize = p["page"].parse().unwrap();
+            let docs = (0..n).skip((page - 1) * rows).take(rows).map(rec).collect();
+            return ok(adv(&q, n, docs));
+        }
+        if a.url.starts_with("https://archive.org/services/search/v1/scrape") {
+            return ok(json!({"items": (0..n).map(rec).collect::<Vec<_>>(), "count": n, "total": n}));
+        }
+        panic!("the fake does not know {}", a.url);
+    })
+}
+
+struct Aufbau {
+    programm: Programm<Fake, Clock>,
+    clock: Clock,
+    handler: Rc<RefCell<Handler>>,
+    path: String,
+    dir: std::path::PathBuf,
+}
+
+fn aufbau(name: &str, handler: Handler, start_ms: i64) -> Aufbau {
+    let dir = std::env::temp_dir().join(format!("maer-sync-programm-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("katalog.db").to_string_lossy().into_owned();
+    let clock = Clock(Rc::new(RefCell::new(start_ms)));
+    let handler = Rc::new(RefCell::new(handler));
+    let netz = Netz::new(Fake { clock: clock.clone(), handler: handler.clone() }, clock.clone());
+    let programm = Programm::new(netz, &path).unwrap();
+    Aufbau { programm, clock, handler, path, dir }
+}
+
+fn side_files(dir: &std::path::Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with("-wal") || n.ends_with("-shm") || n.ends_with("-journal")).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn only_sources_with_a_reader_are_planned() {
+    assert_eq!(QUELLEN, ["archive-buch", "librivox", "netlabel", "otr", "schellack"]);
+}
+
+#[test]
+fn a_step_runs_the_due_source_and_answers_the_sleep() {
+    let mut a = aufbau("step", archive(3, 1920), T0_MS);
+    let (b, schlaf) = a.programm.schritt();
+    let b = b.expect("a new catalog has a source due");
+    assert_eq!((b.quelle.as_str(), b.art, b.ausgang.clone()), ("archive-buch", Art::Voll, Ok(())));
+    assert!((60..=3_600).contains(&schlaf), "{schlaf}");
+    // All five run one after another, then nothing is due for a day.
+    let mut done = vec![b.quelle];
+    for _ in 0..4 {
+        done.push(a.programm.schritt().0.expect("still due").quelle);
+    }
+    assert_eq!(done, ["archive-buch", "librivox", "netlabel", "otr", "schellack"]);
+    let (none, schlaf) = a.programm.schritt();
+    assert!(none.is_none());
+    assert_eq!(schlaf, 3_600);
+}
+
+#[test]
+fn between_runs_the_catalog_is_closed_clean() {
+    let mut a = aufbau("clean", archive(2, 1920), T0_MS);
+    a.programm.schritt();
+    assert_eq!(side_files(&a.dir), Vec::<String>::new(), "side files beside the catalog between runs");
+    let mode: String = rusqlite::Connection::open(&a.path).unwrap().query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+    assert_eq!(mode.to_lowercase(), "delete");
+}
+
+#[test]
+fn a_failed_step_backs_off() {
+    let mut a = aufbau("backoff", Box::new(|_, _| Ok(Antwort { status: 503, ..Default::default() })), T0_MS);
+    let (b, _) = a.programm.schritt();
+    assert!(matches!(b.unwrap().ausgang, Err(LaufFehler::Holen(HolFehler::Status(503)))));
+    // The failed source is not asked again before its backoff; the next one is.
+    let (b2, _) = a.programm.schritt();
+    assert_eq!(b2.unwrap().quelle, "librivox");
+    *a.handler.borrow_mut() = archive(2, 1920);
+    for _ in 0..4 { a.programm.schritt(); }
+    assert!(a.programm.schritt().0.is_none(), "the failed source came back before its backoff");
+    *a.clock.0.borrow_mut() += BACKOFF_S[0] * 1000;
+    let (b3, _) = a.programm.schritt();
+    assert_eq!(b3.unwrap().quelle, "archive-buch");
+}
+
+#[test]
+fn retry_after_postpones_the_source() {
+    let mut a = aufbau("later", Box::new(|_, _| Ok(Antwort { status: 429, retry_after_s: Some(7_200), ..Default::default() })), T0_MS);
+    a.programm.schritt();
+    *a.handler.borrow_mut() = archive(2, 1920);
+    for _ in 0..4 { a.programm.schritt(); }
+    *a.clock.0.borrow_mut() += BACKOFF_S[0] * 1000 + 1000;
+    assert!(a.programm.schritt().0.is_none(), "asked again before Retry-After");
+    *a.clock.0.borrow_mut() += 7_200 * 1000;
+    assert_eq!(a.programm.schritt().0.unwrap().quelle, "archive-buch");
+}
+
+#[test]
+fn run_times_come_back_from_the_catalog() {
+    let mut a = aufbau("times", archive(2, 1920), T0_MS);
+    for _ in 0..5 { a.programm.schritt(); }
+    let path = a.path.clone();
+    let clock = Clock(Rc::new(RefCell::new(*a.clock.0.borrow())));
+    let handler: Rc<RefCell<Handler>> = Rc::new(RefCell::new(Box::new(|a, _| panic!("asked after a restart: {}", a.url))));
+    let netz = Netz::new(Fake { clock: clock.clone(), handler }, clock);
+    let mut again = Programm::new(netz, &path).unwrap();
+    assert!(again.schritt().0.is_none(), "a restart fetched everything again");
+}
+
+#[test]
+fn the_calendar_year_comes_from_the_clock() {
+    // 2027-01-01 00:00:10 UTC: a record of 1926 is free by its year now.
+    let mut a = aufbau("year", archive(1, 1926), 1_798_761_610_000);
+    assert_eq!(a.programm.kalenderjahr(), 2027);
+    for _ in 0..5 { a.programm.schritt(); }
+    let k = Katalog::open_read(&a.path).unwrap();
+    let rows = k.full("schellack", None, MAX_PAGE).unwrap().zeilen;
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|s| s.row.rechte_kennung == "pd" && !s.row.laden), "{:?}", rows[0].row);
+}
+
+// ---------------------------------------------------------------- the run, from the reviewer's notes
+
+fn settings() -> Einstellungen { Einstellungen { scrape_count: 10_000, adv_rows: 10_000, kalenderjahr: 2026 } }
+
+#[test]
+fn a_count_that_moves_during_the_pass_is_counted_again() {
+    // The count says 5, a record is added before the pages are read: the
+    // second count says 6 and the pass of 6 is written.
+    let counts = Rc::new(RefCell::new(vec![5usize, 6]));
+    let c2 = counts.clone();
+    let handler: Handler = Box::new(move |a, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        if a.url.contains("advancedsearch") {
+            let n = { let mut c = c2.borrow_mut(); if c.len() > 1 { c.remove(0) } else { c[0] } };
+            return ok(adv(&q, n, vec![]));
+        }
+        ok(json!({"items": (0..6).map(|i| json!({"identifier": format!("ot-{i}"), "collection": ["oldtimeradio"]})).collect::<Vec<_>>()}))
+    });
+    let mut a = aufbau("moving", handler, T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    let b = lauf(&mut a.programm.netz, &mut k, "otr", Art::Voll, &settings());
+    assert_eq!(b.ausgang, Ok(()));
+    assert_eq!(b.gelesen, 6);
+    // A count that matches neither the first nor the second is still refused.
+    *counts.borrow_mut() = vec![4, 4];
+    let b = lauf(&mut a.programm.netz, &mut k, "otr", Art::Voll, &settings());
+    assert!(matches!(b.ausgang, Err(LaufFehler::Zaehlung { .. })), "{:?}", b.ausgang);
+}
+
+#[test]
+fn advancedsearch_above_its_bound_is_refused() {
+    let handler: Handler = Box::new(|_, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        ok(adv(&q, maer_sync_abruf::lauf::ADV_GRENZE + 1, vec![]))
+    });
+    let mut a = aufbau("bound", handler, T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    let b = lauf(&mut a.programm.netz, &mut k, "schellack", Art::Voll, &settings());
+    assert!(matches!(&b.ausgang, Err(LaufFehler::Quelle(s)) if s.contains("advancedsearch")), "{:?}", b.ausgang);
+    assert_eq!(k.version("schellack").unwrap(), 0);
+}
+
+#[test]
+fn a_shellac_delta_keeps_the_other_shelves() {
+    // A record on jazz and swing; the delta finds it again only on jazz.
+    let handler: Handler = Box::new(|_, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        let word = q.split("subject:\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or("").to_string();
+        let on = (word == "jazz" || word == "swing") && !(q.contains("addeddate") && word == "swing");
+        let docs = if on { vec![json!({"identifier": "78_both", "title": "Both", "collection": ["georgeblood"], "subject": [word], "year": 1940})] } else { vec![] };
+        ok(adv(&q, docs.len(), docs))
+    });
+    let mut a = aufbau("shelves", handler, T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    assert_eq!(lauf(&mut a.programm.netz, &mut k, "schellack", Art::Voll, &settings()).ausgang, Ok(()));
+    let reihen = |k: &Katalog| k.full("schellack", None, MAX_PAGE).unwrap().zeilen[0].row.reihen.clone();
+    assert_eq!(reihen(&k), vec!["shellac-jazz", "shellac-swing"]);
+    assert_eq!(lauf(&mut a.programm.netz, &mut k, "schellack", Art::Delta, &settings()).ausgang, Ok(()));
+    assert_eq!(reihen(&k), vec!["shellac-jazz", "shellac-swing"], "the delta dropped a shelf");
+}

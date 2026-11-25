@@ -493,6 +493,7 @@ name = "maer-sync-abruf"
 version = "0.0.0"
 dependencies = [
  "maer-sync",
+ "rusqlite",
  "serde_json",
  "ureq",
 ]

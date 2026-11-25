@@ -50,6 +50,9 @@ impl UreqHoler {
         !self.agent.config().tls_config().disable_verification()
     }
 
+    /// Signature only until its witness is red.
+    pub fn follows_a_proxy(&self) -> bool { true }
+
     pub fn https_only(&self) -> bool {
         self.agent.config().https_only()
     }

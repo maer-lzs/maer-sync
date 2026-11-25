@@ -22,3 +22,7 @@ serde_json = "=1.0.151"
 # rustls with the compiled-in Mozilla roots (webpki-roots), gzip included.
 # Measured 25.11.2026: 18 new crates, builds with Rust 1.85, +1.76 MB.
 ureq = "=3.5.2"
+
+[dev-dependencies]
+# The witnesses read the catalog file directly; the same pin as the service.
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
