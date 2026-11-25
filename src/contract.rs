@@ -23,10 +23,15 @@ use sha2::{Digest, Sha256};
 /// Der Digest des Vertrags, wie er in beiden Repos steht. Eine Aenderung hier
 /// ist eine Aenderung am Vertrag und damit ein Schritt auf `main` mit dem
 /// App-Nachzug im selben Zug, nie ein Commit auf einem Bau-Zweig.
-pub const DIGEST: &str = "f77b2a9c8bd1ce9ef03d8796be9508be85e0578a6a0592a151e48817c1ba456b";
+pub const DIGEST: &str = "7d3283615c51aa0190a1cdf6efa36f76bbc22cd9ecf72fea46ad11966b459885";
 
 /// Die Fassung, die dieser Bau bedient.
-pub const VERSION: &str = "7";
+pub const VERSION: &str = "6";
+
+/// The additions to this version the service carries. An addition adds
+/// paths a device of the version never calls and never raises `VERSION`
+/// (CONTRACT.md, "An addition does not bump the version").
+pub const ADDITIONS: &[&str] = &["katalog-1"];
 
 pub fn digest_of(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
