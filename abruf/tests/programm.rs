@@ -53,6 +53,25 @@ fn adv(q: &str, total: usize, docs: Vec<Value>) -> Value {
     json!({"responseHeader": {"params": {"query": q}}, "response": {"numFound": total, "start": 0, "docs": docs}})
 }
 
+/// One Musopen file and one station, for the two sources beside archive.org.
+fn commons_or_radio(a: &Anfrage, p: &BTreeMap<String, String>) -> Option<Result<Antwort, HolFehler>> {
+    if a.url.starts_with("https://commons.wikimedia.org/") {
+        if p.get("prop").map(String::as_str) == Some("categoryinfo") {
+            return Some(ok(json!({"query": {"pages": [{"title": p["titles"], "categoryinfo": {"files": 1}}]}})));
+        }
+        let id = if p["gcmtitle"] == "Category:Musopen" { 1 } else { 2 };
+        return Some(ok(json!({"query": {"pages": [{"pageid": id, "ns": 6, "title": "File:A - I. B.ogg",
+            "videoinfo": [{"url": "https://upload.wikimedia.org/a.ogg", "extmetadata": {"License": {"value": "pd"}}}]}]}})));
+    }
+    if a.url.contains(".api.radio-browser.info/") {
+        if a.url.contains("/json/stats") { return Some(ok(json!({"stations": 1, "stations_broken": 0}))); }
+        let offset: usize = p["offset"].parse().unwrap();
+        let v = if offset == 0 { json!([{"stationuuid": "00000000-0000-0000-0000-000000000001", "name": "S", "url": "http://s"}]) } else { json!([]) };
+        return Some(ok(v));
+    }
+    None
+}
+
 fn coll_of(q: &str) -> &'static str {
     ["librivoxaudio", "audio_bookspoetry", "netlabels", "georgeblood", "oldtimeradio"].into_iter()
         .find(|c| q.contains(&format!("collection:{c}"))).unwrap_or_else(|| panic!("the fake does not know {q}"))
@@ -62,6 +81,7 @@ fn coll_of(q: &str) -> &'static str {
 /// carrying their own word as subject and a year.
 fn archive(n: usize, year: i64) -> Handler {
     Box::new(move |a, p| {
+        if let Some(r) = commons_or_radio(a, p) { return r; }
         let q = p.get("q").cloned().unwrap_or_default();
         let coll = coll_of(&q);
         let word = q.split("subject:\"").nth(1).and_then(|r| r.split('"').next()).map(str::to_string);
@@ -112,7 +132,7 @@ fn side_files(dir: &std::path::Path) -> Vec<String> {
 
 #[test]
 fn only_sources_with_a_reader_are_planned() {
-    assert_eq!(QUELLEN, ["archive-buch", "librivox", "netlabel", "otr", "schellack"]);
+    assert_eq!(QUELLEN, ["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
 }
 
 #[test]
@@ -122,12 +142,12 @@ fn a_step_runs_the_due_source_and_answers_the_sleep() {
     let b = b.expect("a new catalog has a source due");
     assert_eq!((b.quelle.as_str(), b.art, b.ausgang.clone()), ("archive-buch", Art::Voll, Ok(())));
     assert!((60..=3_600).contains(&schlaf), "{schlaf}");
-    // All five run one after another, then nothing is due for a day.
+    // All seven run one after another, then nothing is due for a day.
     let mut done = vec![b.quelle];
-    for _ in 0..4 {
+    for _ in 0..6 {
         done.push(a.programm.schritt().0.expect("still due").quelle);
     }
-    assert_eq!(done, ["archive-buch", "librivox", "netlabel", "otr", "schellack"]);
+    assert_eq!(done, ["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
     let (none, schlaf) = a.programm.schritt();
     assert!(none.is_none());
     assert_eq!(schlaf, 3_600);
@@ -151,7 +171,7 @@ fn a_failed_step_backs_off() {
     let (b2, _) = a.programm.schritt();
     assert_eq!(b2.unwrap().quelle, "librivox");
     *a.handler.borrow_mut() = archive(2, 1920);
-    for _ in 0..4 { a.programm.schritt(); }
+    for _ in 0..6 { a.programm.schritt(); }
     assert!(a.programm.schritt().0.is_none(), "the failed source came back before its backoff");
     *a.clock.0.borrow_mut() += BACKOFF_S[0] * 1000;
     let (b3, _) = a.programm.schritt();
@@ -163,7 +183,7 @@ fn retry_after_postpones_the_source() {
     let mut a = aufbau("later", Box::new(|_, _| Ok(Antwort { status: 429, retry_after_s: Some(7_200), ..Default::default() })), T0_MS);
     a.programm.schritt();
     *a.handler.borrow_mut() = archive(2, 1920);
-    for _ in 0..4 { a.programm.schritt(); }
+    for _ in 0..6 { a.programm.schritt(); }
     *a.clock.0.borrow_mut() += BACKOFF_S[0] * 1000 + 1000;
     assert!(a.programm.schritt().0.is_none(), "asked again before Retry-After");
     *a.clock.0.borrow_mut() += 7_200 * 1000;
@@ -173,7 +193,7 @@ fn retry_after_postpones_the_source() {
 #[test]
 fn run_times_come_back_from_the_catalog() {
     let mut a = aufbau("times", archive(2, 1920), T0_MS);
-    for _ in 0..5 { a.programm.schritt(); }
+    for _ in 0..7 { a.programm.schritt(); }
     let path = a.path.clone();
     let clock = Clock(Rc::new(RefCell::new(*a.clock.0.borrow())));
     let handler: Rc<RefCell<Handler>> = Rc::new(RefCell::new(Box::new(|a, _| panic!("asked after a restart: {}", a.url))));
@@ -187,7 +207,7 @@ fn the_calendar_year_comes_from_the_clock() {
     // 2027-01-01 00:00:10 UTC: a record of 1926 is free by its year now.
     let mut a = aufbau("year", archive(1, 1926), 1_798_761_610_000);
     assert_eq!(a.programm.kalenderjahr(), 2027);
-    for _ in 0..5 { a.programm.schritt(); }
+    for _ in 0..7 { a.programm.schritt(); }
     let k = Katalog::open_read(&a.path).unwrap();
     let rows = k.full("schellack", None, MAX_PAGE).unwrap().zeilen;
     assert!(!rows.is_empty());

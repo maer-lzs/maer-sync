@@ -1,0 +1,20 @@
+[
+ {
+  "stationuuid": "7f645759-b133-40b8-bace-9c9458407099",
+  "name": "\r\nГарик Сукачёв",
+  "language": "russian",
+  "url": "https://stream.pcradio.ru/Garik_Sukachov-hi",
+  "url_resolved": "https://stream03.pcradio.app/Garik_Sukachov-hi",
+  "favicon": "null",
+  "homepage": "https://pcradio.ru/",
+  "countrycode": "RU",
+  "tags": "discography",
+  "bitrate": 0,
+  "codec": "AAC",
+  "votes": 22,
+  "languagecodes": "ru",
+  "state": "",
+  "clickcount": 6,
+  "lastcheckok": 1
+ }
+]

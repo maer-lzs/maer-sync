@@ -15,15 +15,8 @@
    "laden": true,
    "reihen": [],
    "auch": [],
-   "version": 1,
-   "geloescht": false,
-   "tief": {
-    "komponist": "OFFEN (liefert die Swift-Seite, K1)",
-    "werk": "OFFEN (liefert die Swift-Seite, K1)",
-    "interpret": "OFFEN (liefert die Swift-Seite, K1)",
-    "satz": null
-   }
+   "tief": null
   }
  ],
- "_hinweis": "satz nach MusopenOrder.movementNumber (iOS 8319e1c0): nach dem letzten ' - ' eine roemische Zahl in Grossbuchstaben oder eine arabische, gefolgt von '. ' oder ') '; die Swift-Seite bestaetigt"
+ "_offen": "komponist, werk, interpret liefert die Swift-Seite; bis dahin fehlen sie in tief"
 }

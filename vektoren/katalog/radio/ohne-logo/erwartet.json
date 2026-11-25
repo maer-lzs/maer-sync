@@ -1,0 +1,34 @@
+{
+ "zeilen": [
+  {
+   "quelle": "radio",
+   "id": "radio:rb:9afeaf65-bb57-4d76-892d-c7a39fc6c805",
+   "art": "sender",
+   "titel": "\tHard Rock Radio FM",
+   "urheber": null,
+   "sprache": null,
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": {
+    "url": "http://67.249.184.45:8015/listen.pls",
+    "url_resolved": "http://67.249.184.45:8015/",
+    "favicon": null,
+    "homepage": "https://hardrockradiofm.weebly.com/",
+    "countrycode": "US",
+    "tags": "80's,90's,hard rock,heavy metal",
+    "bitrate": 128,
+    "codec": "MP3",
+    "votes": 1302,
+    "languagecodes": null,
+    "state": "NY",
+    "clickcount": 138
+   }
+  }
+ ]
+}

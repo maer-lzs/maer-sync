@@ -1,0 +1,34 @@
+{
+ "zeilen": [
+  {
+   "quelle": "radio",
+   "id": "radio:rb:7f645759-b133-40b8-bace-9c9458407099",
+   "art": "sender",
+   "titel": "\r\nГарик Сукачёв",
+   "urheber": null,
+   "sprache": "ru",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": {
+    "url": "https://stream.pcradio.ru/Garik_Sukachov-hi",
+    "url_resolved": "https://stream03.pcradio.app/Garik_Sukachov-hi",
+    "favicon": "null",
+    "homepage": "https://pcradio.ru/",
+    "countrycode": "RU",
+    "tags": "discography",
+    "bitrate": 0,
+    "codec": "AAC",
+    "votes": 22,
+    "languagecodes": "ru",
+    "state": null,
+    "clickcount": 6
+   }
+  }
+ ]
+}

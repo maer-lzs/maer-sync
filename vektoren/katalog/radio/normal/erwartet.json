@@ -2,11 +2,11 @@
  "zeilen": [
   {
    "quelle": "radio",
-   "id": "radio:rb:595687e1-9fa0-49d7-8cb7-d6ed63f6d8b3",
+   "id": "radio:rb:ffc0d701-f43b-4232-8be6-f7ff72add8ef",
    "art": "sender",
-   "titel": "Christmas FM Non-stop!",
+   "titel": "\tBlasmusikradio mit Bernd",
    "urheber": null,
-   "sprache": "italian",
+   "sprache": "de",
    "jahr": null,
    "rechte": {
     "kennung": "unbekannt",
@@ -15,9 +15,20 @@
    "laden": false,
    "reihen": [],
    "auch": [],
-   "version": 1,
-   "geloescht": false
+   "tief": {
+    "url": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+    "url_resolved": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+    "favicon": "https://assets.laut.fm/b22749b7fdb382b8912269e3d8054380?t=_120x120",
+    "homepage": "https://laut.fm/blasmusikradio_mit_bernd",
+    "countrycode": "DE",
+    "tags": "blasmusik,folk,marsch,polka",
+    "bitrate": 128,
+    "codec": "MP3",
+    "votes": 295,
+    "languagecodes": "de",
+    "state": "Bayern",
+    "clickcount": 44
+   }
   }
- ],
- "_hinweis": "ein Sender hat keine Lizenz im Sinne der Liste; laden ist fuer Sender gegenstandslos"
+ ]
 }

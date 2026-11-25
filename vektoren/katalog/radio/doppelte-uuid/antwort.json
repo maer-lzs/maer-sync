@@ -1,0 +1,38 @@
+[
+ {
+  "stationuuid": "ffc0d701-f43b-4232-8be6-f7ff72add8ef",
+  "name": "\tBlasmusikradio mit Bernd",
+  "language": "german",
+  "url": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+  "url_resolved": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+  "favicon": "https://assets.laut.fm/b22749b7fdb382b8912269e3d8054380?t=_120x120",
+  "homepage": "https://laut.fm/blasmusikradio_mit_bernd",
+  "countrycode": "DE",
+  "tags": "blasmusik,folk,marsch,polka",
+  "bitrate": 128,
+  "codec": "MP3",
+  "votes": 295,
+  "languagecodes": "de",
+  "state": "Bayern",
+  "clickcount": 44,
+  "lastcheckok": 1
+ },
+ {
+  "stationuuid": "ffc0d701-f43b-4232-8be6-f7ff72add8ef",
+  "name": "\tBlasmusikradio mit Bernd (zweiter Eintrag)",
+  "language": "german",
+  "url": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+  "url_resolved": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+  "favicon": "https://assets.laut.fm/b22749b7fdb382b8912269e3d8054380?t=_120x120",
+  "homepage": "https://laut.fm/blasmusikradio_mit_bernd",
+  "countrycode": "DE",
+  "tags": "blasmusik,folk,marsch,polka",
+  "bitrate": 128,
+  "codec": "MP3",
+  "votes": 295,
+  "languagecodes": "de",
+  "state": "Bayern",
+  "clickcount": 44,
+  "lastcheckok": 1
+ }
+]

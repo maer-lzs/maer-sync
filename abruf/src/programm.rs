@@ -26,7 +26,7 @@ use crate::netz::{HolFehler, Holer, Netz, Uhr};
 use crate::plan::{naechster, schlaf_s, Art, Zustand};
 
 /// The sources that have a reader today, in the order of their names.
-pub const QUELLEN: [&str; 5] = ["archive-buch", "librivox", "netlabel", "otr", "schellack"];
+pub const QUELLEN: &[&str] = &["archive-buch", "librivox", "netlabel", "otr", "schellack"];
 
 pub struct Programm<H: Holer, U: Uhr> {
     pub netz: Netz<H, U>,

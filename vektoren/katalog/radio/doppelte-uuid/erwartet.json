@@ -1,0 +1,35 @@
+{
+ "zeilen": [
+  {
+   "quelle": "radio",
+   "id": "radio:rb:ffc0d701-f43b-4232-8be6-f7ff72add8ef",
+   "art": "sender",
+   "titel": "\tBlasmusikradio mit Bernd",
+   "urheber": null,
+   "sprache": "de",
+   "jahr": null,
+   "rechte": {
+    "kennung": "unbekannt",
+    "url": null
+   },
+   "laden": false,
+   "reihen": [],
+   "auch": [],
+   "tief": {
+    "url": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+    "url_resolved": "https://stream.laut.fm/blasmusikradio_mit_bernd",
+    "favicon": "https://assets.laut.fm/b22749b7fdb382b8912269e3d8054380?t=_120x120",
+    "homepage": "https://laut.fm/blasmusikradio_mit_bernd",
+    "countrycode": "DE",
+    "tags": "blasmusik,folk,marsch,polka",
+    "bitrate": 128,
+    "codec": "MP3",
+    "votes": 295,
+    "languagecodes": "de",
+    "state": "Bayern",
+    "clickcount": 44
+   }
+  }
+ ],
+ "_hinweis": "gebaut: dieselbe uuid zweimal in einer Seite, die erste gilt (wie die App)"
+}

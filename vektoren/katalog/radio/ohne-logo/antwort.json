@@ -1,0 +1,20 @@
+[
+ {
+  "stationuuid": "9afeaf65-bb57-4d76-892d-c7a39fc6c805",
+  "name": "\tHard Rock Radio FM",
+  "language": "",
+  "url": "http://67.249.184.45:8015/listen.pls",
+  "url_resolved": "http://67.249.184.45:8015/",
+  "favicon": "",
+  "homepage": "https://hardrockradiofm.weebly.com/",
+  "countrycode": "US",
+  "tags": "80's,90's,hard rock,heavy metal",
+  "bitrate": 128,
+  "codec": "MP3",
+  "votes": 1302,
+  "languagecodes": "",
+  "state": "NY",
+  "clickcount": 138,
+  "lastcheckok": 1
+ }
+]

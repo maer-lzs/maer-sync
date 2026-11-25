@@ -9,7 +9,9 @@
 
 pub mod archive;
 pub mod lauf;
+pub mod musopen;
 pub mod netz;
 pub mod plan;
 pub mod programm;
+pub mod radio;
 pub mod ureq_holer;
