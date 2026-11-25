@@ -337,6 +337,36 @@ fn the_catalog_paths_touch_no_user_data() {
     }
 }
 
+// ---------------------------------------------------------------- a damaged tief
+
+/// The writer checks `tief` before it lands; an unreadable one can only come
+/// from a damaged file. The row still goes out, with `tief` null, and the log
+/// gets one warning per request naming the source and the first id.
+#[test]
+fn an_unreadable_tief_goes_out_as_null_with_one_log_line() {
+    let mut st = stand("tief", |k| {
+        let mut r = rows("otr", 3);
+        for x in r.iter_mut() { x.tief = Some(r#"{"a":1}"#.into()); }
+        k.write_run("otr", &r, false).unwrap();
+    });
+    let c = Connection::open(&st.katalog).unwrap();
+    c.execute("UPDATE eintrag SET tief = '{broken' WHERE id IN ('lva:item-0001', 'lva:item-0002')", []).unwrap();
+    drop(c);
+    let before = st.app.protokoll.len();
+    let v = body(&get(&mut st, "/v1/katalog/otr", ""));
+    let tief: Vec<Value> = v["zeilen"].as_array().unwrap().iter().map(|z| z["tief"].clone()).collect();
+    assert_eq!(tief, vec![json!({"a": 1}), Value::Null, Value::Null]);
+    let warn: Vec<String> = st.app.protokoll[before..].iter().map(|z| format!("{z:?}"))
+        .filter(|l| l.contains("Warnung") && l.contains("tief")).collect();
+    assert_eq!(warn.len(), 1, "one line per request: {warn:?}");
+    assert!(warn[0].contains("otr") && warn[0].contains("lva:item-0001") && warn[0].contains('2'), "{}", warn[0]);
+    // A clean request logs nothing of the kind.
+    let mut ok = stand("tiefok", |k| { k.write_run("otr", &rows("otr", 2), false).unwrap(); });
+    let n = ok.app.protokoll.len();
+    get(&mut ok, "/v1/katalog/otr", "");
+    assert!(!ok.app.protokoll[n..].iter().any(|z| format!("{z:?}").contains("tief")));
+}
+
 #[test]
 #[ignore]
 fn page_size_measured() {
