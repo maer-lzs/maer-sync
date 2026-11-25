@@ -120,6 +120,8 @@ EXEMPT = {
 #: answers holds dozens of files of one kind, and listing each would hide the
 #: one reason they share.
 EXEMPT_UNDER = {
+    "abruf/lizenzen/": "the licence files of the third-party crates of the fetch program, copied unchanged "
+                       "from each published crate; a header would alter another author's licence text",
     "vektoren/katalog/": "answers of the catalog sources, recorded and cut to one record, and the rows "
                          "expected from them; JSON, RDF and CSV have no comment to put a header in, a "
                          "header would alter recorded bytes, and where they come from is stated in "

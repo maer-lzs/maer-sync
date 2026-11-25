@@ -1,6 +1,6 @@
 # Third-party crates of the fetch program
 
-The crates the fetch program (`abruf/`) adds to those of the service, each with its licence as `cargo metadata` names it. Built: whether it is compiled for the Linux targets of this project; the others stand in `Cargo.lock` only because cargo resolves every target. Taken in on 25.11.2026 by the operator's decision for `ureq`; `webpki-roots` (CDLA-Permissive-2.0, the Mozilla root certificates as data) is the operator's own licence check. The witness `tests/zaeune.rs` holds this list against the lock file.
+The crates the fetch program (`abruf/`) adds to those of the service, each with its licence as `cargo metadata` names it. Built: whether it is compiled for the Linux targets of this project; the others stand in `Cargo.lock` only because cargo resolves every target. Taken in on 25.11.2026 by the operator's decision for `ureq`; `webpki-roots` (CDLA-Permissive-2.0, the Mozilla root certificates as data) is the operator's own licence check. The licence files of every built crate lie under `abruf/lizenzen/<crate>-<version>/`, copied unchanged from the published crate, and travel with the image under `/lizenzen`. The witness `tests/zaeune.rs` holds this list against the lock file and the folder.
 
 | crate | licence | built | repository |
 | --- | --- | --- | --- |

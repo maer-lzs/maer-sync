@@ -35,6 +35,9 @@ COPY --from=bau /maer-sync-abruf /maer-sync-abruf
 # service reads the same volume read only under its own uid.
 COPY --from=bau --chown=10002:10002 /leer/var/lib/maer-sync-katalog /var/lib/maer-sync-katalog
 COPY LICENSE LICENSE-ADDITIONAL-TERMS abruf/FREMDTEILE.md /
+# The licence texts of the third-party crates travel with the binary
+# (CDLA-Permissive-2.0 of webpki-roots asks that its text goes with the data).
+COPY abruf/lizenzen /lizenzen
 ENV MAER_SYNC_KATALOG=/var/lib/maer-sync-katalog/katalog.db
 USER 10002:10002
 VOLUME ["/var/lib/maer-sync-katalog"]
