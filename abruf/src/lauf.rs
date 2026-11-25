@@ -281,11 +281,13 @@ fn radio_get<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'stat
 fn radio_count<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'static str>) -> Result<usize, LaufFehler> {
     let v = parse(&radio_get(netz, server, "/json/stats")?)?;
     let n = |k: &str| v.get(k).and_then(Value::as_u64).ok_or_else(|| LaufFehler::Lesen(ReadError::Unreadable(format!("no {k} in the statistics"))));
-    Ok((n("stations")?.saturating_sub(n("stations_broken")?)) as usize)
+    // `stations` counts only the stations that are not broken: exactly what
+    // the pages with `hidebroken=true` list.
+    Ok(n("stations")? as usize)
 }
 
 /// All stations in pages of `adv_rows`, ordered by uuid; counted against the
-/// statistics (stations minus broken). A uuid on two pages (a station moved
+/// statistics (`stations`, which leaves the broken out). A uuid on two pages (a station moved
 /// while paging) repeats the pass once, then refuses.
 fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
     let mut server = None;
