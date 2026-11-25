@@ -8,7 +8,8 @@
 //!
 //! As the app (`RadioMapping.stations`): name and address lose spaces and
 //! tabs at their ends; the address played is `url_resolved`, else `url`; an
-//! entry with an empty name or address is dropped, and of a uuid twice in
+//! entry with an empty name or address, or an address Foundation cannot
+//! read, is dropped, and of a uuid twice in
 //! one page the first usable entry wins. The row's id is the app's (`radio:rb:<stationuuid>`), a
 //! station is never loaded, and `tief` carries what the app reads to play
 //! and to order (empty strings as null). The station's own address stays in
@@ -41,6 +42,20 @@ pub struct Seite {
     pub uuids: Vec<String>,
 }
 
+/// Whether Foundation's `URL(string:)` gives no address: on the systems the
+/// app runs on, only for an empty string and for a host that opens a bracket
+/// without closing it; everything else it encodes into an address.
+fn refused_by_url_string(s: &str) -> bool {
+    if s.is_empty() {
+        return true;
+    }
+    let Some(at) = s.find("://") else { return false };
+    let rest = &s[at + 3..];
+    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    host.starts_with('[') && !host.contains(']')
+}
+
 /// Swift's `.whitespaces`: spaces and tabs, not line breaks.
 fn trimmed(v: Option<&Value>) -> &str {
     v.and_then(Value::as_str).unwrap_or("").trim_matches(|c: char| c.is_whitespace() && !matches!(c, '\n' | '\r' | '\u{0B}' | '\u{0C}' | '\u{85}' | '\u{2028}' | '\u{2029}'))
@@ -62,7 +77,7 @@ pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {
         let name = trimmed(x.get("name"));
         let resolved = trimmed(x.get("url_resolved"));
         let stream = if resolved.is_empty() { trimmed(x.get("url")) } else { resolved };
-        if name.is_empty() || stream.is_empty() || !taken.insert(uuid.to_string()) {
+        if name.is_empty() || stream.is_empty() || refused_by_url_string(stream) || !taken.insert(uuid.to_string()) {
             continue;
         }
         let codes: Vec<&str> = x.get("languagecodes").and_then(Value::as_str).unwrap_or("")
