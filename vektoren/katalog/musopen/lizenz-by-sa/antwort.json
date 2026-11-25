@@ -62,11 +62,37 @@
         "source": "commons-desc-page"
        }
       },
-      "mime": "video/webm"
+      "mime": "video/webm",
+      "derivatives": [
+       {
+        "src": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/A_Walk_down_Main_Street%2C_Delta_PA.webm/A_Walk_down_Main_Street%2C_Delta_PA.webm.240p.vp9.webm",
+        "type": "video/webm; codecs=\"vp9, opus\"",
+        "transcodekey": "240p.vp9.webm",
+        "width": 320,
+        "height": 240,
+        "bandwidth": 303288
+       },
+       {
+        "src": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/A_Walk_down_Main_Street%2C_Delta_PA.webm/A_Walk_down_Main_Street%2C_Delta_PA.webm.360p.mpeg4.mov",
+        "type": "video/quicktime; codecs=\"mp4v\"",
+        "transcodekey": "360p.mpeg4.mov",
+        "width": 480,
+        "height": 360,
+        "bandwidth": 1129272
+       },
+       {
+        "src": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/A_Walk_down_Main_Street%2C_Delta_PA.webm/A_Walk_down_Main_Street%2C_Delta_PA.webm.480p.vp9.webm",
+        "type": "video/webm; codecs=\"vp9, opus\"",
+        "transcodekey": "480p.vp9.webm",
+        "width": 640,
+        "height": 480,
+        "bandwidth": 923240
+       }
+      ]
      }
     ]
    }
   ]
  },
- "_quelle": "commons.wikimedia.org/w/api.php generator=categorymembers, gekuerzt auf eine Datei, extmetadata auf die gelesenen Felder"
+ "_quelle": "commons.wikimedia.org/w/api.php generator=categorymembers, gekuerzt auf eine Datei, extmetadata auf die gelesenen Felder; derivatives aus pageids mit viprop url|size|mime|derivatives|extmetadata, gelesene Felder unveraendert"
 }

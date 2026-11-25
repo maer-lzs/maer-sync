@@ -58,11 +58,21 @@
         "source": "commons-desc-page"
        }
       },
-      "mime": "application/ogg"
+      "mime": "application/ogg",
+      "derivatives": [
+       {
+        "src": "https://example.org/elsewhere.mp3",
+        "type": "audio/mpeg",
+        "transcodekey": "mp3",
+        "width": 0,
+        "height": 0,
+        "bandwidth": 219712
+       }
+      ]
      }
     ]
    }
   ]
  },
- "_quelle": "wie normal-cc0, die Adresse der Datei auf einen fremden Wirt gesetzt (gebaut)"
+ "_quelle": "wie normal-cc0 mit seinen Abkoemmlingen, die Adresse der Datei und des mp3-Abkoemmlings auf einen fremden Wirt gesetzt (gebaut)"
 }

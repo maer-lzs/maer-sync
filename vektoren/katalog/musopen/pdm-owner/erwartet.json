@@ -15,8 +15,20 @@
    "laden": true,
    "reihen": [],
    "auch": [],
-   "tief": null
+   "tief": {
+    "komponist": "Antonio Vivaldi",
+    "werk": "Mandolin Concerto in C major, RV 425",
+    "interpret": "The Milan Baroque Soloists",
+    "satz": null,
+    "spuren": [
+     {
+      "nummer": 1,
+      "titel": "Antonio Vivaldi, Mandolin Concerto in C major, RV 425",
+      "dauer": 499.93142857142857,
+      "adresse": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/60/Antonio_Vivaldi%2C_Mandolin_Concerto_in_C_major%2C_RV_425.ogg/Antonio_Vivaldi%2C_Mandolin_Concerto_in_C_major%2C_RV_425.ogg.mp3"
+     }
+    ]
+   }
   }
- ],
- "_offen": "komponist, werk, interpret liefert die Swift-Seite; bis dahin fehlen sie in tief"
+ ]
 }

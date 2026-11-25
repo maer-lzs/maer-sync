@@ -51,12 +51,58 @@ fn same(got: &[Row], want: &[Row]) -> bool {
 #[test]
 fn musopen_rows_match_the_vectors() {
     let all = cases("musopen");
-    assert_eq!(all.len(), 11);
+    assert_eq!(all.len(), 13);
     for dir in all {
         let a = std::fs::read(dir.join("antwort.json")).unwrap();
         let want: Vec<Row> = read(&dir.join("erwartet.json"))["zeilen"].as_array().unwrap().iter().map(expected).collect();
         let got = musopen::rows_from_answer(&a).unwrap_or_else(|e| panic!("{}: {e:?}", dir.display())).zeilen;
         assert!(same(&got, &want), "{}:\n got  {got:?}\n want {want:?}", dir.display());
+    }
+}
+
+fn info(mime: Option<&str>, url: &str, derivatives: Value, licence: &str) -> Value {
+    json!({"mime": mime, "url": url, "derivatives": derivatives,
+           "extmetadata": {"License": {"value": licence}, "LicenseShortName": {"value": licence}}})
+}
+
+/// The index takes exactly the files the app takes (iOS
+/// `MusopenCatalog.recording`), in its order: a sound at all, then the
+/// licence, then a form the player takes; and it plays what the app plays:
+/// the MP3 Commons derives, else an MP3 original without its query.
+#[test]
+fn playable_form_as_the_app() {
+    use musopen::Dropped::*;
+    let mp3 = json!([{"src": "https://upload.wikimedia.org/t/a.ogg.mp3", "type": "audio/mpeg", "transcodekey": "mp3"}]);
+    let only_ogg = json!([{"src": "https://upload.wikimedia.org/t/a.flac.ogg", "type": "audio/ogg; codecs=\"vorbis\"", "transcodekey": "ogg"}]);
+    let video = json!([{"src": "https://upload.wikimedia.org/t/a.ogv.webm", "type": "video/webm; codecs=\"vp9\"", "transcodekey": "240p.vp9.webm"},
+                       {"src": "https://upload.wikimedia.org/t/a.ogv.mp3", "type": "audio/mpeg", "transcodekey": "mp3"}]);
+    let by_type = json!([{"src": "https://upload.wikimedia.org/t/b.mp3", "type": "audio/mpeg"}]);
+    let o = "https://upload.wikimedia.org/o/a";
+    let table: Vec<(Value, Result<&str, musopen::Dropped>)> = vec![
+        (info(Some("application/ogg"), &format!("{o}.ogg"), mp3.clone(), "pd"), Ok("https://upload.wikimedia.org/t/a.ogg.mp3")),
+        (info(Some("audio/flac"), &format!("{o}.flac"), mp3.clone(), "cc0"), Ok("https://upload.wikimedia.org/t/a.ogg.mp3")),
+        (info(Some("audio/x-flac"), &format!("{o}.flac"), by_type, "cc0"), Ok("https://upload.wikimedia.org/t/b.mp3")),
+        (info(Some("audio/mpeg"), &format!("{o}.mp3?utm_source=commons#t=2"), json!([]), "pd"), Ok("https://upload.wikimedia.org/o/a.mp3#t=2")),
+        (info(Some("audio/mpeg"), &format!("{o}.mp3"), json!([]), "pd"), Ok("https://upload.wikimedia.org/o/a.mp3")),
+        (info(Some("audio/flac"), &format!("{o}.flac"), only_ogg, "pd"), Err(NoPlayableForm)),
+        (info(Some("audio/flac"), &format!("{o}.flac"), json!([]), "pd"), Err(NoPlayableForm)),
+        (info(Some("application/ogg"), &format!("{o}.ogv"), video, "pd"), Err(NotAudio)),
+        (info(Some("video/webm"), &format!("{o}.webm"), mp3.clone(), "pd"), Err(NotAudio)),
+        (info(Some("image/png"), &format!("{o}.png"), json!([]), "pd"), Err(NotAudio)),
+        (info(None, &format!("{o}.ogg"), mp3.clone(), "pd"), Err(NotAudio)),
+        (info(Some("application/ogg"), &format!("{o}.ogg"), mp3.clone(), "cc-by-sa-3.0"), Err(Licence)),
+        // Not a rule of the app: the address the device plays is on Commons.
+        (info(Some("application/ogg"), &format!("{o}.ogg"), json!([{"src": "https://example.org/a.mp3", "type": "audio/mpeg", "transcodekey": "mp3"}]), "pd"), Err(ForeignHost)),
+    ];
+    for (vi, want) in table {
+        assert_eq!(musopen::playable(&vi).as_deref().map_err(|e| *e), want, "{vi}");
+    }
+    // Every row of the vectors plays the address its answer derives.
+    for dir in cases("musopen") {
+        for r in musopen::rows_from_answer(&std::fs::read(dir.join("antwort.json")).unwrap()).unwrap().zeilen {
+            let t: Value = serde_json::from_str(r.tief.as_deref().unwrap()).unwrap();
+            assert!(t["spuren"][0]["adresse"].as_str().unwrap().ends_with(".mp3"), "{}: {t}", dir.display());
+        }
     }
 }
 
@@ -78,36 +124,89 @@ fn musopen_licence_as_the_app() {
     }
 }
 
+/// The cases of iOS `MovementNumberTests` (1d254baa).
 #[test]
 fn musopen_movement_number_as_the_app() {
-    let table: [(&str, Option<i64>); 12] = [
-        ("Bach - Suite - I. Prelude", Some(1)),
-        ("X - IV. Allegro", Some(4)),
-        ("X - IX. Air", Some(9)),
-        ("X - XIV. Fuga", Some(14)),
-        ("X - XL. Late", Some(40)),
-        ("X - C) Last", Some(100)),
-        ("X - 10. Air", Some(10)),
-        ("A - b - 2) Andante", Some(2)),
-        ("X - ii. largo", None),
-        ("Op. 9, I. Allegro", None),
-        ("X - 1 Allegro", None),
-        ("X - I.Allegro", None),
+    let table: [(&str, Option<i64>); 13] = [
+        ("Suite - IX. Air", Some(9)),
+        ("Suite - XII. Gigue", Some(12)),
+        ("Suite - IV) Bourrée", Some(4)),
+        ("Suite - 10. Air", Some(10)),
+        ("Wiener Blut Op. 354", None),
+        ("Traviata - Act 1 - Libiamo", None),
+        ("Nocturne Op. 9, I. Allegro", Some(1)),
+        ("String Quartet op. 95 - ii. largo", Some(2)),
+        ("String Quartet op. 95, iv. allegretto agitato", Some(4)),
+        ("Prelude, C. major", None),
+        ("Bach, J. S. - Air", None),
+        ("Suite in D major BWV 1068 - XII. Satz 12", Some(12)),
+        ("Suite in D major BWV 1068 - 12. Satz 12", Some(12)),
     ];
     for (t, n) in table {
         assert_eq!(musopen::movement_number(t), n, "{t}");
     }
+    assert_eq!(musopen::work_stem("String Quartet op. 95 - ii. largo"), musopen::work_stem("String Quartet op. 95 - iii. allegretto"));
+    assert_eq!(musopen::work_stem("Nocturne Op. 9, I. Allegro"), musopen::work_stem("Nocturne Op. 9, II. Andante"));
+    assert!(musopen::work_stem("Nocturne Op. 9, I. Allegro").is_some());
 }
 
+/// The cases of iOS `MusopenComposerTests.fieldForms` (1d254baa).
 #[test]
-fn musopen_titles_and_ids() {
-    for (file, title) in [("File:A - I. B.ogg", "A - I. B"), ("File:x.flac", "x"), ("File:y.webm", "y"), ("File:z.MP3", "z"), ("File:w.oga", "w"), ("File:v.wav", "v"), ("File:u.mid", "u.mid")] {
-        assert_eq!(musopen::titel_of(file), title);
+fn musopen_composer_as_the_app() {
+    let table: [(Option<&str>, &str, Option<&str>); 14] = [
+        (Some("(See Musopen for author information)"), "Isaac Albeniz - suite espanola op. 47 - leyenda", Some("Isaac Albeniz")),
+        (Some("(See Musopen for author information)"), "Jacques Ibert- cinq pieces en trio", None),
+        (Some("Unknown authorUnknown author"), "Nocturne in E flat", None),
+        (Some("Musopen Symphony Orchestra"), "Symphony No. 5 in C minor", None),
+        (Some("The Modena Chamber Orchestra"), "Concerto", None),
+        (Some("European Archives"), "A Midsummer Night's Dream", None),
+        (Some("Composer: Frédéric Chopin; Performer: Paul Pitman"), "Nocturne Op. 9 No. 2", Some("Frédéric Chopin")),
+        (Some("Performers: Ensemble Morales\n\nComposer: William Byrd (c.1539–1623)"), "Mass for Four Voices", Some("William Byrd")),
+        (Some("J.S. Bach. Performer: Michel Rondeau"), "Prelude in C", None),
+        (Some("Frank Lévy (performer)"), "Sonata", None),
+        (Some("Grieg, Edvard; Musopen Symphony Orchestra"), "Peer Gynt", Some("Edvard Grieg")),
+        (Some("Robert Schumann (1810-1856) (see Musopen for performance author information)"), "Kinderszenen", Some("Robert Schumann")),
+        (Some("Johann Sebastian Bach"), "Bach, J S - Goldberg Variations, BWV988 - 01. Aria", Some("Johann Sebastian Bach")),
+        (None, "Bach, J S - Goldberg Variations", Some("J S Bach")),
+    ];
+    for (field, title, want) in table {
+        assert_eq!(musopen::composer(field, title).as_deref(), want, "{field:?} | {title}");
+    }
+    assert_eq!(musopen::composer(None, "La Traviata - Act 1 - Libiamo ne' lieti calici").as_deref(), Some("Giuseppe Verdi"));
+}
+
+/// The cases of iOS `MusopenMetadataTests.artistText` (1d254baa).
+#[test]
+fn musopen_artist_text_as_the_app() {
+    assert_eq!(musopen::artist_text(Some("Unknown author<span style=\"display: none;\">Unknown author</span>")), None);
+    assert_eq!(musopen::artist_text(Some("<a href=\"//commons.wikimedia.org/wiki/User:Morn\" title=\"User:Morn\">Morn</a>")), None);
+    assert_eq!(musopen::artist_text(Some("<bdi><a href=\"https://en.wikipedia.org/wiki/en:Fr%C3%A9d%C3%A9ric_Chopin\">Frédéric Chopin</a></bdi> / <bdi>Frank Levy</bdi>")).as_deref(),
+               Some("Frédéric Chopin; Frank Levy"));
+    assert_eq!(musopen::artist_text(Some("European &amp; Archive")).as_deref(), Some("European & Archive"));
+    assert_eq!(musopen::artist_text(None), None);
+}
+
+/// iOS `MusopenCatalog.shownTitle`: the object name the page states, else the
+/// file name without its namespace and its extension; an object name with
+/// markup is the rendering of a template, not a name.
+#[test]
+fn musopen_titles_as_the_app() {
+    for (object, file, title) in [
+        (Some("Oboe Concerto - I. Allegro"), "File:Albinoni, Concerto.ogg", "Oboe Concerto - I. Allegro"),
+        (Some("  "), "File:A - I. B.ogg", "A - I. B"),
+        (Some("<span>x</span>"), "File:y.flac", "y"),
+        (None, "File:z.MP3", "z"),
+        (None, "File:u.mid", "u"),
+        (None, "File:Op. 9 no.2.ogg", "Op. 9 no.2"),
+        (None, "File:noext", "noext"),
+    ] {
+        assert_eq!(musopen::shown_title(object, file), title);
     }
 }
 
 fn page(pageid: i64, title: &str, url: &str, licence: &str) -> Value {
-    json!({"pageid": pageid, "ns": 6, "title": title, "videoinfo": [{"url": url,
+    json!({"pageid": pageid, "ns": 6, "title": title, "videoinfo": [{"url": url, "mime": "application/ogg",
+        "derivatives": [{"src": format!("{url}.mp3"), "type": "audio/mpeg", "transcodekey": "mp3"}],
         "extmetadata": {"License": {"value": licence}, "LicenseShortName": {"value": licence}}}]})
 }
 

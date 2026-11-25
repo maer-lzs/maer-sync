@@ -62,11 +62,21 @@
         "source": "commons-desc-page"
        }
       },
-      "mime": "application/ogg"
+      "mime": "application/ogg",
+      "derivatives": [
+       {
+        "src": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/15/Chopin_Waltz_in_A_flat_major_Op_42.ogg/Chopin_Waltz_in_A_flat_major_Op_42.ogg.mp3",
+        "type": "audio/mpeg",
+        "transcodekey": "mp3",
+        "width": 0,
+        "height": 0,
+        "bandwidth": 197784
+       }
+      ]
      }
     ]
    }
   ]
  },
- "_quelle": "commons.wikimedia.org/w/api.php prop=videoinfo, eine Datei, extmetadata auf die gelesenen Felder, 25.11.2026"
+ "_quelle": "commons.wikimedia.org/w/api.php generator=categorymembers, gekuerzt auf eine Datei, extmetadata auf die gelesenen Felder; derivatives aus pageids mit viprop url|size|mime|derivatives|extmetadata, gelesene Felder unveraendert"
 }

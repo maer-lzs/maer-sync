@@ -107,3 +107,32 @@ pub fn rows_from_answer(answer: &[u8]) -> Result<Seite, MusopenFehler> {
     }
     Ok(Seite { zeilen, gesehen: pages.len(), weiter: text(&v, "/continue/gcmcontinue").map(str::to_string) })
 }
+
+/// Why a file of the category gives no row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dropped {
+    NotAudio,
+    Licence,
+    NoPlayableForm,
+    ForeignHost,
+}
+
+pub fn playable(_videoinfo: &Value) -> Result<String, Dropped> {
+    unimplemented!("written with the witnesses green")
+}
+
+pub fn work_stem(_title: &str) -> Option<String> {
+    unimplemented!("written with the witnesses green")
+}
+
+pub fn composer(_author: Option<&str>, _title: &str) -> Option<String> {
+    unimplemented!("written with the witnesses green")
+}
+
+pub fn artist_text(_html: Option<&str>) -> Option<String> {
+    unimplemented!("written with the witnesses green")
+}
+
+pub fn shown_title(_object_name: Option<&str>, _file_title: &str) -> String {
+    unimplemented!("written with the witnesses green")
+}

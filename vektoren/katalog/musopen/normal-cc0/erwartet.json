@@ -15,8 +15,20 @@
    "laden": true,
    "reihen": [],
    "auch": [],
-   "tief": null
+   "tief": {
+    "komponist": "Bach",
+    "werk": "BWV 147, 10. Jesus bleibet meine Freude",
+    "interpret": "Orchestra Gli Armonici",
+    "satz": 10,
+    "spuren": [
+     {
+      "nummer": 1,
+      "titel": "Bach, BWV 147, 10. Jesus bleibet meine Freude",
+      "dauer": 202.2661224489796,
+      "adresse": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/27/Bach%2C_BWV_147%2C_10._Jesus_bleibet_meine_Freude.ogg/Bach%2C_BWV_147%2C_10._Jesus_bleibet_meine_Freude.ogg.mp3"
+     }
+    ]
+   }
   }
- ],
- "_offen": "komponist, werk, interpret liefert die Swift-Seite; bis dahin fehlen sie in tief"
+ ]
 }

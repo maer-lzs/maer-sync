@@ -16,9 +16,19 @@
    "reihen": [],
    "auch": [],
    "tief": {
-    "satz": 11
+    "komponist": "Johann Sebastian Bach",
+    "werk": "Goldberg Variations, BWV988 - 11. Variation 10. Fughetta (Shelley Katz)",
+    "interpret": null,
+    "satz": 11,
+    "spuren": [
+     {
+      "nummer": 1,
+      "titel": "Bach, J S - Goldberg Variations, BWV988 - 11. Variation 10. Fughetta (Shelley Katz)",
+      "dauer": 86.64,
+      "adresse": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/03/Bach%2C_J_S_-_Goldberg_Variations%2C_BWV988_-_11._Variation_10._Fughetta_%28Shelley_Katz%29.flac/Bach%2C_J_S_-_Goldberg_Variations%2C_BWV988_-_11._Variation_10._Fughetta_%28Shelley_Katz%29.flac.mp3"
+     }
+    ]
    }
   }
- ],
- "_offen": "komponist, werk, interpret liefert die Swift-Seite; bis dahin fehlen sie in tief"
+ ]
 }

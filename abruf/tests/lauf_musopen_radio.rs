@@ -69,7 +69,8 @@ fn seven_sources_are_planned() {
 
 fn file(id: i64) -> Value {
     json!({"pageid": id, "ns": 6, "title": format!("File:Composer - Work - {}. Part.ogg", id % 5 + 1),
-           "videoinfo": [{"url": format!("https://upload.wikimedia.org/x/{id}.ogg"),
+           "videoinfo": [{"url": format!("https://upload.wikimedia.org/x/{id}.ogg"), "mime": "application/ogg",
+                          "derivatives": [{"src": format!("https://upload.wikimedia.org/t/{id}.ogg.mp3"), "type": "audio/mpeg", "transcodekey": "mp3"}],
                           "extmetadata": {"License": {"value": "pd"}, "LicenseShortName": {"value": "Public domain"}}}]})
 }
 
@@ -131,6 +132,11 @@ fn musopen_every_request_names_the_client_and_asks_maxlag() {
         let p: BTreeMap<String, String> = decode_params(&a.url).into_iter().collect();
         assert_eq!(p.get("maxlag").map(String::as_str), Some("5"), "{}", a.url);
         assert_eq!(p.get("format").map(String::as_str), Some("json"));
+        if p.get("generator").map(String::as_str) == Some("categorymembers") {
+            // The same fields as the app asks (iOS `MusopenCatalog.fileFields`).
+            assert_eq!(p.get("prop").map(String::as_str), Some("videoinfo"));
+            assert_eq!(p.get("viprop").map(String::as_str), Some("url|size|mime|derivatives|extmetadata"), "{}", a.url);
+        }
     }
 }
 
