@@ -592,3 +592,57 @@ fn a_reordered_list_keeps_the_version() {
     bad.tief = Some("not json".into());
     assert!(k.write_run("schellack", &[bad], false).is_err());
 }
+
+// ---------------------------------------------------------------- K3c: delta and run times
+
+#[test]
+fn write_delta_keeps_absent_rows() {
+    let p = scratch("delta");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    let mut d = vec![row("otr", "lva:new", "new")];
+    let mut changed = rows("otr", 3)[1].clone();
+    changed.titel = Some("changed".into());
+    d.push(changed);
+    assert_eq!(k.write_delta("otr", &d).unwrap(), 2);
+    let page = k.full("otr", None, MAX_PAGE).unwrap();
+    assert_eq!(page.zeilen.len(), 4, "a delta deleted rows");
+    assert!(page.zeilen.iter().all(|s| !s.geloescht));
+    // Nothing changed: the version stays.
+    assert_eq!(k.write_delta("otr", &d).unwrap(), 2);
+    // An empty delta is no change, not an empty run.
+    assert_eq!(k.write_delta("otr", &[]).unwrap(), 2);
+}
+
+#[test]
+fn a_mark_that_returns_in_a_delta_lives_again() {
+    let p = scratch("delta-mark");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    k.write_run("otr", &rows("otr", 3)[1..], false).unwrap();
+    assert_eq!(k.write_delta("otr", &rows("otr", 3)[..1]).unwrap(), 3);
+    let Since::Page(page) = k.since("otr", 2, None, MAX_PAGE).unwrap() else { panic!() };
+    assert_eq!(ids(&page.zeilen), vec!["lva:item-0000".to_string()]);
+    assert!(!page.zeilen[0].geloescht);
+    // A row of another source is refused, as in write_run.
+    assert!(k.write_delta("otr", &[row("gutenberg", "gut:1", "t")]).is_err());
+    let mut bad = row("otr", "lva:x", "t");
+    bad.art = "film".into();
+    assert!(k.write_delta("otr", &[bad]).is_err());
+}
+
+#[test]
+fn run_times_survive_reopening() {
+    let p = scratch("times");
+    {
+        let mut k = Katalog::open(&p).unwrap();
+        assert_eq!(k.last_run("otr", "voll").unwrap(), None);
+        k.set_last_run("otr", "voll", 1_764_000_000).unwrap();
+        k.set_last_run("otr", "delta", 1_764_086_400).unwrap();
+        assert!(k.set_last_run("otr", "halb", 1).is_err(), "only voll and delta");
+    }
+    let k = Katalog::open(&p).unwrap();
+    assert_eq!(k.last_run("otr", "voll").unwrap(), Some(1_764_000_000));
+    assert_eq!(k.last_run("otr", "delta").unwrap(), Some(1_764_086_400));
+    assert_eq!(k.last_run("librivox", "voll").unwrap(), None);
+}

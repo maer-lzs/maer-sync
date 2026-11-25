@@ -425,6 +425,15 @@ impl Katalog {
         Ok(next)
     }
 
+    /// K3c. Signature only until its witnesses are red.
+    pub fn write_delta(&mut self, _quelle: &str, _rows: &[Row]) -> Result<i64, KatalogError> { todo!("K3c") }
+
+    /// K3c. Signature only until its witnesses are red.
+    pub fn set_last_run(&mut self, _quelle: &str, _art: &str, _unix_s: i64) -> Result<(), KatalogError> { todo!("K3c") }
+
+    /// K3c. Signature only until its witnesses are red.
+    pub fn last_run(&self, _quelle: &str, _art: &str) -> Result<Option<i64>, KatalogError> { todo!("K3c") }
+
     /// The live rows of a source in id order, one page after `nach`.
     pub fn full(&self, quelle: &str, nach: Option<&str>, anzahl: usize) -> Result<Page, KatalogError> {
         page_size(anzahl)?;
