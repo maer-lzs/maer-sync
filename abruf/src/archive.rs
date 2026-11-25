@@ -20,6 +20,10 @@
 //! error; only a well-formed empty list reads as no rows, because the
 //! catalog treats an empty run as "the source removed everything".
 //!
+//! **Shellac is never loaded.** Its collection declares no licence; a year
+//! up to the calendar year minus 101 gives the mark `pd` as a statement, but
+//! loading needs a declared licence (decision of 24.08.2026).
+//!
 //! **Shellac only from a shelf** (decision of 25.10.2026): the collection is
 //! never read whole. A shellac answer is read only together with its shelf,
 //! and its rows carry that shelf in `reihen`; no other source has rows in
@@ -229,7 +233,9 @@ pub fn rows_from_answer(quelle: &str, answer: &[u8], calendar_year: i32, shelf: 
             urheber: joined(d.get("creator")),
             sprache: joined(d.get("language")),
             jahr,
-            laden: kennung != "unbekannt",
+            // Loading needs a declared licence; shellac declares none, so its
+            // year is a statement only and never opens the download.
+            laden: quelle != "schellack" && kennung != "unbekannt",
             rechte_kennung: kennung,
             rechte_url,
             reihen: shelf.map(|s| vec![s.schluessel.clone()]).unwrap_or_default(),
