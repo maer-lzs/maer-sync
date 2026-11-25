@@ -221,6 +221,20 @@ fn list_from(text: &str) -> Result<Vec<String>, KatalogError> {
     serde_json::from_str(text).map_err(|e| KatalogError::Invalid(format!("stored list: {e}")))
 }
 
+fn normalised(r: &Row) -> Result<Row, KatalogError> {
+    let mut r = r.clone();
+    for list in [&mut r.reihen, &mut r.auch] {
+        list.sort();
+        list.dedup();
+    }
+    if let Some(text) = &r.tief {
+        let v: serde_json::Value = serde_json::from_str(text)
+            .map_err(|e| KatalogError::Invalid(format!("deep part of {} is not JSON: {e}", r.id)))?;
+        r.tief = Some(v.to_string());
+    }
+    Ok(r)
+}
+
 const COLUMNS: &str =
     "quelle, id, art, titel, urheber, sprache, jahr, rechte_kennung, rechte_url, laden, reihen, auch, tief, version, geloescht";
 
@@ -322,7 +336,20 @@ impl Katalog {
     /// Apply one whole run of a source and answer the version after it.
     /// `confirmed` is the caller's sign that an empty run or a large
     /// deletion is what the source really answered.
+    ///
+    /// The run holds the whole stock of its source in memory to compare it
+    /// (up to some 190 000 rows for the shellac collection if it were read
+    /// whole; read from its shelves it is some 30 000). That is meant for the
+    /// fetch program, not the service; the memory of a full run is measured
+    /// with the fetch program.
+    ///
+    /// Lists and the deep part are normalised before they are compared and
+    /// stored: lists sorted and without doubles, the deep part as canonical
+    /// JSON. Their order carries no meaning, and a run that only reorders
+    /// them must not raise the version.
     pub fn write_run(&mut self, quelle: &str, rows: &[Row], confirmed: bool) -> Result<i64, KatalogError> {
+        let rows: Vec<Row> = rows.iter().map(normalised).collect::<Result<_, _>>()?;
+        let rows = rows.as_slice();
         if self.read_only {
             return Err(KatalogError::Invalid("opened for reading".into()));
         }
@@ -362,7 +389,7 @@ impl Katalog {
 
         let changed: Vec<&Row> = rows.iter()
             .filter(|r| match before.get(&r.id) {
-                Some(s) => s.geloescht || &s.row != *r,
+                Some(s) => s.geloescht || s.row != **r,
                 None => true,
             })
             .collect();

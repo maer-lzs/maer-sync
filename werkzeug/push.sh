@@ -36,6 +36,8 @@ else
     run="$root"
     rc=0
     ( cd "$run" && werkzeug/bau.sh test --locked ) > "$log" 2>&1 || rc=1
+    # The fetch program is a package of its own with its own lock file.
+    ( cd "$run" && werkzeug/bau.sh test --locked --manifest-path abruf/Cargo.toml ) >> "$log" 2>&1 || rc=1
     rust="$(grep -E '^test result: ok\.' "$log" | sed -E 's/.* ok\. ([0-9]+) passed.*/\1/' | awk '{s+=$1} END {if (NR) print s}')"
     grep -qE '^test result: FAILED' "$log" && rc=1
     ( cd "$run" && python3 -m unittest discover -s tests -t . ) >> "$log" 2>&1 || rc=1

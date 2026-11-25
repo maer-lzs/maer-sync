@@ -44,7 +44,9 @@ fi
 rm -f "$PROT"
 
 echo "== Rust =="
-werkzeug/bau.sh test --offline 2>&1 | grep -E '^test result' \
+# The fetch program (abruf/) is a package of its own; its witnesses run here too.
+{ werkzeug/bau.sh test --offline; werkzeug/bau.sh test --offline --manifest-path abruf/Cargo.toml; } 2>&1 \
+  | grep -E '^test result' \
   | awk -F'[ ;]+' '{p+=$4; f+=$6; i+=$8}
       END {printf "  grün: %d  rot: %d  übersprungen: %d\n", p, f, i;
            if (f > 0 || p == 0) exit 1}' || {
