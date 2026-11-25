@@ -394,3 +394,28 @@ fn additions_do_not_touch_version_6() {
     let added = block.get("additions-paths").cloned().unwrap_or_default();
     assert!(added.contains(&"/v1/katalog".to_string()) && !paths.contains(&"/v1/katalog".to_string()));
 }
+
+/// No text of this service calls the catalog "version 7" while the spoken
+/// version is 6: after the operator's decision (Weg A) the catalog is the
+/// addition katalog-1, and a comment that says otherwise is the next wrong
+/// bump waiting to happen.
+#[test]
+fn no_text_names_a_version_the_service_does_not_speak() {
+    assert_eq!(VERSION, "6");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut found = vec![];
+    for dir in ["src", "tests", "abruf/src", "abruf/tests"] {
+        let Ok(entries) = std::fs::read_dir(root.join(dir)) else { continue };
+        for e in entries {
+            let p = e.unwrap().path();
+            if p.extension().and_then(|x| x.to_str()) != Some("rs") || p.ends_with("tests/vertrag.rs") { continue; }
+            let text = std::fs::read_to_string(&p).unwrap().to_lowercase();
+            for (i, line) in text.lines().enumerate() {
+                if line.contains("version 7") || line.contains("fassung 7") {
+                    found.push(format!("{}:{}", p.strip_prefix(root).unwrap().display(), i + 1));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "texts that name version 7: {found:?}");
+}
