@@ -13,6 +13,14 @@
 use maer_sync::contract::{self, declared, digest_of, DIGEST, VERSION};
 use maer_sync::{paths, writes};
 
+/// A line of the block together with its addition line (`additions-<key>`):
+/// what the service answers is version 6 plus its additions.
+fn samt_ergaenzungen(block: &std::collections::BTreeMap<String, Vec<String>>, key: &str) -> Vec<String> {
+    let mut v = block.get(key).cloned().unwrap_or_default();
+    v.extend(block.get(&format!("additions-{key}")).cloned().unwrap_or_default());
+    v
+}
+
 fn vertrag() -> Vec<u8> {
     std::fs::read("CONTRACT.md").expect("CONTRACT.md liegt neben dem Zweig")
 }
@@ -173,7 +181,7 @@ fn jeder_genannte_weg_steht_in_dieser_umsetzung() {
     let text = quelltext();
     let vertragstext = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&vertragstext).expect("der Vertrag hat seinen Block");
-    let wege = block.get("paths").expect("der Vertrag nennt Pfade");
+    let wege = &samt_ergaenzungen(&block, "paths");
     assert!(wege.len() >= 7, "der Vertrag nennt nur {} Pfade", wege.len());
     for weg in wege {
         // Zwei Gestalten, weil der Dienst seine Pfade auf zwei Arten baut:
@@ -194,8 +202,8 @@ fn jeder_weg_den_diese_umsetzung_beantwortet_steht_im_vertrag() {
     let text = quelltext();
     let vertragstext = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&vertragstext).expect("Block");
-    let genannt: std::collections::BTreeSet<&String> =
-        block.get("paths").expect("Pfade").iter().collect();
+    let alle_wege = samt_ergaenzungen(&block, "paths");
+    let genannt: std::collections::BTreeSet<&String> = alle_wege.iter().collect();
 
     // Alle ganzen `/v1/…`-Literale aus dem Quelltext.
     let mut gefunden = std::collections::BTreeSet::new();
@@ -241,7 +249,7 @@ er sieht also zu wenig", ganz_genannte.len());
 fn jeder_genannte_status_wird_hier_beantwortet() {
     let vertragstext = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&vertragstext).expect("Block");
-    let genannt = block.get("status").expect("der Vertrag nennt Statuswerte");
+    let genannt = &samt_ergaenzungen(&block, "status");
     assert!(genannt.len() >= 10, "der Vertrag nennt nur {} Statuswerte", genannt.len());
     let beantwortet = beantwortete_status();
     let fehlen: Vec<&String> = genannt.iter().filter(|s| !beantwortet.contains(*s)).collect();
@@ -253,8 +261,8 @@ fn jeder_genannte_status_wird_hier_beantwortet() {
 fn jeder_status_den_diese_umsetzung_beantwortet_steht_im_vertrag_oder_hat_seinen_grund() {
     let vertragstext = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&vertragstext).expect("Block");
-    let genannt: std::collections::BTreeSet<&String> =
-        block.get("status").expect("Status").iter().collect();
+    let alle_status = samt_ergaenzungen(&block, "status");
+    let genannt: std::collections::BTreeSet<&String> = alle_status.iter().collect();
     let beantwortet = beantwortete_status();
 
     // Loch-Melder zuerst: wer nicht alles sieht, darf ueber Fehlendes nichts sagen.
@@ -292,7 +300,7 @@ fn jede_genannte_kopfzeile_wird_hier_gelesen() {
     let text = quelltext().to_lowercase();
     let vertragstext = String::from_utf8(vertrag()).expect("UTF-8");
     let block = declared(&vertragstext).expect("Block");
-    let kopfzeilen = block.get("headers").expect("der Vertrag nennt Kopfzeilen");
+    let kopfzeilen = &samt_ergaenzungen(&block, "headers");
     assert!(kopfzeilen.len() >= 6, "nur {} Kopfzeilen genannt", kopfzeilen.len());
     for k in kopfzeilen {
         assert!(text.contains(&k.to_lowercase()),
