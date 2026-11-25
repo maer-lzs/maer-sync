@@ -477,6 +477,7 @@ Measured by counting occurrences in the source, not from memory.
 | `MAER_SYNC_PLAIN_WAYS` | on |
 | `MAER_SYNC_MAX_BODY_BYTES` | 67108864 (64 MiB) |
 | `MAER_SYNC_TRUSTED_PROXIES` | `127.0.0.1,::1`: whose `X-Real-IP` is believed, see step 7 |
+| `MAER_SYNC_KATALOG` | empty: no catalog, see "Catalog index (optional)" |
 
 **`MAER_SYNC_BIND` is the trap.** The earlier Python build read
 `MAER_SYNC_HOST` and `MAER_SYNC_PORT`; this one reads neither, zero
@@ -493,6 +494,42 @@ the default, which is on. Do not check the unit file to see whether it worked,
 check the behaviour: with plain ways off, `/v1/doc/...` answers **426** instead
 of 401, and it does so even with a valid token, because the gate sits in front
 of the token check.
+
+## Catalog index (optional)
+
+**Off unless you switch it on.** A host can carry a catalog index of public
+sources, so devices read the free catalogs (titles, rights, covers later)
+from their own server instead of asking every source themselves. The audio
+file always comes from the source, never through this service.
+
+**What it fetches.** A second program, `maer-sync-abruf`, in its own
+container, asks archive.org for LibriVox, its audiobooks, the netlabels, the
+theme shelves of the 78 rpm collection and old time radio, one source at a
+time, one request a second at most, as `Maer/1.0 (+https://maer.fm)`.
+Measured on 25.11.2026: about 35 requests and 20 MB a day, and once a week a
+full pass of about 165 MB. Gutenberg, Musopen, Radio Browser and the radio
+play feeds follow as their readers are built.
+
+**What it stores.** Records only (title, author, year, rights, shelves) in
+one file, `katalog.db`, on its own volume; no audio, no account, no user
+data. The fetch program has no port and never sees the user store; the
+service mounts the catalog read only and holds no write right on it. Without
+the file, or with it unreadable, the catalog paths answer 404 or 503 and
+everything else works as before.
+
+**Switch it on:**
+
+    MAER_SYNC_KATALOG=/var/lib/maer-sync-katalog/katalog.db \
+      docker compose --profile katalog up -d
+
+Set `MAER_SYNC_KATALOG` in the environment of compose (or in `.env`) so
+the service reads the file, and start the profile so the fetch program runs.
+Its log has one line per run.
+
+**Switch it off:** `docker compose --profile katalog stop maer-sync-abruf`,
+unset `MAER_SYNC_KATALOG`, and `docker compose up -d`; the catalog paths
+answer 404 again. The volume `maer-sync-katalog` can be removed; it is
+rebuilt on the next run.
 
 ## Updating a running host, and the way back
 
@@ -896,6 +933,7 @@ in front of it; that proxy has to carry the WebSocket upgrade on
     MAER_SYNC_BIND=127.0.0.1:8081       # one address, host and port together
     MAER_SYNC_MAX_BODY_BYTES=67108864   # host protection, 413 above it
     MAER_SYNC_PLAIN_WAYS=on             # off: the five older ways answer only inside a session
+    MAER_SYNC_KATALOG=                  # empty: no catalog; a path: read this catalog file
 
 ### The identity of this service
 

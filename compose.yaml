@@ -50,7 +50,9 @@ services:
     environment:
       MAER_SYNC_DB: /var/lib/maer-sync/store.sqlite
       MAER_SYNC_BIND: 0.0.0.0:8099
-      MAER_SYNC_KATALOG: /var/lib/maer-sync-katalog/katalog.db
+      # Off by default: only when the operator sets it does the service read
+      # a catalog; empty, the catalog paths answer 404 (README, "Catalog index").
+      MAER_SYNC_KATALOG: ${MAER_SYNC_KATALOG:-}
       # Whose `X-Real-IP` the service believes. In the container the peer is
       # NOT the loopback but the gateway of the bridge below: measured on
       # 24.09.2026, without this entry the attempt limit counted every device
@@ -92,6 +94,9 @@ services:
       context: .
       dockerfile: abruf/Dockerfile
     image: maer-sync-abruf:local
+    # Not started by a plain `docker compose up`: the fetch program asks
+    # archive.org on the operator's word only (`--profile katalog`).
+    profiles: ["katalog"]
     container_name: maer-sync-abruf
     restart: unless-stopped
     volumes:
