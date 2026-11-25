@@ -75,7 +75,10 @@ case "$(uname -m)" in
 esac
 
 mkdir -p "$WURZEL/ziel/cargo-home"
+# As the caller, not as root: a file of another owner in a checkout makes the
+# next tool blind (abruf/Cargo.lock was left owned by root on 25.11.2026).
 exec docker run --rm \
+  --user "$(id -u):$(id -g)" \
   -v "$WURZEL:/bau" \
   -e CARGO_HOME=/bau/ziel/cargo-home \
   -e CARGO_TARGET_DIR=/bau/ziel/abbau \

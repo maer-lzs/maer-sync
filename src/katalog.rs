@@ -221,6 +221,58 @@ fn list_from(text: &str) -> Result<Vec<String>, KatalogError> {
     serde_json::from_str(text).map_err(|e| KatalogError::Invalid(format!("stored list: {e}")))
 }
 
+/// The kinds of run whose time `meta` keeps.
+pub const RUN_KINDS: [&str; 2] = ["voll", "delta"];
+
+/// The checks every writer makes before its transaction: a known source,
+/// rows of that source only, known kinds, ids present and once each.
+fn checked<'a>(quelle: &str, rows: &'a [Row]) -> Result<BTreeSet<&'a str>, KatalogError> {
+    if !SOURCES.contains(&quelle) {
+        return Err(KatalogError::Invalid(format!("unknown source {quelle:?}")));
+    }
+    let mut seen = BTreeSet::new();
+    for r in rows {
+        if r.quelle != quelle {
+            return Err(KatalogError::Invalid(format!("row {} names source {:?}", r.id, r.quelle)));
+        }
+        if !KINDS.contains(&r.art.as_str()) {
+            return Err(KatalogError::Invalid(format!("row {} has kind {:?}", r.id, r.art)));
+        }
+        if r.id.is_empty() || !seen.insert(r.id.as_str()) {
+            return Err(KatalogError::Invalid(format!("id {:?} is empty or twice in the run", r.id)));
+        }
+    }
+    Ok(seen)
+}
+
+/// Raise the version of a source by one inside the writer's transaction.
+fn raise(tx: &Connection, quelle: &str, version: i64, voll_ab: i64) -> Result<i64, KatalogError> {
+    let next = version + 1;
+    tx.execute(
+        "INSERT INTO stand (quelle, version, voll_ab) VALUES (?1, ?2, ?3)
+         ON CONFLICT(quelle) DO UPDATE SET version = excluded.version",
+        params![quelle, next, voll_ab])?;
+    Ok(next)
+}
+
+/// Write changed rows with a version; a row written here is live.
+fn upsert(tx: &Connection, changed: &[&Row], version: i64) -> Result<(), KatalogError> {
+    let mut up = tx.prepare(&format!(
+        "INSERT INTO eintrag ({COLUMNS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,0)
+         ON CONFLICT(quelle, id) DO UPDATE SET
+           art=excluded.art, titel=excluded.titel, urheber=excluded.urheber, sprache=excluded.sprache,
+           jahr=excluded.jahr, rechte_kennung=excluded.rechte_kennung, rechte_url=excluded.rechte_url,
+           laden=excluded.laden, reihen=excluded.reihen, auch=excluded.auch, tief=excluded.tief,
+           version=excluded.version, geloescht=0"))?;
+    for r in changed {
+        up.execute(params![
+            r.quelle, r.id, r.art, r.titel, r.urheber, r.sprache, r.jahr, r.rechte_kennung,
+            r.rechte_url, r.laden as i64, list_json(&r.reihen), list_json(&r.auch), r.tief, version,
+        ])?;
+    }
+    Ok(())
+}
+
 fn normalised(r: &Row) -> Result<Row, KatalogError> {
     let mut r = r.clone();
     for list in [&mut r.reihen, &mut r.auch] {
@@ -348,28 +400,11 @@ impl Katalog {
     /// JSON. Their order carries no meaning, and a run that only reorders
     /// them must not raise the version.
     pub fn write_run(&mut self, quelle: &str, rows: &[Row], confirmed: bool) -> Result<i64, KatalogError> {
+        self.writable()?;
         let rows: Vec<Row> = rows.iter().map(normalised).collect::<Result<_, _>>()?;
-        let rows = rows.as_slice();
-        if self.read_only {
-            return Err(KatalogError::Invalid("opened for reading".into()));
-        }
-        if !SOURCES.contains(&quelle) {
-            return Err(KatalogError::Invalid(format!("unknown source {quelle:?}")));
-        }
+        let seen = checked(quelle, &rows)?;
         if rows.is_empty() && !confirmed {
             return Err(KatalogError::EmptyRun);
-        }
-        let mut seen = BTreeSet::new();
-        for r in rows {
-            if r.quelle != quelle {
-                return Err(KatalogError::Invalid(format!("row {} names source {:?}", r.id, r.quelle)));
-            }
-            if !KINDS.contains(&r.art.as_str()) {
-                return Err(KatalogError::Invalid(format!("row {} has kind {:?}", r.id, r.art)));
-            }
-            if r.id.is_empty() || !seen.insert(r.id.as_str()) {
-                return Err(KatalogError::Invalid(format!("id {:?} is empty or twice in the run", r.id)));
-            }
         }
 
         let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -396,26 +431,9 @@ impl Katalog {
         if changed.is_empty() && vanished.is_empty() {
             return Ok(version);
         }
-
-        let next = version + 1;
-        tx.execute(
-            "INSERT INTO stand (quelle, version, voll_ab) VALUES (?1, ?2, ?3)
-             ON CONFLICT(quelle) DO UPDATE SET version = excluded.version",
-            params![quelle, next, voll_ab])?;
+        let next = raise(&tx, quelle, version, voll_ab)?;
+        upsert(&tx, &changed, next)?;
         {
-            let mut up = tx.prepare(&format!(
-                "INSERT INTO eintrag ({COLUMNS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,0)
-                 ON CONFLICT(quelle, id) DO UPDATE SET
-                   art=excluded.art, titel=excluded.titel, urheber=excluded.urheber, sprache=excluded.sprache,
-                   jahr=excluded.jahr, rechte_kennung=excluded.rechte_kennung, rechte_url=excluded.rechte_url,
-                   laden=excluded.laden, reihen=excluded.reihen, auch=excluded.auch, tief=excluded.tief,
-                   version=excluded.version, geloescht=0"))?;
-            for r in &changed {
-                up.execute(params![
-                    r.quelle, r.id, r.art, r.titel, r.urheber, r.sprache, r.jahr, r.rechte_kennung,
-                    r.rechte_url, r.laden as i64, list_json(&r.reihen), list_json(&r.auch), r.tief, next,
-                ])?;
-            }
             let mut mark = tx.prepare("UPDATE eintrag SET geloescht=1, version=?3 WHERE quelle=?1 AND id=?2")?;
             for id in &vanished {
                 mark.execute(params![quelle, id, next])?;
@@ -425,14 +443,62 @@ impl Katalog {
         Ok(next)
     }
 
-    /// K3c. Signature only until its witnesses are red.
-    pub fn write_delta(&mut self, _quelle: &str, _rows: &[Row]) -> Result<i64, KatalogError> { todo!("K3c") }
+    /// Apply the new and changed rows of a delta and answer the version
+    /// after it. Unlike a run, a delta names only what is new: a row it does
+    /// not name stays as it is and is never marked deleted, and a deletion
+    /// mark it names again lives again. An empty delta is no change, not an
+    /// empty run; the version rises only on a change.
+    pub fn write_delta(&mut self, quelle: &str, rows: &[Row]) -> Result<i64, KatalogError> {
+        self.writable()?;
+        let rows: Vec<Row> = rows.iter().map(normalised).collect::<Result<_, _>>()?;
+        checked(quelle, &rows)?;
+        let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let (version, voll_ab) = stand_of(&tx, quelle)?;
+        let mut changed: Vec<&Row> = vec![];
+        for r in &rows {
+            let found = read_rows(
+                &tx, &format!("SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND id=?2"), &[&quelle as &dyn rusqlite::ToSql, &r.id])?;
+            if !matches!(found.first(), Some(s) if !s.geloescht && s.row == *r) {
+                changed.push(r);
+            }
+        }
+        if changed.is_empty() {
+            return Ok(version);
+        }
+        let next = raise(&tx, quelle, version, voll_ab)?;
+        upsert(&tx, &changed, next)?;
+        tx.commit()?;
+        Ok(next)
+    }
 
-    /// K3c. Signature only until its witnesses are red.
-    pub fn set_last_run(&mut self, _quelle: &str, _art: &str, _unix_s: i64) -> Result<(), KatalogError> { todo!("K3c") }
+    /// Keep the time of the last successful run of a kind (`voll` or
+    /// `delta`) for a source, so a restart does not fetch everything again.
+    pub fn set_last_run(&mut self, quelle: &str, art: &str, unix_s: i64) -> Result<(), KatalogError> {
+        self.writable()?;
+        if !SOURCES.contains(&quelle) || !RUN_KINDS.contains(&art) {
+            return Err(KatalogError::Invalid(format!("no run time for {quelle:?} {art:?}")));
+        }
+        self.db.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![format!("lauf:{quelle}:{art}"), unix_s.to_string()])?;
+        Ok(())
+    }
 
-    /// K3c. Signature only until its witnesses are red.
-    pub fn last_run(&self, _quelle: &str, _art: &str) -> Result<Option<i64>, KatalogError> { todo!("K3c") }
+    /// The time of the last successful run of a kind, if there was one.
+    pub fn last_run(&self, quelle: &str, art: &str) -> Result<Option<i64>, KatalogError> {
+        let v: Option<String> = self.db
+            .query_row("SELECT value FROM meta WHERE key=?1", [format!("lauf:{quelle}:{art}")], |r| r.get(0))
+            .optional()?;
+        match v {
+            None => Ok(None),
+            Some(s) => s.parse().map(Some)
+                .map_err(|_| KatalogError::Invalid(format!("run time {s:?} of {quelle} {art} is not a number"))),
+        }
+    }
+
+    fn writable(&self) -> Result<(), KatalogError> {
+        if self.read_only { Err(KatalogError::Invalid("opened for reading".into())) } else { Ok(()) }
+    }
 
     /// The live rows of a source in id order, one page after `nach`.
     pub fn full(&self, quelle: &str, nach: Option<&str>, anzahl: usize) -> Result<Page, KatalogError> {
