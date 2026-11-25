@@ -253,7 +253,7 @@ fn musopen_continue_token() {
 #[test]
 fn radio_rows_match_the_vectors() {
     let all = cases("radio");
-    assert_eq!(all.len(), 9);
+    assert_eq!(all.len(), 10);
     for dir in all {
         let a = std::fs::read(dir.join("antwort.json")).unwrap();
         let want: Vec<Row> = read(&dir.join("erwartet.json"))["zeilen"].as_array().unwrap().iter().map(expected).collect();
@@ -313,4 +313,18 @@ fn radio_name_and_address_as_the_app() {
     let s = page(json!([station("e", "", "https://x/e", ""), station("e", "E", "https://x/e", "")]));
     assert_eq!((s.zeilen.len(), s.uuids.len(), s.roh), (1, 1, 2));
     assert_eq!(s.zeilen[0].titel.as_deref(), Some("E"));
+}
+
+/// `URL(string:)` gives nil only for an empty string and for a host that
+/// opens a bracket and never closes it (measured on macOS 27.2.1, the
+/// behaviour since iOS 17); everything else becomes an address, encoded.
+#[test]
+fn radio_drops_only_what_url_string_refuses() {
+    let rows = |url: &str| radio::rows_from_page(json!([station("u", "U", url, "")]).to_string().as_bytes()).unwrap().zeilen.len();
+    for bad in ["http://[::1/stream", "https://user@[fe80::1/x", "http://[::1"] {
+        assert_eq!(rows(bad), 0, "{bad}");
+    }
+    for good in ["http://[::1]/stream", "http://a b/c", "kein url", "http://", "http://x/[y]", "http://x/\u{1}y", "http://h\u{e4}user/"] {
+        assert_eq!(rows(good), 1, "{good}");
+    }
 }
