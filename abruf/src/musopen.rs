@@ -450,13 +450,13 @@ pub fn rows_from_answer(answer: &[u8]) -> Result<Seite, MusopenFehler> {
         let t = titel.clone().unwrap_or_default();
         let (komponist, werk, interpret) = parts(author.as_deref(), &t);
         let tief = json!({
-            "komponist": komponist, "werk": werk, "interpret": interpret, "satz": movement_number(&t),
+            "komponist": &komponist, "werk": werk, "interpret": interpret, "satz": movement_number(&t),
             "seite": text(vi, "/descriptionurl").filter(|s| !s.is_empty()),
             "spuren": [{ "nummer": 1, "titel": titel, "dauer": vi.get("duration").cloned().unwrap_or(Value::Null), "adresse": adresse }],
         });
         zeilen.push(Row {
             quelle: "musopen".into(), id: format!("mso:{id}"), art: "musik".into(), titel,
-            urheber: None, sprache: None, jahr: None, rechte_kennung: mark.into(),
+            urheber: komponist.clone(), sprache: None, jahr: None, rechte_kennung: mark.into(),
             rechte_url: text(vi, "/extmetadata/LicenseUrl/value").map(str::to_string),
             laden: true, reihen: vec![], auch: vec![], tief: Some(tief.to_string()),
         });
