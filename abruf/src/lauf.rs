@@ -33,6 +33,8 @@ use maer_sync::katalog::{Katalog, Row};
 use serde_json::Value;
 
 use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
+use crate::musopen::{self, MusopenFehler};
+use crate::radio;
 use crate::netz::{encode, HolFehler, Holer, Netz, Uhr};
 use crate::plan::{Art, DELTA_S};
 
@@ -40,6 +42,9 @@ use crate::plan::{Art, DELTA_S};
 /// and a shelf stay far below it (the largest shelf, jazz, has some 6 800); a
 /// query above it is refused rather than read short.
 pub const ADV_GRENZE: usize = 10_000;
+
+/// Sources without a delta: a due delta runs as a full pass.
+pub const OHNE_DELTA: [&str; 2] = ["musopen", "radio"];
 
 const ADV: &str = "https://archive.org/advancedsearch.php";
 const SCRAPE: &str = "https://archive.org/services/search/v1/scrape";
@@ -202,7 +207,126 @@ fn check_count(rows: &[Row], erwartet: usize) -> Result<(), LaufFehler> {
     Ok(())
 }
 
+impl From<MusopenFehler> for LaufFehler {
+    fn from(e: MusopenFehler) -> Self {
+        match e {
+            MusopenFehler::Unreadable(s) => LaufFehler::Lesen(ReadError::Unreadable(s)),
+            MusopenFehler::Maxlag(s) => LaufFehler::Holen(HolFehler::SpaeterWieder(s)),
+        }
+    }
+}
+
+const COMMONS: &str = "https://commons.wikimedia.org/w/api.php";
+/// Files per Commons page: `extmetadata` is heavy, Commons answers 50 well.
+const COMMONS_SEITE: usize = 50;
+
+fn commons_url(params: &[(&str, &str)]) -> String {
+    let mut u = format!("{COMMONS}?action=query&format=json&formatversion=2&maxlag=5");
+    for (k, v) in params {
+        u.push_str(&format!("&{k}={}", encode(v)));
+    }
+    u
+}
+
+/// Both categories of Musopen in full; each counted against `categoryinfo`
+/// (pages seen, media or not); a file in both is one row.
+fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
+    let mut rows: Vec<Row> = vec![];
+    let mut ids = BTreeSet::new();
+    let limit = e.adv_rows.min(COMMONS_SEITE).to_string();
+    for cat in musopen::KATEGORIEN {
+        let a = netz.get(&commons_url(&[("prop", "categoryinfo"), ("titles", cat)]))?;
+        let v = parse(&a.koerper)?;
+        if v.pointer("/error/code").and_then(Value::as_str) == Some("maxlag") {
+            musopen::rows_from_answer(&a.koerper)?;
+        }
+        let files = v.pointer("/query/pages/0/categoryinfo/files").and_then(Value::as_u64)
+            .ok_or_else(|| LaufFehler::Lesen(ReadError::Unreadable(format!("no count for {cat}"))))? as usize;
+        let mut seen = 0;
+        let mut weiter: Option<String> = None;
+        loop {
+            let mut p = vec![("generator", "categorymembers"), ("gcmtitle", cat), ("gcmtype", "file"),
+                             ("gcmlimit", limit.as_str()), ("prop", "videoinfo"), ("viprop", "url|size|mime|extmetadata")];
+            if let Some(w) = weiter.as_deref() { p.push(("gcmcontinue", w)); }
+            let a = netz.get(&commons_url(&p))?;
+            let s = musopen::rows_from_answer(&a.koerper)?;
+            seen += s.gesehen;
+            for r in s.zeilen {
+                if ids.insert(r.id.clone()) { rows.push(r); }
+            }
+            match s.weiter { Some(w) => weiter = Some(w), None => break }
+        }
+        if seen != files {
+            return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len() });
+        }
+    }
+    Ok(rows)
+}
+
+/// GET a path on the first server of the list that answers, and stay there.
+fn radio_get<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'static str>, path: &str) -> Result<Vec<u8>, LaufFehler> {
+    if let Some(s) = *server {
+        return Ok(netz.get(&format!("{s}{path}"))?.koerper);
+    }
+    let mut last = None;
+    for s in radio::SERVER {
+        match netz.get(&format!("{s}{path}")) {
+            Ok(a) => { *server = Some(s); return Ok(a.koerper); }
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(LaufFehler::Holen(last.expect("the list is not empty")))
+}
+
+fn radio_count<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'static str>) -> Result<usize, LaufFehler> {
+    let v = parse(&radio_get(netz, server, "/json/stats")?)?;
+    let n = |k: &str| v.get(k).and_then(Value::as_u64).ok_or_else(|| LaufFehler::Lesen(ReadError::Unreadable(format!("no {k} in the statistics"))));
+    Ok((n("stations")?.saturating_sub(n("stations_broken")?)) as usize)
+}
+
+/// All stations in pages of `adv_rows`, ordered by uuid; counted against the
+/// statistics (stations minus broken). A uuid on two pages (a station moved
+/// while paging) repeats the pass once, then refuses.
+fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
+    let mut server = None;
+    let limit = e.adv_rows;
+    for versuch in 0..2 {
+        let erwartet = radio_count(netz, &mut server)?;
+        let mut rows = vec![];
+        let mut uuids = BTreeSet::new();
+        let mut doppelt = false;
+        let mut offset = 0;
+        loop {
+            let s = radio::rows_from_page(&radio_get(netz, &mut server,
+                &format!("/json/stations?offset={offset}&limit={limit}&hidebroken=true&order=stationuuid"))?)?;
+            for u in &s.uuids {
+                if !uuids.insert(u.clone()) { doppelt = true; }
+            }
+            rows.extend(s.zeilen);
+            if s.roh < limit { break; }
+            offset += limit;
+        }
+        if doppelt {
+            if versuch == 0 { continue; }
+            return Err(LaufFehler::Zaehlung { erwartet, gelesen: rows.len(), eindeutig: uuids.len() });
+        }
+        if uuids.len() != erwartet {
+            let again = radio_count(netz, &mut server)?;
+            if uuids.len() != again {
+                return Err(LaufFehler::Zaehlung { erwartet: again, gelesen: rows.len(), eindeutig: uuids.len() });
+            }
+        }
+        return Ok(rows);
+    }
+    unreachable!("the loop returns in its second pass")
+}
+
 fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
+    match quelle {
+        "musopen" => return musopen_pass(netz, e),
+        "radio" => return radio_pass(netz, e),
+        _ => {}
+    }
     if quelle == "schellack" {
         let mut parts = vec![];
         for s in regale_der_app() {
@@ -275,16 +399,12 @@ pub fn lauf<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
     let vorher = katalog.version(quelle).unwrap_or(-1);
     let mut gelesen = 0;
     let ausgang = (|| -> Result<(), LaufFehler> {
-        let rows = match art {
-            Art::Voll => full_pass(netz, quelle, e)?,
-            Art::Delta => delta(netz, katalog, quelle, e)?,
-        };
+        // Musopen and Radio Browser have no delta: their day is a full pass.
+        let voll = art == Art::Voll || OHNE_DELTA.contains(&quelle);
+        let rows = if voll { full_pass(netz, quelle, e)? } else { delta(netz, katalog, quelle, e)? };
         gelesen = rows.len();
         let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
-        match art {
-            Art::Voll => katalog.write_run(quelle, &rows, false).map_err(k)?,
-            Art::Delta => katalog.write_delta(quelle, &rows).map_err(k)?,
-        };
+        if voll { katalog.write_run(quelle, &rows, false).map_err(k)? } else { katalog.write_delta(quelle, &rows).map_err(k)? };
         katalog.set_last_run(quelle, art.name(), netz.uhr.jetzt_ms().div_euclid(1000)).map_err(k)?;
         Ok(())
     })();
