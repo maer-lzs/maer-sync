@@ -16,7 +16,8 @@
 //!
 //! Title, composer, work, performer and movement follow the rules of the app
 //! (`MusopenCatalog.shownTitle`, `artistText`, `MusopenOrder.parts`,
-//! `movementNumber`); `tief` carries them with the one track to play.
+//! `movementNumber`); `tief` carries them with the one track to play and the
+//! page of the recording on Commons (`descriptionurl`), as the app keeps it.
 
 use maer_sync::katalog::Row;
 use serde_json::{json, Value};
@@ -450,6 +451,7 @@ pub fn rows_from_answer(answer: &[u8]) -> Result<Seite, MusopenFehler> {
         let (komponist, werk, interpret) = parts(author.as_deref(), &t);
         let tief = json!({
             "komponist": komponist, "werk": werk, "interpret": interpret, "satz": movement_number(&t),
+            "seite": text(vi, "/descriptionurl").filter(|s| !s.is_empty()),
             "spuren": [{ "nummer": 1, "titel": titel, "dauer": vi.get("duration").cloned().unwrap_or(Value::Null), "adresse": adresse }],
         });
         zeilen.push(Row {
