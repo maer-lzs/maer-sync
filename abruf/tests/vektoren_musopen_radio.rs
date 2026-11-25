@@ -236,6 +236,19 @@ fn musopen_page_of_the_recording() {
     assert_eq!(t(&a)["seite"], Value::Null, "no page stated, none in tief");
 }
 
+/// The tile of the app names the composer (`authorName` from
+/// `MusopenOrder.parts`); the row's `urheber` is the same, none where the
+/// rule finds none.
+#[test]
+fn musopen_urheber_is_the_composer() {
+    for dir in cases("musopen") {
+        for r in musopen::rows_from_answer(&std::fs::read(dir.join("antwort.json")).unwrap()).unwrap().zeilen {
+            let t: Value = serde_json::from_str(r.tief.as_deref().unwrap()).unwrap();
+            assert_eq!(r.urheber.as_deref(), t["komponist"].as_str(), "{}", dir.display());
+        }
+    }
+}
+
 #[test]
 fn musopen_maxlag_postpones() {
     let a = json!({"error": {"code": "maxlag", "info": "Waiting for a database server", "lag": 7}});
