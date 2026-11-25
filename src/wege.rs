@@ -201,6 +201,8 @@ pub struct App {
     /// Die Uhr der Versuchsgrenze, als Sekunden. Von aussen, damit ein Zeuge
     /// ein Fenster ablaufen lassen kann, ohne zu warten.
     pub uhr: Box<dyn Fn() -> f64 + Send>,
+    /// K3d. The path of the catalog file, if this service carries one.
+    pub katalog: Option<String>,
 }
 
 /// Die Wanduhr als Sekunden seit 1970.
@@ -226,6 +228,7 @@ impl App {
             vertraute_proxys: crate::versuche::vertraute_aus(None)
                 .expect("die Vorgabe ist lesbar"),
             uhr: Box::new(wanduhr),
+            katalog: None,
         }
     }
 
@@ -244,6 +247,8 @@ impl App {
         self
     }
     pub fn ohne_alte_wege(mut self) -> Self { self.plain_ways = false; self }
+    /// K3d. Signature only until its witnesses are red.
+    pub fn mit_katalog(mut self, pfad: &str) -> Self { let _ = pfad; self.katalog = None; self }
     pub fn mit_grenzen(mut self, limits: Limits) -> Self {
         self.sessions = SessionStore::mit(limits, Box::new(|| 0.0));
         self

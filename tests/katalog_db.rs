@@ -646,3 +646,37 @@ fn run_times_survive_reopening() {
     assert_eq!(k.last_run("otr", "delta").unwrap(), Some(1_764_086_400));
     assert_eq!(k.last_run("librivox", "voll").unwrap(), None);
 }
+
+// ---------------------------------------------------------------- K3d: the service reads without any write right
+
+#[test]
+fn a_clean_close_leaves_no_side_files() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = std::env::temp_dir().join(format!("maer-sync-katalog-clean-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let p = d.join("katalog.db");
+    let mut k = Katalog::open(p.to_str().unwrap()).unwrap();
+    k.write_run("otr", &rows("otr", 3), false).unwrap();
+    k.close_clean().unwrap();
+    let names: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, vec!["katalog.db".to_string()], "side files after a clean close");
+    let mode: String = Connection::open(&p).unwrap().query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+    assert_eq!(mode.to_lowercase(), "delete");
+    // A reader in a folder it cannot write opens it.
+    std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let r = Katalog::open_read(p.to_str().unwrap()).map(|r| r.full("otr", None, MAX_PAGE).map(|pg| pg.zeilen.len()));
+    std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(r.unwrap().unwrap(), 3);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn the_writer_runs_in_wal() {
+    let p = scratch("writer-wal");
+    { let mut k = Katalog::open(&p).unwrap(); k.write_run("otr", &rows("otr", 1), false).unwrap(); k.close_clean().unwrap(); }
+    let mode = |p: &str| -> String { Connection::open(p).unwrap().query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap() };
+    assert_eq!(mode(&p).to_lowercase(), "delete");
+    let _k = Katalog::open(&p).unwrap();
+    assert_eq!(mode(&p).to_lowercase(), "wal", "the writer did not switch back to WAL");
+}

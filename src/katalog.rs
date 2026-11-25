@@ -496,6 +496,9 @@ impl Katalog {
         }
     }
 
+    /// K3d. Signature only until its witnesses are red.
+    pub fn close_clean(self) -> Result<(), KatalogError> { todo!("K3d") }
+
     fn writable(&self) -> Result<(), KatalogError> {
         if self.read_only { Err(KatalogError::Invalid("opened for reading".into())) } else { Ok(()) }
     }
