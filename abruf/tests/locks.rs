@@ -31,12 +31,16 @@ fn both_locks_name_the_same_versions() {
     let service = versions(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.lock"));
     let fetch = versions(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock"));
     assert!(service.len() > 50, "the service lock was not read");
+    // Every version the service names stands unchanged in the fetch lock. A
+    // fetch crate may bring a second generation of a shared crate (ring
+    // brings getrandom 0.2 next to 0.4), but never moves the service's one.
     let mut differ = vec![];
     for (name, v) in &service {
-        match fetch.get(name) {
-            Some(w) if w == v => {}
-            Some(w) => differ.push(format!("{name}: service {v:?}, fetch {w:?}")),
-            None => differ.push(format!("{name}: missing in the fetch lock")),
+        let w = fetch.get(name).cloned().unwrap_or_default();
+        for version in v {
+            if !w.contains(version) {
+                differ.push(format!("{name} {version}: not in the fetch lock (it has {w:?})"));
+            }
         }
     }
     assert!(differ.is_empty(), "{differ:#?}");

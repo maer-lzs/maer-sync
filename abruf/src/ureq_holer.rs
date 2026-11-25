@@ -3,24 +3,91 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
-//! The real `Holer` over `ureq` (K3c). Signatures only: the witnesses in
-//! `tests/holer.rs` are written first.
+//! The real `Holer` over `ureq` (K3c; decision of 25.11.2026, "ok ureq").
+//!
+//! It makes exactly one request and decides nothing a source could abuse:
+//! redirects are returned, not followed (`netz::Netz` follows them, https
+//! only, a bounded number); every status comes back as an answer; reading
+//! stops one byte after the bound, counted after decoding; every request
+//! has its time limit. TLS is rustls with the Mozilla roots compiled in
+//! (`webpki-roots`), so the hardened image needs no certificate file.
+//! **Certificate verification cannot be turned off here**: there is no
+//! switch for it, and a witness holds that.
+
+use std::time::Duration;
+
+use ureq::Agent;
 
 use crate::netz::{Anfrage, Antwort, HolFehler, Holer};
 
-pub struct UreqHoler;
+pub struct UreqHoler {
+    agent: Agent,
+}
+
+fn agent(https_only: bool) -> Agent {
+    let config = Agent::config_builder()
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .https_only(https_only)
+        .save_redirect_history(false)
+        .build();
+    Agent::new_with_config(config)
+}
 
 impl UreqHoler {
-    pub fn new() -> Self { todo!("K3c ureq") }
-    pub fn plain_http_for_witnesses() -> Self { todo!("K3c ureq") }
-    pub fn verifies_certificates(&self) -> bool { todo!("K3c ureq") }
-    pub fn https_only(&self) -> bool { todo!("K3c ureq") }
+    /// The holer of the program: https only.
+    pub fn new() -> Self {
+        UreqHoler { agent: agent(true) }
+    }
+
+    /// The same holer allowing plain http, for the witnesses' local server
+    /// only (it speaks no TLS). Verification is the same.
+    pub fn plain_http_for_witnesses() -> Self {
+        UreqHoler { agent: agent(false) }
+    }
+
+    pub fn verifies_certificates(&self) -> bool {
+        !self.agent.config().tls_config().disable_verification()
+    }
+
+    pub fn https_only(&self) -> bool {
+        self.agent.config().https_only()
+    }
 }
 
 impl Default for UreqHoler {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn mapped(e: ureq::Error, max_bytes: usize) -> HolFehler {
+    match e {
+        ureq::Error::Timeout(_) => HolFehler::Zeit,
+        ureq::Error::BodyExceedsLimit(_) => HolFehler::ZuGross(max_bytes + 1),
+        other => HolFehler::Verbindung(other.to_string()),
+    }
 }
 
 impl Holer for UreqHoler {
-    fn hole(&mut self, _a: &Anfrage) -> Result<Antwort, HolFehler> { todo!("K3c ureq") }
+    fn hole(&mut self, a: &Anfrage) -> Result<Antwort, HolFehler> {
+        let mut resp = self.agent
+            .get(&a.url)
+            .header("User-Agent", &a.user_agent)
+            .config()
+            .timeout_global(Some(Duration::from_secs(a.timeout_s)))
+            .build()
+            .call()
+            .map_err(|e| mapped(e, a.max_bytes))?;
+        let header = |name: &str| resp.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+        let location = header("location");
+        let retry_after_s = header("retry-after").and_then(|v| v.trim().parse().ok());
+        let status = resp.status().as_u16();
+        let koerper = resp.body_mut()
+            .with_config()
+            .limit(a.max_bytes as u64)
+            .read_to_vec()
+            .map_err(|e| mapped(e, a.max_bytes))?;
+        Ok(Antwort { status, koerper, location, retry_after_s })
+    }
 }

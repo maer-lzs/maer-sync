@@ -71,7 +71,11 @@ fn the_program_holer_verifies_and_allows_https_only() {
 #[test]
 fn no_switch_turns_verification_off() {
     let src = include_str!("../src/ureq_holer.rs");
-    assert!(!src.contains("disable_verification("), "the holer calls disable_verification");
+    // Reading the setting is allowed (`disable_verification()`); setting it is not.
+    for (i, _) in src.match_indices("disable_verification(") {
+        let after = &src[i + "disable_verification(".len()..];
+        assert!(after.starts_with(')'), "the holer sets disable_verification: {}", &after[..after.len().min(20)]);
+    }
     assert!(!src.contains("danger"), "the holer names a dangerous option");
 }
 
