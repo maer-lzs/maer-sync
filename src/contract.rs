@@ -28,6 +28,9 @@ pub const DIGEST: &str = "f77b2a9c8bd1ce9ef03d8796be9508be85e0578a6a0592a151e488
 /// Die Fassung, die dieser Bau bedient.
 pub const VERSION: &str = "7";
 
+/// Signature only until its witnesses are red.
+pub const ADDITIONS: &[&str] = &[];
+
 pub fn digest_of(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }

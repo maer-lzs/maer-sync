@@ -352,3 +352,37 @@ fn die_nachricht_des_sockets_ist_die_des_vertrags() {
     let _ = std::fs::remove_file(&wo);
 }
 
+
+// ---------------------------------------------------------------- additions to version 6 (25.11.2026)
+
+/// The service speaks version 6 with the catalog: an addition never raises
+/// the number (operator's decision, Weg A), so every app in the field keeps
+/// signing in.
+#[test]
+fn the_service_speaks_version_6_with_its_additions() {
+    assert_eq!(VERSION, "6");
+    let text = String::from_utf8(vertrag()).expect("UTF-8");
+    let block = declared(&text).expect("Block");
+    assert_eq!(block.get("version").map(|v| v.as_slice()), Some(&["6".to_string()][..]));
+    assert_eq!(block.get("additions").cloned().unwrap_or_default(), contract::ADDITIONS.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    assert_eq!(contract::ADDITIONS, ["katalog-1"]);
+}
+
+/// An addition names only what version 6 does not: a path, header or status
+/// of an addition never stands in the lines of version 6, where the app's
+/// fence would ask for it in the app's own code.
+#[test]
+fn additions_do_not_touch_version_6() {
+    let text = String::from_utf8(vertrag()).expect("UTF-8");
+    let block = declared(&text).expect("Block");
+    for key in ["paths", "headers", "status"] {
+        let own: std::collections::BTreeSet<&String> = block.get(key).map(|v| v.iter().collect()).unwrap_or_default();
+        let added = block.get(&format!("additions-{key}")).cloned().unwrap_or_default();
+        for a in &added {
+            assert!(!own.contains(a), "{a} stands in {key} and in additions-{key}");
+        }
+    }
+    let paths = block.get("paths").cloned().unwrap_or_default();
+    let added = block.get("additions-paths").cloned().unwrap_or_default();
+    assert!(added.contains(&"/v1/katalog".to_string()) && !paths.contains(&"/v1/katalog".to_string()));
+}

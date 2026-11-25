@@ -40,13 +40,10 @@ const DATEI: &str = "vektoren/faelle-v6.json";
 /// eine neue Lieferung und wird hier bewusst eingetragen, nicht still gelesen.
 const DATEI_DIGEST: &str = "57b1c873dbaa6fe9158b1b5562999af69aec0235ec9ddf11fe8de5d4344cc657";
 const QUELLE: &str = "203.0.113.7:40000";
-/// The contract these cases were written from (version 6). Version 7
-/// (25.11.2026) only adds the catalog paths; every case of version 6 still
-/// holds, with the one exception below. The file stays as it was delivered.
+/// The contract text these cases were written from: version 6 before the
+/// addition katalog-1 (25.11.2026). The addition changes no answer of
+/// version 6, so every case holds unchanged; the file stays as delivered.
 const VERTRAG_V6_DIGEST: &str = "283761495f6fd0abc669ca30ab97fc02370addf3a7353e0fc770acfe32143b55";
-/// The one exception, with its reason: `/v2/key` names the version of the
-/// contract the service speaks, and that is 7 now.
-const AUSNAHME_FASSUNG: (&str, &str, &str) = ("x-maer-contract", "6", "7");
 
 /// Wie die Datei die Konten beschreibt (`anwendungen.v6`).
 const ANNA: &str = "anna6";
@@ -175,9 +172,6 @@ fn pruefen(name: &str, e: &Value, gab: &Antwort, frueher: &BTreeMap<String, Vec<
                 let s: u64 = hat.as_deref().and_then(|s| s.parse().ok())
                     .unwrap_or_else(|| panic!("{name}: {k} ist keine ganze Zahl: {hat:?}"));
                 assert!(s > 0, "{name}: {k} ist 0");
-            } else if (k.as_str(), v.as_str()) == (AUSNAHME_FASSUNG.0, Some(AUSNAHME_FASSUNG.1)) {
-                assert_eq!(hat.as_deref(), Some(AUSNAHME_FASSUNG.2), "{name}: Kopfzeile {k} (Fassung 7)");
-                assert_eq!(maer_sync::contract::VERSION, AUSNAHME_FASSUNG.2);
             } else {
                 assert_eq!(hat.as_deref(), v.as_str(), "{name}: Kopfzeile {k}");
             }
@@ -230,7 +224,7 @@ fn die_datei_ist_die_uebernommene_und_gehoert_zu_diesem_vertrag() {
     let d = datei();
     assert_eq!(d["vertrag_sha256"].as_str(), Some(VERTRAG_V6_DIGEST),
                "die Faelle sind aus einem anderen Vertrag geschrieben");
-    assert_ne!(maer_sync::contract::DIGEST, VERTRAG_V6_DIGEST, "the exception above is for a later version only");
+    assert_ne!(maer_sync::contract::DIGEST, VERTRAG_V6_DIGEST, "the text carries the addition katalog-1 now");
     assert_eq!(d["faelle"].as_array().unwrap().len(), 25, "Faelle");
     assert_eq!(d["ablaeufe"].as_array().unwrap().len(), 9, "Ablaeufe");
     for f in d["faelle"].as_array().unwrap() {
