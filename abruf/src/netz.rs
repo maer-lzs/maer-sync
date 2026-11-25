@@ -69,12 +69,22 @@ pub trait Uhr {
     fn schlafe_ms(&mut self, ms: i64);
 }
 
-/// The clock of the program. Signature only until its witness is red.
+/// The clock of the program: wall time in milliseconds since 1970, and a
+/// real sleep. A negative wait sleeps not at all.
 pub struct SystemUhr;
 
 impl Uhr for SystemUhr {
-    fn jetzt_ms(&self) -> i64 { todo!("K3c clock") }
-    fn schlafe_ms(&mut self, _ms: i64) { todo!("K3c clock") }
+    fn jetzt_ms(&self) -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0)
+    }
+    fn schlafe_ms(&mut self, ms: i64) {
+        if ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+        }
+    }
 }
 
 pub struct Netz<H: Holer, U: Uhr> {
