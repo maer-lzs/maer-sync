@@ -234,7 +234,8 @@ fn der_neue_schluesselweg_nennt_die_fassung() {
     let mut st = aufbauen();
     let gab = st.app.http(&Anfrage::neu("GET", "/v2/key"));
     assert_eq!(gab.status, 200);
-    assert_eq!(gab.kopf("x-maer-contract"), Some("6"));
+    // Version 7 since 25.11.2026: the catalog paths.
+    assert_eq!(gab.kopf("x-maer-contract"), Some("7"));
     assert_eq!(gab.kopf("x-maer-contract"), Some(maer_sync::contract::VERSION));
     let j = gab.als_json().unwrap();
     assert!(j["key"].is_string() && j["fingerprint"].is_string());
