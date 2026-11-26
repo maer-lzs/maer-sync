@@ -56,6 +56,13 @@ pub enum HolFehler {
     ZuVieleWeiterleitungen,
     UnsichereWeiterleitung(String),
     SpaeterWieder(u64),
+    /// The name of the host does not resolve.
+    WirtUnbekannt,
+}
+
+/// The error that counts when every server of a list failed.
+pub fn gewichtigster(fehler: Vec<HolFehler>) -> HolFehler {
+    fehler.into_iter().last().expect("at least one error")
 }
 
 /// One request, no redirect followed, reading at most `max_bytes + 1`

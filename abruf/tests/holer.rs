@@ -15,7 +15,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use maer_sync_abruf::netz::{Anfrage, HolFehler, Holer, USER_AGENT};
-use maer_sync_abruf::ureq_holer::UreqHoler;
+use maer_sync_abruf::ureq_holer::{mapped, UreqHoler};
 
 /// Serve one connection with `answer` after reading the request head; the
 /// head comes back over the channel.
@@ -127,4 +127,18 @@ fn the_program_holer_refuses_plain_http() {
     let (url, _) = serve_once(answer("200 OK", &[], b"x"), Duration::ZERO);
     assert!(UreqHoler::new().hole(&ask(&url, 1024, 5)).is_err());
     let _ = std::io::empty().read(&mut [0u8; 1]);
+}
+
+#[test]
+fn a_name_that_does_not_resolve_is_host_not_found() {
+    // Measured 26.11.2026 with this holer in the build container: a name
+    // that does not resolve comes from the system as an io error with this
+    // text, not as ureq's own HostNotFound (that one stands for an empty
+    // answer). A refused connection stays a connection failure.
+    let io = |kind, text: &str| ureq::Error::Io(std::io::Error::new(kind, text.to_string()));
+    let unknown = io(std::io::ErrorKind::Other, "failed to lookup address information: Name does not resolve");
+    assert_eq!(mapped(unknown, 10), HolFehler::WirtUnbekannt);
+    assert_eq!(mapped(ureq::Error::HostNotFound, 10), HolFehler::WirtUnbekannt);
+    let refused = io(std::io::ErrorKind::ConnectionRefused, "Connection refused (os error 111)");
+    assert!(matches!(mapped(refused, 10), HolFehler::Verbindung(_)));
 }

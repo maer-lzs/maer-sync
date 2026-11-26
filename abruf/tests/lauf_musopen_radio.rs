@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use maer_sync::katalog::{Katalog, MAX_PAGE};
 use maer_sync_abruf::lauf::{lauf, Einstellungen, LaufFehler};
-use maer_sync_abruf::netz::{decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr, USER_AGENT};
+use maer_sync_abruf::netz::{decode_params, gewichtigster, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr, USER_AGENT};
 use maer_sync_abruf::plan::Art;
 use maer_sync_abruf::programm::QUELLEN;
 use serde_json::{json, Value};
@@ -170,7 +170,12 @@ fn station(i: usize) -> Value {
            "bitrate": 128, "codec": "MP3", "votes": 3, "languagecodes": "de", "state": "", "clickcount": 1, "lastcheckok": 1})
 }
 
-/// A Radio Browser server; `down` servers fail. Its statistics as the real
+/// The servers that resolve (measured 26.11.2026: `de1` and `all`, one
+/// machine; `at1` and `nl1` no longer resolve).
+const RESOLVING: [&str; 2] = ["de1.", "all."];
+
+/// A Radio Browser server; `down` servers fail, a name outside `RESOLVING`
+/// does not resolve. Its statistics as the real
 /// API states them: `stations` counts the stations that are not broken,
 /// exactly what the pages with `hidebroken=true` list, and `stations_broken`
 /// the others (de1, 25.11.2026: 53 393 listed, 53 393 stations, 330 broken).
@@ -178,6 +183,7 @@ fn radio_api(stations: Rc<RefCell<Vec<Value>>>, stats: Rc<RefCell<(usize, usize)
     Box::new(move |a, p| {
         let host = a.url.split('/').nth(2).unwrap_or("").to_string();
         assert!(host.ends_with(".api.radio-browser.info"), "the fake does not know {} (a station address?)", a.url);
+        if !RESOLVING.iter().any(|d| host.starts_with(d)) { return Err(HolFehler::WirtUnbekannt); }
         if down.iter().any(|d| host.starts_with(d)) { return Err(HolFehler::Verbindung("down".into())); }
         if a.url.contains("/json/stats") {
             let (s, b) = *stats.borrow();
@@ -240,12 +246,50 @@ fn radio_falls_back_to_the_next_server_of_the_list() {
     assert_eq!(lauf(&mut n, &mut k, "radio", Art::Voll, &e(3)).ausgang, Ok(()));
     let hosts: Vec<String> = log.borrow().iter().map(|a| a.url.split('/').nth(2).unwrap().to_string()).collect();
     assert_eq!(hosts[0], "de1.api.radio-browser.info");
-    assert!(hosts[1..].iter().all(|h| h == "nl1.api.radio-browser.info"), "{hosts:?}");
+    assert!(hosts[1..].iter().all(|h| h == "all.api.radio-browser.info"), "{hosts:?}");
 }
 
 /// When every server of the list fails, the run is refused and the stations
-/// of the last good run stay as they were (measured 25.11.2026: nl1 and at1
-/// answered with a self-signed certificate, so de1 stood alone).
+/// of the last good run stay as they were.
+#[test]
+fn radio_servers_as_the_app() {
+    // iOS dev 4887e253, `RadioBrowserClient.mirrors`.
+    assert_eq!(&maer_sync_abruf::radio::SERVER[..], &["https://de1.api.radio-browser.info", "https://all.api.radio-browser.info"][..]);
+}
+
+#[test]
+fn the_weightiest_error_counts() {
+    // As the app (`RadioBrowserClient.weightiest`, SourceOutageTests): a
+    // server that answered says most, one that timed out or refused more
+    // than a host not found; on a tie the first of the list.
+    use HolFehler::*;
+    let fall: [(Vec<HolFehler>, HolFehler); 5] = [
+        (vec![Status(503), WirtUnbekannt], Status(503)),
+        (vec![WirtUnbekannt, Zeit], Zeit),
+        (vec![Zeit, Status(503)], Status(503)),
+        (vec![Status(500), Status(502)], Status(500)),
+        (vec![Verbindung("refused".into()), Zeit], Verbindung("refused".into())),
+    ];
+    for (fehler, erwartet) in fall {
+        assert_eq!(gewichtigster(fehler.clone()), erwartet, "{fehler:?}");
+    }
+}
+
+#[test]
+fn radio_reports_the_weightiest_error() {
+    // de1 runs out of time, the fallback does not resolve: the line names
+    // the time, not the missing name of the fallback.
+    let handler: Handler = Box::new(|a, _| {
+        let host = a.url.split('/').nth(2).unwrap_or("").to_string();
+        if host.starts_with("de1.") { return Err(HolFehler::Zeit); }
+        Err(HolFehler::WirtUnbekannt)
+    });
+    let (mut n, _) = net(handler);
+    let mut k = katalog("radio-weightiest");
+    let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e(3));
+    assert_eq!(b.ausgang, Err(LaufFehler::Holen(HolFehler::Zeit)), "{}", b.zeile());
+}
+
 #[test]
 fn radio_all_servers_fail_and_the_catalog_stays() {
     let st = Rc::new(RefCell::new((0..3).map(station).collect::<Vec<_>>()));
@@ -253,11 +297,11 @@ fn radio_all_servers_fail_and_the_catalog_stays() {
     let (mut n, _) = net(radio_api(st.clone(), stats.clone(), vec![]));
     let mut k = katalog("radio-all-down");
     assert_eq!(lauf(&mut n, &mut k, "radio", Art::Voll, &e(3)).ausgang, Ok(()));
-    let (mut down, log) = net(radio_api(st, stats, vec!["de1.", "nl1.", "at1."]));
+    let (mut down, log) = net(radio_api(st, stats, vec!["de1.", "all."]));
     let b = lauf(&mut down, &mut k, "radio", Art::Voll, &e(3));
     assert!(matches!(b.ausgang, Err(LaufFehler::Holen(_))), "{:?}", b.ausgang);
     let hosts: Vec<String> = log.borrow().iter().map(|a| a.url.split('/').nth(2).unwrap().to_string()).collect();
-    assert_eq!(hosts, ["de1.api.radio-browser.info", "nl1.api.radio-browser.info", "at1.api.radio-browser.info"]);
+    assert_eq!(hosts, ["de1.api.radio-browser.info", "all.api.radio-browser.info"]);
     assert_eq!(k.version("radio").unwrap(), 1, "a refused run wrote");
     assert_eq!(live(&k, "radio").len(), 3, "the stations of the last run are gone");
 }

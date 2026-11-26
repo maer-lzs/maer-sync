@@ -69,7 +69,7 @@ impl Default for UreqHoler {
     }
 }
 
-fn mapped(e: ureq::Error, max_bytes: usize) -> HolFehler {
+pub fn mapped(e: ureq::Error, max_bytes: usize) -> HolFehler {
     match e {
         ureq::Error::Timeout(_) => HolFehler::Zeit,
         ureq::Error::BodyExceedsLimit(_) => HolFehler::ZuGross(max_bytes + 1),
