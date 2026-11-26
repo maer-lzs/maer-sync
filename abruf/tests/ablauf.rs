@@ -12,11 +12,13 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use maer_sync::katalog::{Katalog, MAX_PAGE};
+use maer_sync::katalog::{Katalog, KatalogError, Row, MAX_PAGE};
 use maer_sync_abruf::netz::{
     decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr, MAX_BYTES, MAX_REDIRECTS, MIN_GAP_MS, USER_AGENT,
 };
-use maer_sync_abruf::lauf::{base_query, datum, lauf, regale_der_app, Einstellungen, LaufFehler};
+use maer_sync_abruf::lauf::{
+    base_query, datum, keep_known_shelves, lauf, regale_der_app, Einstellungen, LaufFehler,
+};
 use maer_sync_abruf::plan::{faellig, naechster, schlaf_s, wann, Art, Zustand, BACKOFF_S, DELTA_S, VOLL_S};
 use serde_json::{json, Value};
 
@@ -501,6 +503,43 @@ fn an_end_between_pages_writes_nothing() {
     let k = Katalog::open(&path).unwrap();
     let z = Zustand { letzter_voll: k.last_run("librivox", "voll").unwrap(), ..Default::default() };
     assert_eq!(faellig(T, &z), Some(Art::Voll));
+}
+
+fn shellac_row(id: &str, reihen: &[&str]) -> Row {
+    Row {
+        quelle: "schellack".into(), id: id.into(), art: "musik".into(), titel: None, urheber: None,
+        sprache: None, jahr: None, rechte_kennung: "pd".into(), rechte_url: None, laden: true,
+        reihen: reihen.iter().map(|s| s.to_string()).collect(), auch: vec![], tief: None,
+    }
+}
+
+#[test]
+fn a_shellac_delta_keeps_the_shelves_the_catalog_knows() {
+    let mut shelves = BTreeMap::new();
+    shelves.insert("jazz".to_string(), vec!["78_both".to_string()]);
+    shelves.insert("swing".to_string(), vec!["78_both".to_string()]);
+    let (mut n, _, _) = net(shelf_source(shelves));
+    let (mut k, _) = katalog("shellac-delta-keeps");
+    assert_eq!(lauf(&mut n, &mut k, "schellack", Art::Voll, &settings()).ausgang, Ok(()));
+    // The delta finds the record again, on a third shelf only.
+    let mut again = BTreeMap::new();
+    again.insert("tango".to_string(), vec!["78_both".to_string()]);
+    let (mut n, _, _) = net(shelf_source(again));
+    assert_eq!(lauf(&mut n, &mut k, "schellack", Art::Delta, &settings()).ausgang, Ok(()));
+    let row = k.stored("schellack", "lva:78_both").unwrap().unwrap().row;
+    assert_eq!(row.reihen, vec!["shellac-jazz", "shellac-swing", "shellac-tango"]);
+}
+
+#[test]
+fn a_shellac_delta_refuses_when_a_known_row_cannot_be_read() {
+    // A read that fails is not a row that was never there: taken as unknown,
+    // the record would lose its shelves in the catalog.
+    let mut rows = vec![shellac_row("lva:78_a", &["shellac-tango"]), shellac_row("lva:78_b", &["shellac-tango"])];
+    let r = keep_known_shelves(&mut rows, |id| match id {
+        "lva:78_a" => Ok(Some(vec!["shellac-jazz".to_string()])),
+        _ => Err(KatalogError::Busy),
+    });
+    assert!(matches!(r, Err(LaufFehler::Katalog(_))), "{r:?}");
 }
 
 // ---------------------------------------------------------------- the line of a run

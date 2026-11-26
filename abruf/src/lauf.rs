@@ -29,7 +29,7 @@
 
 use std::collections::BTreeSet;
 
-use maer_sync::katalog::{Katalog, Row};
+use maer_sync::katalog::{Katalog, KatalogError, Row};
 use serde_json::Value;
 
 use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
@@ -362,6 +362,26 @@ fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstell
     Ok(rows)
 }
 
+/// A shellac delta sees a record only on the shelves it was added to again;
+/// the shelves the catalog already knows for it stay (a full pass resets
+/// them). `stored` answers the shelves the catalog holds for an id.
+pub fn keep_known_shelves<F>(rows: &mut [Row], mut stored: F) -> Result<(), LaufFehler>
+where
+    F: FnMut(&str) -> Result<Option<Vec<String>>, KatalogError>,
+{
+    for r in rows.iter_mut() {
+        if let Ok(Some(old)) = stored(&r.id) {
+            for k in old {
+                if !r.reihen.contains(&k) {
+                    r.reihen.push(k);
+                }
+            }
+            r.reihen.sort();
+        }
+    }
+    Ok(())
+}
+
 fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &str, e: &Einstellungen)
     -> Result<Vec<Row>, LaufFehler> {
     let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
@@ -374,19 +394,8 @@ fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &st
         for s in regale_der_app() {
             parts.push(adv_all(netz, quelle, &format!("{}{since}", shelf_query(&s)), e, Some(&s))?);
         }
-        // A delta sees a record only on the shelves it was added to again; the
-        // shelves the catalog already knows for it stay (a full pass resets them).
         let mut rows = merge_shelves(parts);
-        for r in rows.iter_mut() {
-            if let Ok(Some(old)) = katalog.stored(quelle, &r.id) {
-                for k in old.row.reihen {
-                    if !r.reihen.contains(&k) {
-                        r.reihen.push(k);
-                    }
-                }
-                r.reihen.sort();
-            }
-        }
+        keep_known_shelves(&mut rows, |id| katalog.stored(quelle, id).map(|s| s.map(|s| s.row.reihen)))?;
         return Ok(rows);
     }
     let q = base_query(quelle).ok_or_else(|| LaufFehler::Quelle(quelle.into()))?;
