@@ -341,3 +341,40 @@ fn radio_drops_only_what_url_string_refuses() {
         assert_eq!(rows(good), 1, "{good}");
     }
 }
+
+#[test]
+fn radio_a_resolved_url_of_spaces_drops_the_station_as_the_devices() {
+    // iOS (RadioModels.swift, RadioMapping.stations) and Kotlin ask whether
+    // `url_resolved` is empty before they trim: one of spaces is not empty,
+    // trims to nothing, and the station has no stream. The `url` beside it
+    // does not stand in.
+    let page = json!([{"stationuuid": "u-1", "name": "Station", "url_resolved": "   ", "url": "https://stream.example/a"}]);
+    let s = radio::rows_from_page(page.to_string().as_bytes()).unwrap();
+    assert!(s.zeilen.is_empty(), "{:?}", s.zeilen);
+    assert_eq!(s.uuids, ["u-1"]);
+    // An empty `url_resolved` still falls back to `url`, trimmed.
+    let page = json!([{"stationuuid": "u-2", "name": "Station", "url_resolved": "", "url": " https://stream.example/b "}]);
+    let s = radio::rows_from_page(page.to_string().as_bytes()).unwrap();
+    assert_eq!(s.zeilen.len(), 1);
+    let tief: Value = serde_json::from_str(s.zeilen[0].tief.as_deref().unwrap()).unwrap();
+    assert_eq!(tief["url"], "https://stream.example/b");
+}
+
+#[test]
+fn both_readers_trim_the_same_characters() {
+    // Both readers follow Swift's `.whitespaces`: spaces and tabs, not line
+    // breaks. Held against the same characters on both ways.
+    let trims = |c: char| {
+        let musopen = musopen::licence(Some(&format!("{c}PD{c}")), None) == Some("pd");
+        let page = json!([{"stationuuid": "u", "name": format!("{c}Station{c}"), "url": "https://s.example/a"}]);
+        let zeilen = radio::rows_from_page(page.to_string().as_bytes()).unwrap().zeilen;
+        let radio = zeilen.first().and_then(|r| r.titel.as_deref()) == Some("Station");
+        (musopen, radio)
+    };
+    for c in [' ', '\t', '\u{A0}', '\u{2003}', '\u{3000}', '\n', '\r', '\u{0B}', '\u{0C}', '\u{85}', '\u{2028}', '\u{2029}'] {
+        let (m, r) = trims(c);
+        assert_eq!(m, r, "{c:?}");
+    }
+    assert_eq!(trims(' '), (true, true));
+    assert_eq!(trims('\n'), (false, false));
+}

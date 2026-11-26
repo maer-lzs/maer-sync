@@ -29,6 +29,22 @@ fn the_system_clock_moves_and_sleeps() {
     let _ = Duration::ZERO;
 }
 
+/// Whether the probe run may reach archive.org; without the variable it
+/// says what is missing.
+fn probe_wanted(_v: Option<&str>) -> Result<(), String> {
+    Ok(())
+}
+
+#[test]
+fn the_probe_run_without_its_variable_says_what_is_missing() {
+    // Run with `--ignored` but without the variable, the probe run ended
+    // green without a request: a green without a measurement.
+    let e = probe_wanted(None).unwrap_err();
+    assert!(e.contains("MAER_PROBELAUF=1"), "{e}");
+    assert!(probe_wanted(Some("0")).is_err());
+    assert!(probe_wanted(Some("1")).is_ok());
+}
+
 #[test]
 #[ignore]
 fn probe_run_librivox_against_archive_org() {
