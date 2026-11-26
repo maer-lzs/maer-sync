@@ -73,6 +73,9 @@ pub enum LaufFehler {
     Gesperrt { grund: String, lebend: usize },
     /// Another run holds the catalog: nothing was fetched or written.
     Belegt,
+    /// The pages of a pass did not end: a cursor came back, or there were
+    /// more pages than the count allows. Nothing is written.
+    Seiten(String),
 }
 
 impl From<HolFehler> for LaufFehler {

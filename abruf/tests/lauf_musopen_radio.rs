@@ -274,3 +274,106 @@ fn a_delta_of_radio_is_a_full_pass() {
     assert_eq!(lauf(&mut n, &mut k, "radio", Art::Delta, &e(3)).ausgang, Ok(()));
     assert_eq!(live(&k, "radio").len(), 3, "a station gone stays live after a delta");
 }
+
+// ---------------------------------------------------------------- pages without end
+
+/// Hands each request to `h` until 200 were made, then times them all out:
+/// a loop without a cap ends here, with the fake's time-out instead of a
+/// reason of its own.
+fn braked(mut h: Handler) -> Handler {
+    let mut n = 0;
+    Box::new(move |a, p| {
+        n += 1;
+        if n > 200 { return Err(HolFehler::Zeit); }
+        h(a, p)
+    })
+}
+
+fn category(p: &BTreeMap<String, String>, files: usize) -> Option<Result<Antwort, HolFehler>> {
+    (p.get("prop").map(String::as_str) == Some("categoryinfo"))
+        .then(|| ok(json!({"query": {"pages": [{"title": p["titles"], "categoryinfo": {"files": files}}]}})))
+}
+
+#[test]
+fn musopen_the_same_cursor_twice_stops() {
+    // Every page answers with the first two files and the same cursor.
+    let h: Handler = Box::new(|_, p| {
+        if let Some(a) = category(p, 4) { return a; }
+        ok(json!({"query": {"pages": [file(1), file(2)]}, "continue": {"gcmcontinue": "2"}}))
+    });
+    let (mut n, log) = net(braked(h));
+    let mut k = katalog("mus-same-cursor");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(2));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
+    assert!(log.borrow().len() <= 3, "{} requests", log.borrow().len());
+    assert_eq!(k.version("musopen").unwrap(), 0);
+}
+
+#[test]
+fn musopen_more_seen_than_files_stops() {
+    // The category says 2; every page brings one new file and a new cursor.
+    let h: Handler = Box::new(|_, p| {
+        if let Some(a) = category(p, 2) { return a; }
+        let c: i64 = p.get("gcmcontinue").map(|c| c.parse().unwrap()).unwrap_or(0);
+        ok(json!({"query": {"pages": [file(c + 1)]}, "continue": {"gcmcontinue": (c + 1).to_string()}}))
+    });
+    let (mut n, log) = net(braked(h));
+    let mut k = katalog("mus-more-seen");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(1));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Zaehlung { erwartet: 2, gelesen: 3, .. })), "{}", b.zeile());
+    assert!(log.borrow().len() <= 4, "{} requests", log.borrow().len());
+    assert_eq!(k.version("musopen").unwrap(), 0);
+}
+
+#[test]
+fn radio_a_server_that_ignores_offset_stops() {
+    // The statistics say 7; every page is the same full page of 3.
+    let h: Handler = Box::new(|a, _| {
+        if a.url.contains("/json/stats") { return ok(json!({"stations": 7, "stations_broken": 0, "status": "OK"})); }
+        ok(Value::Array((0..3).map(station).collect()))
+    });
+    let (mut n, log) = net(braked(h));
+    let mut k = katalog("radio-no-offset");
+    let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e(3));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
+    let pages = log.borrow().iter().filter(|a| a.url.contains("/json/stations?")).count();
+    assert_eq!(pages, 6, "a cap of 3 pages for 7 stations plus 2, and the one above it");
+    assert_eq!(k.version("radio").unwrap(), 0);
+}
+
+#[test]
+fn radio_pages_beyond_the_count_stop() {
+    // The statistics say 3; the pages bring new stations without end.
+    let h: Handler = Box::new(|a, p| {
+        if a.url.contains("/json/stats") { return ok(json!({"stations": 3, "stations_broken": 0, "status": "OK"})); }
+        let offset: usize = p["offset"].parse().unwrap();
+        ok(Value::Array((offset..offset + 3).map(station).collect()))
+    });
+    let (mut n, log) = net(braked(h));
+    let mut k = katalog("radio-beyond");
+    let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e(3));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
+    let pages = log.borrow().iter().filter(|a| a.url.contains("/json/stations?")).count();
+    assert_eq!(pages, 4, "a cap of 1 page plus 2, and the one above it");
+    assert_eq!(k.version("radio").unwrap(), 0);
+}
+
+#[test]
+fn the_pages_within_the_cap_still_pass() {
+    // First of the four: exactly as many pages as the count needs, and a
+    // last empty one, pass on both sources.
+    let st = Rc::new(RefCell::new((0..6).map(station).collect::<Vec<_>>()));
+    let (mut n, log) = net(radio_api(st, Rc::new(RefCell::new((6, 0))), vec![]));
+    let mut k = katalog("radio-cap-ok");
+    let b = lauf(&mut n, &mut k, "radio", Art::Voll, &e(3));
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    assert_eq!(log.borrow().iter().filter(|a| a.url.contains("/json/stations?")).count(), 3, "3, 3, 0");
+    let mut m = BTreeMap::new();
+    m.insert("Category:Musopen", (1..=6).collect::<Vec<i64>>());
+    m.insert("Category:Set Chopin Free", vec![7]);
+    let (mut n, _) = net(commons(m, BTreeMap::new()));
+    let mut k = katalog("mus-cap-ok");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(3));
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    assert_eq!(live(&k, "musopen").len(), 7);
+}
