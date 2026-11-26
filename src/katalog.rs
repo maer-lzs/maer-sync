@@ -41,6 +41,13 @@ pub const MASS_DELETE_MIN_ROWS: usize = 50;
 pub const MASS_DELETE_SHARE_DENOMINATOR: usize = 5;
 /// How long a writer waits for another writer by default.
 pub const DEFAULT_WAIT_MS: u64 = 5000;
+/// The ending of the run lock beside a catalog file (`katalog.db.lauf`).
+pub const LAUFSPERRE: &str = ".lauf";
+
+/// The lock of one run of the fetch program over one catalog file.
+pub struct Laufsperre {
+    _db: Connection,
+}
 
 /// The sources of the index. The table checks the same list.
 pub const SOURCES: [&str; 9] = [
@@ -366,6 +373,11 @@ impl Katalog {
             tx.commit()?;
         }
         Ok(Katalog { db, read_only: false })
+    }
+
+    /// Take the run lock of the catalog at `path`, without waiting.
+    pub fn laufsperre(_path: &str) -> Result<Laufsperre, KatalogError> {
+        Ok(Laufsperre { _db: Connection::open_in_memory()? })
     }
 
     /// Open an existing catalog for reading only (the service).

@@ -71,6 +71,8 @@ pub enum LaufFehler {
     /// The catalog refused the run as too large a loss (no rows, or too many
     /// live rows gone); `lebend` is the number of live rows it holds.
     Gesperrt { grund: String, lebend: usize },
+    /// Another run holds the catalog: nothing was fetched or written.
+    Belegt,
 }
 
 impl From<HolFehler> for LaufFehler {
