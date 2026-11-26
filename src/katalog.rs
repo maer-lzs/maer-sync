@@ -362,7 +362,13 @@ impl Katalog {
         db.busy_timeout(Duration::from_millis(DEFAULT_WAIT_MS))?;
         // WAL while the writer runs, at every open: a clean close switches to
         // DELETE (`close_clean`), so a reader without any write right finds
-        // no side files it would have to create.
+        // no side files it would have to create. Measured 26.11.2026 with
+        // 53 000 rows and a second process: in the rollback journal
+        // throughout, every read during a write waited up to 1.1 s (in WAL
+        // at most 20 ms), and a writer killed while writing left a hot
+        // journal that a read-only reader cannot roll back, so the service
+        // answered 503 until a writing open, where in WAL it reads the last
+        // committed state. WAL during the run stays for those two reasons.
         db.pragma_update(None, "journal_mode", "WAL")?;
         if !laid_down {
             let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
