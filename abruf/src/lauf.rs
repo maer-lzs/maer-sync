@@ -107,6 +107,8 @@ impl Laufbericht {
             Err(LaufFehler::Gesperrt { grund, lebend }) => format!(
                 "abgewiesen grund=Gesperrt({}) lebend={lebend} bestaetigen=\"maer-sync-abruf --bestaetigt {}\"",
                 format!("{grund:?}").replace(['\n', '\r'], " "), self.quelle),
+            Err(LaufFehler::Belegt) =>
+                "abgewiesen grund=Belegt (another run holds the catalog; nothing fetched or written, later again)".into(),
             Err(e) => format!("abgewiesen grund={}", format!("{e:?}").replace(['\n', '\r'], " ")),
         };
         let mut zeile = format!(

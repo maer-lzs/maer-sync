@@ -26,7 +26,7 @@
 //! because SQLite in WAL mode gives each read transaction one snapshot.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension};
 
@@ -43,6 +43,8 @@ pub const MASS_DELETE_SHARE_DENOMINATOR: usize = 5;
 pub const DEFAULT_WAIT_MS: u64 = 5000;
 /// The ending of the run lock beside a catalog file (`katalog.db.lauf`).
 pub const LAUFSPERRE: &str = ".lauf";
+/// How long a clean close waits for readers that opened the file in WAL.
+pub const CLOSE_WAIT_MS: u64 = 10_000;
 
 /// The lock of one run of the fetch program over one catalog file.
 pub struct Laufsperre {
@@ -375,9 +377,18 @@ impl Katalog {
         Ok(Katalog { db, read_only: false })
     }
 
-    /// Take the run lock of the catalog at `path`, without waiting.
-    pub fn laufsperre(_path: &str) -> Result<Laufsperre, KatalogError> {
-        Ok(Laufsperre { _db: Connection::open_in_memory()? })
+    /// Take the run lock of the catalog at `path`, without waiting: a
+    /// connection to the file `<path>.lauf` that holds an exclusive
+    /// transaction for as long as the lock lives. The system releases it
+    /// with its process, so a run that is killed leaves no lock behind.
+    /// `Busy` when another run holds it. The service never opens this file.
+    pub fn laufsperre(path: &str) -> Result<Laufsperre, KatalogError> {
+        let db = Connection::open(format!("{path}{LAUFSPERRE}"))?;
+        db.busy_timeout(Duration::ZERO)?;
+        // It never holds data: the journal stays in memory, so the lock is
+        // this one file and nothing beside it.
+        db.execute_batch("PRAGMA journal_mode=MEMORY; BEGIN EXCLUSIVE")?;
+        Ok(Laufsperre { _db: db })
     }
 
     /// Open an existing catalog for reading only (the service).
@@ -517,14 +528,32 @@ impl Katalog {
     /// still opens it. Measured 25.11.2026: after a crash the side
     /// files stay and a read-only reader still reads the last committed
     /// state; the next writer open cleans up. A reader just drops.
+    ///
+    /// A reader that opened the file while it was in WAL holds a share of
+    /// the WAL index, and leaving WAL needs the file alone. Measured
+    /// 26.11.2026 with a second process: beside such a reader the switch
+    /// failed at once, without the busy handler, and the side files stayed;
+    /// beside one that opened before the switch to WAL it succeeded. The
+    /// service's readers hold the file for one request, so the close tries
+    /// again for up to `CLOSE_WAIT_MS`.
     pub fn close_clean(self) -> Result<(), KatalogError> {
-        if !self.read_only {
-            let mode: String = self.db.query_row("PRAGMA journal_mode=DELETE", [], |r| r.get(0))?;
-            if !mode.eq_ignore_ascii_case("delete") {
-                return Err(KatalogError::Invalid(format!("journal_mode stayed {mode}")));
+        if self.read_only {
+            return Ok(());
+        }
+        let start = Instant::now();
+        loop {
+            match self.db.query_row("PRAGMA journal_mode=DELETE", [], |r| r.get::<_, String>(0)) {
+                Ok(mode) if mode.eq_ignore_ascii_case("delete") => return Ok(()),
+                Ok(mode) => return Err(KatalogError::Invalid(format!("journal_mode stayed {mode}"))),
+                Err(e) => {
+                    let e = KatalogError::from(e);
+                    if !matches!(e, KatalogError::Busy) || start.elapsed() >= Duration::from_millis(CLOSE_WAIT_MS) {
+                        return Err(e);
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
             }
         }
-        Ok(())
     }
 
     fn writable(&self) -> Result<(), KatalogError> {

@@ -16,14 +16,19 @@
 //!
 //! Failures stay in memory (backoff, `Retry-After`); a restart forgets them
 //! and tries again, which is the safe side. Run times come from the catalog.
+//!
+//! One run at a time on a catalog file: every run, planned or confirmed by
+//! the operator, holds the run lock (`Katalog::laufsperre`) from its first
+//! request to its clean close. A run that finds it taken fetches and writes
+//! nothing; the plan tries again after a minute and counts no failure.
 
 use std::collections::BTreeMap;
 
-use maer_sync::katalog::Katalog;
+use maer_sync::katalog::{Katalog, KatalogError};
 
 use crate::lauf::{datum, lauf, lauf_bestaetigt, Einstellungen, LaufFehler, Laufbericht};
 use crate::netz::{HolFehler, Holer, Netz, Uhr};
-use crate::plan::{naechster, schlaf_s, Art, Zustand};
+use crate::plan::{naechster, schlaf_s, Art, Zustand, MIN_SCHLAF_S};
 
 /// The sources that have a reader today, in the order of their names.
 /// What the program was started to do.
@@ -54,19 +59,28 @@ pub struct Programm<H: Holer, U: Uhr> {
 }
 
 impl<H: Holer, U: Uhr> Programm<H, U> {
-    /// Open the catalog once to read the run times, and close it again.
+    /// Read the run times, reading only: a run of another process may hold
+    /// the catalog (measured 26.11.2026: opened for writing beside a writer
+    /// it failed at once, and the program ended at its start). A file that
+    /// is not there yet has no run times; the first run lays it down.
     pub fn new(netz: Netz<H, U>, path: &str) -> Result<Self, String> {
-        let k = Katalog::open(path).map_err(|e| e.to_string())?;
+        let k = if std::path::Path::new(path).exists() {
+            Some(Katalog::open_read(path).map_err(|e| e.to_string())?)
+        } else {
+            None
+        };
         let mut zustaende = BTreeMap::new();
         for q in QUELLEN {
-            let z = Zustand {
-                letzter_voll: k.last_run(q, "voll").map_err(|e| e.to_string())?,
-                letzter_delta: k.last_run(q, "delta").map_err(|e| e.to_string())?,
-                ..Default::default()
+            let z = match &k {
+                Some(k) => Zustand {
+                    letzter_voll: k.last_run(q, "voll").map_err(|e| e.to_string())?,
+                    letzter_delta: k.last_run(q, "delta").map_err(|e| e.to_string())?,
+                    ..Default::default()
+                },
+                None => Zustand::default(),
             };
             zustaende.insert(q.to_string(), z);
         }
-        k.close_clean().map_err(|e| e.to_string())?;
         Ok(Programm { netz, path: path.to_string(), zustaende })
     }
 
@@ -87,19 +101,35 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
     /// (`--bestaetigt`), outside the plan. The catalog is opened for that run
     /// and closed cleanly, as for a planned one.
     pub fn bestaetigt(&mut self, quelle: &str) -> Laufbericht {
+        self.ein_lauf(quelle, Art::Voll, true)
+    }
+
+    /// One run under the run lock: take it, open the catalog, run, close
+    /// cleanly, and only then let the lock go.
+    fn ein_lauf(&mut self, quelle: &str, art: Art, bestaetigt: bool) -> Laufbericht {
+        let ohne = |ausgang| Laufbericht {
+            quelle: quelle.into(), art, gelesen: 0, version_vorher: -1, version_nachher: -1, dauer_ms: 0,
+            ausgang: Err(ausgang), bestaetigt,
+        };
+        let _sperre = match Katalog::laufsperre(&self.path) {
+            Ok(s) => s,
+            Err(KatalogError::Busy) => return ohne(LaufFehler::Belegt),
+            Err(err) => return ohne(LaufFehler::Katalog(err.to_string())),
+        };
         let e = self.einstellungen();
         match Katalog::open(&self.path) {
             Ok(mut k) => {
-                let b = lauf_bestaetigt(&mut self.netz, &mut k, quelle, &e);
+                let b = if bestaetigt {
+                    lauf_bestaetigt(&mut self.netz, &mut k, quelle, &e)
+                } else {
+                    lauf(&mut self.netz, &mut k, quelle, art, &e)
+                };
                 if let Err(err) = k.close_clean() {
                     eprintln!("abruf: catalog not closed cleanly: {err}");
                 }
                 b
             }
-            Err(err) => Laufbericht {
-                quelle: quelle.into(), art: Art::Voll, gelesen: 0, version_vorher: -1, version_nachher: -1,
-                dauer_ms: 0, ausgang: Err(LaufFehler::Katalog(err.to_string())), bestaetigt: true,
-            },
+            Err(err) => ohne(LaufFehler::Katalog(err.to_string())),
         }
     }
 
@@ -109,24 +139,12 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
         let Some((quelle, art)) = naechster(jetzt, &self.zustaende) else {
             return (None, schlaf_s(jetzt, &self.zustaende));
         };
-        let e = self.einstellungen();
-        let bericht = match Katalog::open(&self.path) {
-            Ok(mut k) => {
-                let b = lauf(&mut self.netz, &mut k, &quelle, art, &e);
-                if let Err(err) = k.close_clean() {
-                    eprintln!("abruf: catalog not closed cleanly: {err}");
-                }
-                b
-            }
-            Err(err) => Laufbericht {
-                quelle: quelle.clone(), art, gelesen: 0, version_vorher: -1, version_nachher: -1, dauer_ms: 0,
-                ausgang: Err(LaufFehler::Katalog(err.to_string())),
-                bestaetigt: false,
-            },
-        };
+        let bericht = self.ein_lauf(&quelle, art, false);
         let nach = self.jetzt_s();
         let z = self.zustaende.entry(quelle).or_default();
         match &bericht.ausgang {
+            // Another run holds the catalog: later again, and no failure.
+            Err(LaufFehler::Belegt) => z.nicht_vor = Some(nach + MIN_SCHLAF_S),
             Ok(()) => {
                 z.fehler = 0;
                 z.letzter_fehler = None;
