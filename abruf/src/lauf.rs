@@ -114,7 +114,8 @@ pub fn base_query(quelle: &str) -> Option<&'static str> {
 }
 
 /// The list of the theme shelves the program reads, as the app names them.
-pub const REGALE_JSON: &str = include_str!("../../vektoren/katalog/schellack/regale.json");
+/// It belongs to the program; the vectors keep a copy for the device sides.
+pub const REGALE_JSON: &str = include_str!("../regale.json");
 
 /// The theme shelves of the app.
 pub fn regale_der_app() -> Vec<Shelf> {

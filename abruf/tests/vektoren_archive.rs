@@ -398,5 +398,5 @@ fn the_program_shelves_are_the_vector_shelves() {
     let vector = read_json(&root().join("schellack").join("regale.json"));
     assert!(program["regale"].as_array().is_some_and(|r| !r.is_empty()), "the program lists no shelf");
     assert_eq!(program, vector,
-        "the shelves of the program and of vektoren/katalog/schellack/regale.json differ; the app is the source, bring the file behind it up to date");
+        "abruf/regale.json and vektoren/katalog/schellack/regale.json differ; the app is the source, bring the file behind it up to date");
 }
