@@ -68,6 +68,9 @@ pub enum LaufFehler {
     Echo { gestellt: String, zurueck: Option<String> },
     Katalog(String),
     Quelle(String),
+    /// The catalog refused the run as too large a loss (no rows, or too many
+    /// live rows gone); `lebend` is the number of live rows it holds.
+    Gesperrt { grund: String, lebend: usize },
 }
 
 impl From<HolFehler> for LaufFehler {
@@ -87,6 +90,8 @@ pub struct Laufbericht {
     pub version_nachher: i64,
     pub dauer_ms: i64,
     pub ausgang: Result<(), LaufFehler>,
+    /// The operator confirmed this run (`--bestaetigt`).
+    pub bestaetigt: bool,
 }
 
 impl Laufbericht {
@@ -429,5 +434,13 @@ pub fn lauf<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         version_nachher: katalog.version(quelle).unwrap_or(-1),
         dauer_ms: netz.uhr.jetzt_ms() - start,
         ausgang,
+        bestaetigt: false,
     }
+}
+
+/// A full pass of one source that the operator confirmed: it may empty the
+/// source or delete more live rows than the catalog allows a run on its own.
+pub fn lauf_bestaetigt<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quelle: &str,
+                                         e: &Einstellungen) -> Laufbericht {
+    lauf(netz, katalog, quelle, Art::Voll, e)
 }

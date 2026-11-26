@@ -26,6 +26,20 @@ use crate::netz::{HolFehler, Holer, Netz, Uhr};
 use crate::plan::{naechster, schlaf_s, Art, Zustand};
 
 /// The sources that have a reader today, in the order of their names.
+/// What the program was started to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Befehl {
+    /// No argument: run the sources as the plan says, without end.
+    Dauerlauf,
+    /// `--bestaetigt <quelle>`: one confirmed full pass of that source, then end.
+    Bestaetigt(String),
+}
+
+/// Read the arguments after the program name.
+pub fn befehl(_args: &[String]) -> Result<Befehl, String> {
+    Ok(Befehl::Dauerlauf)
+}
+
 pub const QUELLEN: &[&str] = &["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"];
 
 pub struct Programm<H: Holer, U: Uhr> {
@@ -78,6 +92,7 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
             Err(err) => Laufbericht {
                 quelle: quelle.clone(), art, gelesen: 0, version_vorher: -1, version_nachher: -1, dauer_ms: 0,
                 ausgang: Err(LaufFehler::Katalog(err.to_string())),
+                bestaetigt: false,
             },
         };
         let nach = self.jetzt_s();
