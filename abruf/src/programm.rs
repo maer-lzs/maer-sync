@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use maer_sync::katalog::Katalog;
 
-use crate::lauf::{datum, lauf, Einstellungen, LaufFehler, Laufbericht};
+use crate::lauf::{datum, lauf, lauf_bestaetigt, Einstellungen, LaufFehler, Laufbericht};
 use crate::netz::{HolFehler, Holer, Netz, Uhr};
 use crate::plan::{naechster, schlaf_s, Art, Zustand};
 
@@ -36,8 +36,13 @@ pub enum Befehl {
 }
 
 /// Read the arguments after the program name.
-pub fn befehl(_args: &[String]) -> Result<Befehl, String> {
-    Ok(Befehl::Dauerlauf)
+pub fn befehl(args: &[String]) -> Result<Befehl, String> {
+    match args {
+        [] => Ok(Befehl::Dauerlauf),
+        [flag, quelle] if flag == "--bestaetigt" && QUELLEN.contains(&quelle.as_str()) =>
+            Ok(Befehl::Bestaetigt(quelle.clone())),
+        _ => Err(format!("usage: maer-sync-abruf [--bestaetigt <quelle>], quelle one of {}", QUELLEN.join(", "))),
+    }
 }
 
 pub const QUELLEN: &[&str] = &["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"];
@@ -74,13 +79,37 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
         datum(self.jetzt_s())[..4].parse().expect("datum starts with the year")
     }
 
+    fn einstellungen(&self) -> Einstellungen {
+        Einstellungen { scrape_count: 10_000, adv_rows: 10_000, kalenderjahr: self.kalenderjahr() }
+    }
+
+    /// One full pass of `quelle` that the operator confirmed
+    /// (`--bestaetigt`), outside the plan. The catalog is opened for that run
+    /// and closed cleanly, as for a planned one.
+    pub fn bestaetigt(&mut self, quelle: &str) -> Laufbericht {
+        let e = self.einstellungen();
+        match Katalog::open(&self.path) {
+            Ok(mut k) => {
+                let b = lauf_bestaetigt(&mut self.netz, &mut k, quelle, &e);
+                if let Err(err) = k.close_clean() {
+                    eprintln!("abruf: catalog not closed cleanly: {err}");
+                }
+                b
+            }
+            Err(err) => Laufbericht {
+                quelle: quelle.into(), art: Art::Voll, gelesen: 0, version_vorher: -1, version_nachher: -1,
+                dauer_ms: 0, ausgang: Err(LaufFehler::Katalog(err.to_string())), bestaetigt: true,
+            },
+        }
+    }
+
     /// Run the source that is due, if any, and answer the seconds to sleep.
     pub fn schritt(&mut self) -> (Option<Laufbericht>, i64) {
         let jetzt = self.jetzt_s();
         let Some((quelle, art)) = naechster(jetzt, &self.zustaende) else {
             return (None, schlaf_s(jetzt, &self.zustaende));
         };
-        let e = Einstellungen { scrape_count: 10_000, adv_rows: 10_000, kalenderjahr: self.kalenderjahr() };
+        let e = self.einstellungen();
         let bericht = match Katalog::open(&self.path) {
             Ok(mut k) => {
                 let b = lauf(&mut self.netz, &mut k, &quelle, art, &e);

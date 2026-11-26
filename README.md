@@ -526,6 +526,19 @@ Set `MAER_SYNC_KATALOG` in the environment of compose (or in `.env`) so
 the service reads the file, and start the profile so the fetch program runs.
 Its log has one line per run.
 
+**When a source shrinks.** The catalog refuses a full pass that would
+empty a source, or delete more than a fifth of its live rows once it holds
+50 or more; nothing is written, and the run is tried again later. Its line
+then reads `ausgang=abgewiesen grund=Gesperrt(...)` with the rows read
+(`gelesen`), the live rows the catalog holds (`lebend`) and the command
+that confirms it. If the source really did shrink, confirm that one run:
+
+    docker exec maer-sync-abruf /maer-sync-abruf --bestaetigt <quelle>
+
+It runs one full pass of that source, writes it, prints its line with
+`bestaetigt=ja` and ends with 0 (1 if the run failed). The confirmation
+holds for that run only; the next large loss is refused again.
+
 **Switch it off:** `docker compose --profile katalog stop maer-sync-abruf`,
 unset `MAER_SYNC_KATALOG`, and `docker compose up -d`; the catalog paths
 answer 404 again. The volume `maer-sync-katalog` can be removed; it is

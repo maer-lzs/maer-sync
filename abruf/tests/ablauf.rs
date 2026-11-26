@@ -267,7 +267,7 @@ fn a_vanished_record_becomes_a_mark_only_through_a_full_pass() {
     // Half gone at once: the mass bound of the catalog refuses it.
     let (mut n, _, _) = net(archive_source("librivoxaudio", ids(50, "lv"), 40));
     let b = lauf(&mut n, &mut k, "librivox", Art::Voll, &settings());
-    assert!(matches!(b.ausgang, Err(LaufFehler::Katalog(_))), "{:?}", b.ausgang);
+    assert!(matches!(b.ausgang, Err(LaufFehler::Gesperrt { .. })), "{:?}", b.ausgang);
     assert_eq!(live(&k, "librivox").len(), 99);
 }
 
