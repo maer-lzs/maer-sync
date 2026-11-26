@@ -364,13 +364,15 @@ fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstell
 
 /// A shellac delta sees a record only on the shelves it was added to again;
 /// the shelves the catalog already knows for it stay (a full pass resets
-/// them). `stored` answers the shelves the catalog holds for an id.
+/// them). `stored` answers the shelves the catalog holds for an id. A read
+/// that fails refuses the delta: taken as a row that was never there, the
+/// record would lose its known shelves.
 pub fn keep_known_shelves<F>(rows: &mut [Row], mut stored: F) -> Result<(), LaufFehler>
 where
     F: FnMut(&str) -> Result<Option<Vec<String>>, KatalogError>,
 {
     for r in rows.iter_mut() {
-        if let Ok(Some(old)) = stored(&r.id) {
+        if let Some(old) = stored(&r.id).map_err(|e| LaufFehler::Katalog(e.to_string()))? {
             for k in old {
                 if !r.reihen.contains(&k) {
                     r.reihen.push(k);
