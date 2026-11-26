@@ -388,3 +388,15 @@ fn rows_carry_no_rows_before_the_rotation() {
         }
     }
 }
+
+#[test]
+fn the_program_shelves_are_the_vector_shelves() {
+    // The program carries its own list of the theme shelves; the vectors keep
+    // a copy for the device sides. Both name the app as their source
+    // (`_quelle`): when they differ, the one behind the app is brought to it.
+    let program: Value = serde_json::from_str(maer_sync_abruf::lauf::REGALE_JSON).unwrap();
+    let vector = read_json(&root().join("schellack").join("regale.json"));
+    assert!(program["regale"].as_array().is_some_and(|r| !r.is_empty()), "the program lists no shelf");
+    assert_eq!(program, vector,
+        "the shelves of the program and of vektoren/katalog/schellack/regale.json differ; the app is the source, bring the file behind it up to date");
+}
