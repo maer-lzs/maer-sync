@@ -105,6 +105,11 @@ services:
       MAER_SYNC_KATALOG: /var/lib/maer-sync-katalog/katalog.db
     mem_limit: 1g
     init: true
+    # As the service: no gain of privileges, no fork without end. The program
+    # asks one source at a time with one request in flight.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
 
 volumes:
   maer-sync-katalog:

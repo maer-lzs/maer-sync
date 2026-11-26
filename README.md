@@ -503,12 +503,16 @@ from their own server instead of asking every source themselves. The audio
 file always comes from the source, never through this service.
 
 **What it fetches.** A second program, `maer-sync-abruf`, in its own
-container, asks archive.org for LibriVox, its audiobooks, the netlabels, the
-theme shelves of the 78 rpm collection and old time radio, one source at a
-time, one request a second at most, as `Maer/1.0 (+https://maer.fm)`.
-Measured on 25.11.2026: about 35 requests and 20 MB a day, and once a week a
-full pass of about 165 MB. Gutenberg, Musopen, Radio Browser and the radio
-play feeds follow as their readers are built.
+container, asks seven sources: archive.org for LibriVox, its audiobooks, the
+netlabels, the theme shelves of the 78 rpm collection and old time radio,
+Wikimedia Commons for the recordings of Musopen, and Radio Browser for its
+stations. One source at a time, one request a second at most, as
+`Maer/1.0 (+https://maer.fm)`. Each source gets a full pass once a week and
+a daily look at what was added; Musopen and Radio Browser cannot be asked
+for that, so they take a full pass every day. Measured on 25.11.2026 for the
+five archive.org sources: about 35 requests and 20 MB a day, and once a week
+a full pass of about 165 MB. Gutenberg and the radio play feeds follow as
+their readers are built.
 
 **What it stores.** Records only (title, author, year, rights, shelves) in
 one file, `katalog.db`, on its own volume; no audio, no account, no user

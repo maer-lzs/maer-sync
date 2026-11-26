@@ -31,8 +31,8 @@ fn the_system_clock_moves_and_sleeps() {
 
 /// Whether the probe run may reach archive.org; without the variable it
 /// says what is missing.
-fn probe_wanted(_v: Option<&str>) -> Result<(), String> {
-    Ok(())
+fn probe_wanted(v: Option<&str>) -> Result<(), String> {
+    if v == Some("1") { Ok(()) } else { Err("the probe run needs MAER_PROBELAUF=1; nothing was fetched".into()) }
 }
 
 #[test]
@@ -48,9 +48,8 @@ fn the_probe_run_without_its_variable_says_what_is_missing() {
 #[test]
 #[ignore]
 fn probe_run_librivox_against_archive_org() {
-    if std::env::var("MAER_PROBELAUF").as_deref() != Ok("1") {
-        println!("PROBELAUF nicht gefahren: MAER_PROBELAUF=1 fehlt");
-        return;
+    if let Err(e) = probe_wanted(std::env::var("MAER_PROBELAUF").ok().as_deref()) {
+        panic!("{e}");
     }
     let p = std::env::temp_dir().join(format!("maer-sync-probelauf-{}", std::process::id()));
     let mut k = Katalog::open(p.to_str().unwrap()).unwrap();

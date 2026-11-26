@@ -14,4 +14,5 @@ pub mod netz;
 pub mod plan;
 pub mod programm;
 pub mod radio;
+pub mod text;
 pub mod ureq_holer;
