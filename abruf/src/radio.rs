@@ -23,10 +23,11 @@ use serde_json::{Map, Value};
 use crate::archive::ReadError;
 
 /// The servers of the app, in this order; a run falls back to the next.
-pub const SERVER: [&str; 3] = [
+/// Measured 26.11.2026: `at1` and `nl1` no longer resolve, `all` is the same
+/// machine as `de1`, and the service names only `de1`.
+pub const SERVER: [&str; 2] = [
     "https://de1.api.radio-browser.info",
-    "https://nl1.api.radio-browser.info",
-    "https://at1.api.radio-browser.info",
+    "https://all.api.radio-browser.info",
 ];
 
 const TIEF: [&str; 12] = [

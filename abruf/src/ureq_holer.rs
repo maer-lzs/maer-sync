@@ -73,6 +73,11 @@ pub fn mapped(e: ureq::Error, max_bytes: usize) -> HolFehler {
     match e {
         ureq::Error::Timeout(_) => HolFehler::Zeit,
         ureq::Error::BodyExceedsLimit(_) => HolFehler::ZuGross(max_bytes + 1),
+        // A name that does not resolve comes from the system as an io error
+        // (measured 26.11.2026 in the build container); the own HostNotFound
+        // of ureq stands for an empty answer.
+        ureq::Error::HostNotFound => HolFehler::WirtUnbekannt,
+        ureq::Error::Io(e) if e.to_string().starts_with("failed to lookup address information") => HolFehler::WirtUnbekannt,
         other => HolFehler::Verbindung(other.to_string()),
     }
 }
