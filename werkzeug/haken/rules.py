@@ -143,14 +143,26 @@ def kind_of(path):
     return name if name in ("Dockerfile",) else os.path.splitext(name)[1]
 
 
-def staged_paths():
+def base_of(rev):
+    """The first parent of a commit, or the empty tree for the first one."""
+    rc, out = git("rev-parse", "--verify", "-q", f"{rev}^")
+    return out.strip() if rc == 0 else "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def diff_args(rev):
+    """What `git diff` compares: the index with HEAD, or a commit with its
+    first parent."""
+    return ["--cached"] if rev is None else [base_of(rev), rev]
+
+
+def staged_paths(rev=None):
     """The staged paths as git stores them, NUL separated, so a space or a
     non ASCII character arrives unquoted and whole. A renamed or copied file
     comes with its source, so only what changed against it counts as added,
     unless its kind changed: then all its lines meet the rules of the new kind
     for the first time and it counts as new. A change of type, a file that
     becomes a symbolic link, is read like any other change."""
-    rc, out = git("diff", "--cached", "--name-status", "-M", "--diff-filter=ACMRT", "-z")
+    rc, out = git("diff", *diff_args(rev), "--name-status", "-M", "--diff-filter=ACMRT", "-z")
     if rc != 0:
         raise SystemExit("rules.py: the staged paths cannot be read")
     fields = [f for f in out.split("\0") if f]
@@ -168,13 +180,13 @@ def staged_paths():
     return paths
 
 
-def added_lines():
+def added_lines(rev=None):
     """The added lines of the index, per path. The path comes from the list
     of staged paths, not from the header of the diff, which git quotes or
     pads for unusual names."""
-    for path, source in staged_paths():
+    for path, source in staged_paths(rev):
         both = [source, path] if source else [path]
-        rc, diff = git("diff", "--cached", "-M", "-U0", "--no-color", "--no-ext-diff", "--", *both)
+        rc, diff = git("diff", *diff_args(rev), "-M", "-U0", "--no-color", "--no-ext-diff", "--", *both)
         if rc != 0:
             raise SystemExit(f"rules.py: the staged change of {path} cannot be read")
         in_hunk = False
@@ -195,8 +207,8 @@ def comment_of(path, line):
     return None
 
 
-def staged_file(path):
-    rc, out = git("show", f":{path}")
+def staged_file(path, rev=None):
+    rc, out = git("show", f":{path}" if rev is None else f"{rev}:{path}")
     return out if rc == 0 else None
 
 
@@ -213,18 +225,25 @@ def crate_names(lock_text, toml_text):
     return names
 
 
-def check_staged():
+def check_staged(rev=None):
+    """The rules of the content: of the index before a commit, or of a commit
+    that is already made (push.sh and the push hook read every commit they
+    push, so a commit made in a clone without the hooks is held back)."""
     found = []
-    rc, ident = git("var", "GIT_AUTHOR_IDENT")
-    author = re.sub(r"\s+\d+\s+[+-]\d{4}\s*$", "", ident.strip())
+    if rev is None:
+        rc, ident = git("var", "GIT_AUTHOR_IDENT")
+        author = re.sub(r"\s+\d+\s+[+-]\d{4}\s*$", "", ident.strip())
+    else:
+        rc, ident = git("log", "-1", "--format=%an <%ae>", rev)
+        author = ident.strip()
     if author not in AUTHORS:
         found.append(f"the author is not the agreed one: {author}")
     real = os.path.realpath(ROOT) + "/"
-    if real.startswith(TEMP_ROOTS) or "/scratchpad/" in real:
+    if rev is None and real.startswith(TEMP_ROOTS) or "/scratchpad/" in real:
         if git("cat-file", "-e", ":.wegwerf")[0] != 0:
             found.append(f"the working tree lies in a temporary path without .wegwerf: {ROOT}")
     files = set()
-    for path, line in added_lines():
+    for path, line in added_lines(rev):
         files.add(path)
         if path in CONTENT_EXEMPT:
             continue
@@ -245,7 +264,7 @@ def check_staged():
                 found.append(f"a comment is not English: {where}")
     if files & {"Cargo.lock", "Cargo.toml"}:
         approved = set(read_list(os.path.join(ROOT, "werkzeug", "haken", "crates.txt"), "list of crates"))
-        unknown = crate_names(staged_file("Cargo.lock"), staged_file("Cargo.toml")) - approved
+        unknown = crate_names(staged_file("Cargo.lock", rev), staged_file("Cargo.toml", rev)) - approved
         for name in sorted(unknown):
             found.append(f"a crate without approval: {name}")
     return found
@@ -256,8 +275,14 @@ def main():
         found = check_message(open(sys.argv[2], encoding="utf-8").read())
     elif len(sys.argv) >= 2 and sys.argv[1] == "staged":
         found = check_staged()
+    elif len(sys.argv) >= 3 and sys.argv[1] == "commit":
+        rc, text = git("log", "-1", "--format=%B", sys.argv[2])
+        if rc != 0:
+            print(f"refused: no commit {sys.argv[2]}", file=sys.stderr)
+            return 1
+        found = check_staged(sys.argv[2]) + check_message(text)
     else:
-        print("usage: rules.py msg <file> | rules.py staged", file=sys.stderr)
+        print("usage: rules.py msg <file> | rules.py staged | rules.py commit <hash>", file=sys.stderr)
         return 2
     for item in found:
         print(f"refused: {item}", file=sys.stderr)

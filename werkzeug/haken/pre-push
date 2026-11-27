@@ -51,6 +51,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         why="$(python3 -I "$HOOKS/rules.py" msg "$message" 2>&1)"; rc=$?
         rm -f "$message"
         [ $rc -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the message: $why"
+        # The content too: a commit made in a clone without the hooks met no rule.
+        why="$(python3 -I "$HOOKS/rules.py" commit "$commit" 2>&1)"
+        [ $? -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the content: $why"
     done
 done
 
