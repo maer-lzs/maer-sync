@@ -50,7 +50,7 @@ pub fn befehl(args: &[String]) -> Result<Befehl, String> {
 }
 
 /// The sources that have a reader today, in the order of their names.
-pub const QUELLEN: &[&str] = &["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"];
+pub const QUELLEN: &[&str] = &["archive-buch", "gutenberg", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"];
 
 pub struct Programm<H: Holer, U: Uhr> {
     pub netz: Netz<H, U>,

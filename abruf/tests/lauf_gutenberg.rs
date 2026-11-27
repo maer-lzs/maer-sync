@@ -121,8 +121,8 @@ fn r1_a_record_in_the_public_domain() {
 
 #[test]
 fn r2_the_records_of_the_app_are_copyrighted() {
-    assert_eq!(rdf_lesen(&vektor("pg3002.rdf"), "3002"), Ok(Rdf { rechte: Rechte::Copyrighted, downloads: Some(324) }));
-    assert_eq!(rdf_lesen(&vektor("pg5884.rdf"), "5884"), Ok(Rdf { rechte: Rechte::Copyrighted, downloads: Some(207) }));
+    assert_eq!(rdf_lesen(&vektor("pg3002.rdf"), "3002"), Ok(Rdf { rechte: Rechte::Copyrighted, downloads: Some(326) }));
+    assert_eq!(rdf_lesen(&vektor("pg5884.rdf"), "5884"), Ok(Rdf { rechte: Rechte::Copyrighted, downloads: Some(246) }));
 }
 
 #[test]

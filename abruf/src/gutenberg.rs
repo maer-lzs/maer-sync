@@ -109,8 +109,27 @@ pub struct Rdf {
 
 /// Read the record of work `nummer`; a record of another work, or one that
 /// is not XML, is an error.
-pub fn rdf_lesen(_xml: &[u8], _nummer: &str) -> Result<Rdf, ReadError> {
-    Err(ReadError::Unreadable("not built".into()))
+pub fn rdf_lesen(xml: &[u8], nummer: &str) -> Result<Rdf, ReadError> {
+    const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    const PG: &str = "http://www.gutenberg.org/2009/pgterms/";
+    const DC: &str = "http://purl.org/dc/terms/";
+    let text = std::str::from_utf8(xml).map_err(|e| ReadError::Unreadable(e.to_string()))?;
+    let doc = roxmltree::Document::parse(text).map_err(|e| ReadError::Unreadable(e.to_string()))?;
+    let about = format!("ebooks/{nummer}");
+    let ebook = doc.descendants()
+        .find(|n| n.has_tag_name((PG, "ebook")))
+        .ok_or_else(|| ReadError::Unreadable("a record without an ebook".into()))?;
+    if ebook.attribute((RDF, "about")) != Some(about.as_str()) {
+        return Err(ReadError::ForeignAnswer(format!("the record names {:?}, not {about}", ebook.attribute((RDF, "about")))));
+    }
+    let child = |ns: &str, name: &str| ebook.children().find(|n| n.has_tag_name((ns, name))).and_then(|n| n.text()).map(str::trim);
+    let rechte = match child(DC, "rights") {
+        Some("Public domain in the USA.") => Rechte::Pd,
+        Some(t) if t.starts_with("Copyrighted") => Rechte::Copyrighted,
+        _ => Rechte::Andere,
+    };
+    let downloads = child(PG, "downloads").and_then(|d| d.parse::<i64>().ok()).filter(|d| *d >= 0);
+    Ok(Rdf { rechte, downloads })
 }
 
 /// A class of the Library of Congress exactly `M`.
