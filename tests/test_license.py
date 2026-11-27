@@ -62,6 +62,7 @@ EXEMPT = {
     "werkzeug/haken/pre-push": "a git hook, whose name git fixes without a suffix; it carries the header, "
                                "the collection only knows suffixes",
     "werkzeug/haken/crates.txt": "a list the hooks read; it carries the header as comment lines",
+    "werkzeug/haken/muster.txt": "the patterns the hooks and the gate on the server read; it carries the header as comment lines",
     "tests/role-names.txt": "a list the hooks and the name fence read; it carries the header as comment lines",
     "tests/role-names-allowed.txt": "a list the name fence reads; it carries the header as comment lines",
     ".gitignore": "a list of patterns, and comments in it would be read as patterns",
