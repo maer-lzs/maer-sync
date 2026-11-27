@@ -22,15 +22,6 @@ import tomllib
 AUTHORS = {"lzs <352619651+maer-lzs@users.noreply.github.com>"}
 TEMP_ROOTS = ("/private/tmp/", "/tmp/", "/private/var/folders/", "/var/folders/", "/var/tmp/")
 
-# Files whose added lines are not read for values, names, dashes and
-# language, each with its reason.
-CONTENT_EXEMPT = {
-    "tests/role-names.txt": "it is the list of names",
-    "tests/role-names-allowed.txt": "it holds the phrases in which a name is allowed",
-    "werkzeug/haken/test-haken.sh": "the witnesses carry each forbidden form on purpose",
-    "werkzeug/haken/rules.py": "it spells out the patterns it refuses",
-}
-
 
 def git(*args):
     out = subprocess.run(["git", *args], capture_output=True, text=True)
@@ -90,17 +81,40 @@ HEADER = [
     re.compile(r"^(//!?|#) SPDX-License-Identifier: .+$"),
     re.compile(r"^(//!?|#) Additional terms apply — see LICENSE-ADDITIONAL-TERMS$"),
 ]
-ACCESS = [
-    re.compile(r"(?i)(token|secret|password|passwd|api[_-]?key|apikey|key)\w*\s*(:\s*&?'?\w*\s*)?[:=]\s*[\"'][^\"'\s]{16,}[\"']"),
-    re.compile(r"[\"'][0-9A-Fa-f]{32,}[\"']"),
-    re.compile(r"(?i)authorization:\s*(token|bearer|basic)\s+\S{8,}"),
-]
-# The one hex string that is no access value: the digest src/contract.rs holds
-# the contract file to. Only this line, only in this file, in its whole form.
-DIGEST_LINE = ("src/contract.rs", re.compile(r'pub const DIGEST: &str = "[0-9a-f]{64}";'))
-# The checksum of a crate in a lock file is a hash, not an access value: only
-# that line, only in the two lock files, in its whole form.
-LOCK_LINE = ({"Cargo.lock", "abruf/Cargo.lock"}, re.compile(r'checksum = "[0-9a-f]{64}"'))
+
+
+def read_patterns(path):
+    """The patterns of access values, the lines that are none, and the files
+    whose added lines are not read, from the one file the gate on the server
+    reads too (its format is stated at its head)."""
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError:
+        raise SystemExit(f"rules.py: the list of patterns is missing: {path}")
+    access, exceptions, exempt = [], [], {}
+    for line in lines:
+        if not line.strip() or line.startswith("#"):
+            continue
+        kind, _, rest = line.partition(" ")
+        if kind == "access":
+            access.append(re.compile(rest, re.I))
+        elif kind == "except":
+            paths, _, pattern = rest.partition(" ")
+            exceptions.append((set(paths.split(",")), re.compile(pattern, re.I)))
+        elif kind == "exempt":
+            name, _, reason = rest.partition(" ")
+            exempt[name] = reason
+        else:
+            raise SystemExit(f"rules.py: a line of unknown kind in {path}: {line[:60]}")
+    if not access:
+        raise SystemExit(f"rules.py: the list of patterns holds no access pattern: {path}")
+    return access, exceptions, exempt
+
+
+# Access values, the whole lines that are none (the digest of the contract,
+# the checksums of the lock files), and the files whose added lines are not
+# read for values, names, dashes and language.
+ACCESS, EXCEPTIONS, CONTENT_EXEMPT = read_patterns(os.path.join(ROOT, "werkzeug", "haken", "muster.txt"))
 
 
 def without_allowed(text):
@@ -251,9 +265,9 @@ def check_staged(rev=None):
         if path in CONTENT_EXEMPT:
             continue
         where = f"{path}: {line.strip()[:80]}"
-        digest = path == DIGEST_LINE[0] and DIGEST_LINE[1].fullmatch(line.rstrip("\r\n"))
-        digest = digest or (path in LOCK_LINE[0] and LOCK_LINE[1].fullmatch(line.rstrip("\r\n")))
-        if not digest and any(pattern.search(line) for pattern in ACCESS):
+        whole = line.rstrip("\r\n")
+        excepted = any(path in paths and pattern.fullmatch(whole) for paths, pattern in EXCEPTIONS)
+        if not excepted and any(pattern.search(line) for pattern in ACCESS):
             found.append(f"an access value: {where}")
         if path.endswith(".md") and DASH.search(line):
             found.append(f"a dash in a new markdown line: {where}")

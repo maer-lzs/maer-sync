@@ -39,7 +39,7 @@ cd "$REPO" || exit 2
 echo "witness repository of the hooks" > .wegwerf
 mkdir -p tests werkzeug/haken src docs
 cp "$SOURCE/tests/role-names.txt" "$SOURCE/tests/role-names-allowed.txt" tests/
-cp "$HAKEN/crates.txt" werkzeug/haken/
+cp "$HAKEN/crates.txt" "$HAKEN/muster.txt" werkzeug/haken/
 printf '[[package]]\nname = "serde"\nversion = "1.0.0"\n' > Cargo.lock
 echo "base" > docs/base.md
 # Build output and the log of a failed run stay out of the tree, as in this repository.
