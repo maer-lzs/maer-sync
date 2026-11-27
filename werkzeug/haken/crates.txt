@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 # The crates this repository may depend on, directly or through another
-# crate: the stock of Cargo.lock on 2026-11-16. A crate that is not listed
+# crate: the stock of Cargo.lock on 2026-11-16, and of abruf/Cargo.lock on
+# 2026-11-27. A crate that is not listed
 # here needs an explicit approval before it is added. One name per line,
 # then " # " and the reason.
 aead # in Cargo.lock on 2026-11-16
@@ -104,3 +105,29 @@ windows-sys # in Cargo.lock on 2026-11-16
 x25519-dalek # in Cargo.lock on 2026-11-16
 zeroize # in Cargo.lock on 2026-11-16
 zmij # in Cargo.lock on 2026-11-16
+adler2 # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+base64 # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+crc32fast # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+flate2 # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+miniz_oxide # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+percent-encoding # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+ring # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+rustls # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+rustls-pki-types # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+rustls-webpki # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+simd-adler32 # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+untrusted # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+ureq # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+ureq-proto # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+utf8-zero # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+webpki-roots # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows-targets # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_aarch64_gnullvm # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_aarch64_msvc # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_i686_gnu # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_i686_gnullvm # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_i686_msvc # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_x86_64_gnu # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_x86_64_gnullvm # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+windows_x86_64_msvc # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+zlib-rs # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
