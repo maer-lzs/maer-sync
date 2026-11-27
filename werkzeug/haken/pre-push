@@ -46,14 +46,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         || refuse "$remote_ref needs the note of a green run at $(git rev-parse --short "$local_sha")"
     if [ "$remote_sha" = "$zero" ]; then range=("$local_sha" --not --remotes=origin); else range=("$remote_sha..$local_sha"); fi
     for commit in $(git rev-list "${range[@]}"); do
-        message="$(mktemp)"
-        git log -1 --format=%B "$commit" > "$message"
-        why="$(python3 -I "$HOOKS/rules.py" msg "$message" 2>&1)"; rc=$?
-        rm -f "$message"
-        [ $rc -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the message: $why"
-        # The content too: a commit made in a clone without the hooks met no rule.
+        # Message and content in one reading: a commit made in a clone
+        # without the hooks met no rule.
         why="$(python3 -I "$HOOKS/rules.py" commit "$commit" 2>&1)"
-        [ $? -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the content: $why"
+        [ $? -eq 0 ] || refuse "commit $(git rev-parse --short "$commit") breaks the rules of the content or the message: $why"
     done
 done
 

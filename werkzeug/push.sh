@@ -57,9 +57,9 @@ else
     ( cd "$run" && python3 -m unittest discover -s tests -t . ) >> "$log" 2>&1 || rc=1
     fences="$(sed -n 's/^Ran \([0-9][0-9]*\) tests\{0,1\} in .*/\1/p' "$log" | tail -1)"
     ( cd "$run" && bash werkzeug/haken/test-haken.sh ) >> "$log" 2>&1 || rc=1
-    hooks="$(sed -n 's/^cases: \([0-9][0-9]*\), failures: 0$/\1/p' "$log" | tail -1)"
-    if [ -n "${rust:-}" ] && [ -n "${fences:-}" ] && [ -n "${hooks:-}" ]; then
-        cases=$((rust + fences + hooks))
+    hook_cases="$(sed -n 's/^cases: \([0-9][0-9]*\), failures: 0$/\1/p' "$log" | tail -1)"
+    if [ -n "${rust:-}" ] && [ -n "${fences:-}" ] && [ -n "${hook_cases:-}" ]; then
+        cases=$((rust + fences + hook_cases))
     else
         cases=""; rc=1
     fi

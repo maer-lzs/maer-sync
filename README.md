@@ -511,8 +511,18 @@ stations. One source at a time, one request a second at most, as
 a daily look at what was added; Musopen and Radio Browser cannot be asked
 for that, so they take a full pass every day. Measured on 25.11.2026 for the
 five archive.org sources: about 35 requests and 20 MB a day, and once a week
-a full pass of about 165 MB. Gutenberg and the radio play feeds follow as
-their readers are built.
+a full pass of about 165 MB. Project Gutenberg comes from its mirror
+`gutenberg.pglaf.org`: once a week the catalog dump (about 21 MB) and the
+record of every work of type Sound (about 1100, a few KB each, one a
+second); a work whose record states copyright stays out. The radio play
+feeds follow as their reader is built.
+
+**The popularity step.** A full pass also asks each source for its number
+(archive.org `downloads`, also in the daily look, where it goes unused;
+Radio Browser `votes`; the Gutenberg record's downloads) and gives every row
+the tenth of its source, `beliebt_stufe` 1 to 10; Musopen states no number.
+Only a full pass sets it, so a row changes only when its tenth does. The
+line of a run names `stufen_gewechselt=N`, the rows whose step moved.
 
 **What it stores.** Records only (title, author, year, rights, shelves) in
 one file, `katalog.db`, on its own volume; no audio, no account, no user
@@ -548,7 +558,7 @@ run has ended.
 One run at a time holds the file `katalog.db.lauf` beside the catalog.
 
 **When the pages of a source do not end.** A pass reads at most the pages
-its count calls for and two more. A source that answers past that, or names
+its count calls for and two more, and the one that is refused. A source that answers past that, or names
 a cursor a second time, is refused with `grund=Seiten(...)`; nothing is
 written, and the run is tried again later.
 

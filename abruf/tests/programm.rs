@@ -17,8 +17,6 @@ use maer_sync::katalog::{Katalog, MAX_PAGE};
 use maer_sync_abruf::lauf::{lauf, Einstellungen, LaufFehler};
 use maer_sync_abruf::netz::{decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr};
 use maer_sync_abruf::plan::{Art, BACKOFF_S};
-#[allow(unused_imports)]
-use maer_sync_abruf::lauf::Laufbericht;
 use maer_sync_abruf::programm::{Programm, QUELLEN};
 use serde_json::{json, Value};
 
