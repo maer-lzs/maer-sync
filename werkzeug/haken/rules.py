@@ -242,7 +242,7 @@ def check_staged(rev=None):
     if author not in AUTHORS:
         found.append(f"the author is not the agreed one: {author}")
     real = os.path.realpath(ROOT) + "/"
-    if rev is None and real.startswith(TEMP_ROOTS) or "/scratchpad/" in real:
+    if rev is None and (real.startswith(TEMP_ROOTS) or "/scratchpad/" in real):
         if git("cat-file", "-e", ":.wegwerf")[0] != 0:
             found.append(f"the working tree lies in a temporary path without .wegwerf: {ROOT}")
     files = set()
