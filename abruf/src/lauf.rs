@@ -35,7 +35,7 @@ use serde_json::Value;
 use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
 use crate::musopen::{self, MusopenFehler};
 use crate::radio;
-use crate::netz::{encode, HolFehler, Holer, Netz, Uhr};
+use crate::netz::{encode, gewichtigster, HolFehler, Holer, Netz, Uhr};
 use crate::plan::{Art, DELTA_S};
 
 /// The most records one query of the advanced search is read for. A delta
@@ -307,14 +307,14 @@ fn radio_get<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'stat
     if let Some(s) = *server {
         return Ok(netz.get(&format!("{s}{path}"))?.koerper);
     }
-    let mut last = None;
+    let mut fehler = vec![];
     for s in radio::SERVER {
         match netz.get(&format!("{s}{path}")) {
             Ok(a) => { *server = Some(s); return Ok(a.koerper); }
-            Err(e) => last = Some(e),
+            Err(e) => fehler.push(e),
         }
     }
-    Err(LaufFehler::Holen(last.expect("the list is not empty")))
+    Err(LaufFehler::Holen(gewichtigster(fehler)))
 }
 
 fn radio_count<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'static str>) -> Result<usize, LaufFehler> {

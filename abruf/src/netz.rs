@@ -56,6 +56,30 @@ pub enum HolFehler {
     ZuVieleWeiterleitungen,
     UnsichereWeiterleitung(String),
     SpaeterWieder(u64),
+    /// The name of the host does not resolve.
+    WirtUnbekannt,
+}
+
+/// The error that counts when every server of a list failed, weighed as
+/// the app weighs them: a server that answered says most, a time-out or a
+/// failed connection more than a host not found (the missing name of a
+/// fallback would otherwise cover what the main server said); on a tie the
+/// first of the list.
+pub fn gewichtigster(fehler: Vec<HolFehler>) -> HolFehler {
+    fn gewicht(f: &HolFehler) -> u8 {
+        match f {
+            HolFehler::WirtUnbekannt => 0,
+            HolFehler::Zeit | HolFehler::Verbindung(_) => 1,
+            _ => 2,
+        }
+    }
+    let mut best: Option<HolFehler> = None;
+    for f in fehler {
+        if best.as_ref().is_none_or(|b| gewicht(&f) > gewicht(b)) {
+            best = Some(f);
+        }
+    }
+    best.expect("at least one error")
 }
 
 /// One request, no redirect followed, reading at most `max_bytes + 1`
