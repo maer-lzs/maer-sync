@@ -451,7 +451,7 @@ pub fn rows_from_answer(answer: &[u8]) -> Result<Seite, MusopenFehler> {
             quelle: "musopen".into(), id: format!("mso:{id}"), art: "musik".into(), titel,
             urheber: komponist.clone(), sprache: None, jahr: None, rechte_kennung: mark.into(),
             rechte_url: text(vi, "/extmetadata/LicenseUrl/value").map(str::to_string),
-            laden: true, reihen: vec![], auch: vec![], tief: Some(tief.to_string()),
+            laden: true, reihen: vec![], auch: vec![], tief: Some(tief.to_string()), beliebt_stufe: None,
         });
     }
     Ok(Seite { zeilen, gesehen: pages.len(), weiter: text(&v, "/continue/gcmcontinue").map(str::to_string) })

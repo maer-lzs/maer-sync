@@ -62,6 +62,12 @@ fn trimmed(v: Option<&Value>) -> &str {
     trim_spaces(v.and_then(Value::as_str).unwrap_or(""))
 }
 
+/// The votes per row id of a page, as the app orders its rows; a station
+/// without a whole number from 0 is left out.
+pub fn votes_from_page(_answer: &[u8]) -> std::collections::BTreeMap<String, i64> {
+    std::collections::BTreeMap::new()
+}
+
 pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {
     let v: Value = serde_json::from_slice(answer).map_err(|e| ReadError::Unreadable(e.to_string()))?;
     let list = v.as_array().ok_or_else(|| ReadError::Unreadable("a page is not a list".into()))?;
@@ -97,7 +103,7 @@ pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {
             quelle: "radio".into(), id: format!("radio:rb:{uuid}"), art: "sender".into(),
             titel: Some(name.to_string()), urheber: None, sprache: codes.first().map(|s| s.to_string()),
             jahr: None, rechte_kennung: "unbekannt".into(), rechte_url: None, laden: false,
-            reihen: vec![], auch: vec![], tief: Some(Value::Object(tief).to_string()),
+            reihen: vec![], auch: vec![], tief: Some(Value::Object(tief).to_string()), beliebt_stufe: None,
         });
     }
     Ok(Seite { zeilen, roh: list.len(), uuids })

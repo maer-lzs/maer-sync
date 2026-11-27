@@ -38,7 +38,7 @@ fn row(quelle: &str, id: &str, titel: &str) -> Row {
         laden: true,
         reihen: vec![],
         auch: vec![],
-        tief: None,
+        tief: None, beliebt_stufe: None,
     }
 }
 
@@ -679,4 +679,111 @@ fn the_writer_runs_in_wal() {
     assert_eq!(mode(&p).to_lowercase(), "delete");
     let _k = Katalog::open(&p).unwrap();
     assert_eq!(mode(&p).to_lowercase(), "wal", "the writer did not switch back to WAL");
+}
+
+// ---------------------------------------------------------------- the popularity step
+
+fn mit_stufe(mut r: Row, s: Option<i64>) -> Row {
+    r.beliebt_stufe = s;
+    r
+}
+
+#[test]
+fn a_row_keeps_its_popularity_step() {
+    let p = scratch("stufe");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &[mit_stufe(row("librivox", "lva:a", "A"), Some(3)), row("librivox", "lva:b", "B")], false).unwrap();
+    assert_eq!(k.stored("librivox", "lva:a").unwrap().unwrap().row.beliebt_stufe, Some(3));
+    assert_eq!(k.stored("librivox", "lva:b").unwrap().unwrap().row.beliebt_stufe, None);
+    let page = k.full("librivox", None, MAX_PAGE).unwrap();
+    assert_eq!(page.zeilen.iter().map(|s| s.row.beliebt_stufe).collect::<Vec<_>>(), vec![Some(3), None]);
+}
+
+#[test]
+fn a_step_outside_one_to_ten_refuses_the_run() {
+    let p = scratch("stufe-grenze");
+    let mut k = Katalog::open(&p).unwrap();
+    for s in [0, 11, -1] {
+        match k.write_run("librivox", &[mit_stufe(row("librivox", "lva:a", "A"), Some(s))], false) {
+            Err(KatalogError::Invalid(_)) => {}
+            other => panic!("step {s}: {other:?}"),
+        }
+    }
+    assert_eq!(k.version("librivox").unwrap(), 0);
+    for s in [1, 10] {
+        k.write_run("librivox", &[mit_stufe(row("librivox", "lva:a", "A"), Some(s))], false).unwrap();
+    }
+}
+
+#[test]
+fn only_a_new_step_raises_the_version() {
+    let p = scratch("stufe-version");
+    let mut k = Katalog::open(&p).unwrap();
+    let lauf = |a: i64, b: i64| vec![mit_stufe(row("librivox", "lva:a", "A"), Some(a)), mit_stufe(row("librivox", "lva:b", "B"), Some(b))];
+    let v1 = k.write_run("librivox", &lauf(3, 5), false).unwrap();
+    assert_eq!(k.write_run("librivox", &lauf(3, 5), false).unwrap(), v1, "the same steps raised the version");
+    let v2 = k.write_run("librivox", &lauf(4, 5), false).unwrap();
+    assert!(v2 > v1);
+    assert_eq!(k.stored("librivox", "lva:a").unwrap().unwrap().version, v2);
+    assert_eq!(k.stored("librivox", "lva:b").unwrap().unwrap().version, v1, "a row whose step stayed took a new version");
+}
+
+#[test]
+fn a_delta_never_sets_a_step() {
+    // A delta sees only some rows, so it cannot know a tenth: the stored
+    // step stays, and a row that first comes through a delta has none.
+    let p = scratch("stufe-delta");
+    let mut k = Katalog::open(&p).unwrap();
+    k.write_run("librivox", &[mit_stufe(row("librivox", "lva:a", "A"), Some(2))], false).unwrap();
+    let mut a = mit_stufe(row("librivox", "lva:a", "A changed"), None);
+    a.jahr = Some(1900);
+    k.write_delta("librivox", &[a, mit_stufe(row("librivox", "lva:c", "C"), Some(1))]).unwrap();
+    let a = k.stored("librivox", "lva:a").unwrap().unwrap().row;
+    assert_eq!((a.titel.as_deref(), a.beliebt_stufe), (Some("A changed"), Some(2)));
+    assert_eq!(k.stored("librivox", "lva:c").unwrap().unwrap().row.beliebt_stufe, None);
+    let v = k.version("librivox").unwrap();
+    assert_eq!(k.write_delta("librivox", &[mit_stufe(row("librivox", "lva:a", "A changed"), Some(9))]).unwrap(), v,
+               "a step in a delta changed the row");
+}
+
+/// The table of the catalog as it stood before the popularity step: a probe
+/// of the old form, kept here on purpose and never changed.
+const SCHEMA_VOR_DER_STUFE: &str = "
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE stand (quelle TEXT PRIMARY KEY, version INTEGER NOT NULL, voll_ab INTEGER NOT NULL);
+CREATE TABLE eintrag (
+  quelle TEXT NOT NULL, id TEXT NOT NULL, art TEXT NOT NULL, titel TEXT, urheber TEXT, sprache TEXT,
+  jahr INTEGER, rechte_kennung TEXT NOT NULL, rechte_url TEXT, laden INTEGER NOT NULL,
+  reihen TEXT NOT NULL DEFAULT '[]', auch TEXT NOT NULL DEFAULT '[]', tief TEXT,
+  version INTEGER NOT NULL, geloescht INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (quelle, id)
+) WITHOUT ROWID;
+CREATE INDEX eintrag_delta ON eintrag (quelle, version);
+CREATE TABLE cover (sha256 TEXT PRIMARY KEY, breite INTEGER, hoehe INTEGER, bytes INTEGER, typ TEXT);
+INSERT INTO meta VALUES ('katalog_format', '1');
+INSERT INTO stand VALUES ('librivox', 4, 0);
+INSERT INTO eintrag (quelle, id, art, titel, rechte_kennung, laden, version)
+  VALUES ('librivox', 'lva:alt', 'hoerbuch', 'Old', 'pd', 1, 4);
+";
+
+#[test]
+fn a_catalog_of_the_form_before_the_step_is_read_and_kept() {
+    let p = scratch("vor-der-stufe");
+    Connection::open(&p).unwrap().execute_batch(SCHEMA_VOR_DER_STUFE).unwrap();
+    // The reader (the service) cannot change the file and reads it as it is.
+    {
+        let r = Katalog::open_read(&p).expect("the reader opens a catalog of the old form");
+        let page = r.full("librivox", None, MAX_PAGE).unwrap();
+        assert_eq!(page.version, 4);
+        assert_eq!(page.zeilen.len(), 1);
+        assert_eq!(page.zeilen[0].row.beliebt_stufe, None);
+    }
+    // The writer (the fetch program) takes it over: rows and versions stay,
+    // and the next run writes steps.
+    let mut k = Katalog::open(&p).expect("the writer opens a catalog of the old form");
+    let alt = k.stored("librivox", "lva:alt").unwrap().unwrap();
+    assert_eq!((alt.version, alt.row.titel.as_deref()), (4, Some("Old")));
+    assert_eq!(k.version("librivox").unwrap(), 4);
+    k.write_run("librivox", &[mit_stufe(row("librivox", "lva:alt", "Old"), Some(1))], false).unwrap();
+    assert_eq!(k.stored("librivox", "lva:alt").unwrap().unwrap().row.beliebt_stufe, Some(1));
 }

@@ -67,7 +67,7 @@ fn expected_row(v: &Value) -> Row {
         laden: v["laden"].as_bool().unwrap(),
         reihen: strings(&v["reihen"]),
         auch: strings(&v["auch"]),
-        tief: opt(&v["tief"]),
+        tief: opt(&v["tief"]), beliebt_stufe: None,
     }
 }
 
@@ -173,6 +173,37 @@ fn a_deletion_runs_through_the_catalog() {
 }
 
 // ---------------------------------------------------------------- 4, 5: licences
+
+#[test]
+fn the_downloads_of_every_case_match_the_vectors() {
+    let mut with = 0;
+    for q in ["librivox", "archive-buch", "netlabel", "otr", "schellack"] {
+        for dir in cases(q) {
+            let want = read_json(&dir.join("erwartet.json"));
+            let Ok(answer) = std::fs::read(dir.join("antwort.json")) else { continue };
+            let expected: std::collections::BTreeMap<String, i64> = want.get("beliebt")
+                .map(|b| serde_json::from_value(b.clone()).unwrap()).unwrap_or_default();
+            with += usize::from(!expected.is_empty());
+            assert_eq!(maer_sync_abruf::archive::downloads_from_answer(&answer), expected, "{}", dir.display());
+        }
+    }
+    assert_eq!(with, 5, "one case per archive source carries downloads");
+}
+
+#[test]
+fn downloads_that_are_no_whole_number_from_zero_are_left_out() {
+    let answer = serde_json::json!({"items": [
+        {"identifier": "ok", "downloads": 12},
+        {"identifier": "null", "downloads": null},
+        {"identifier": "missing"},
+        {"identifier": "negative", "downloads": -3},
+        {"identifier": "text", "downloads": "12"},
+        {"identifier": "float", "downloads": 1.5},
+    ]}).to_string();
+    let got = maer_sync_abruf::archive::downloads_from_answer(answer.as_bytes());
+    assert_eq!(got, std::collections::BTreeMap::from([("lva:ok".to_string(), 12)]));
+    assert!(maer_sync_abruf::archive::downloads_from_answer(b"not json").is_empty());
+}
 
 #[test]
 fn licence_urls_map_to_one_mark() {

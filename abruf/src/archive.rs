@@ -240,10 +240,16 @@ pub fn rows_from_answer(quelle: &str, answer: &[u8], calendar_year: i32, shelf: 
             rechte_url,
             reihen: shelf.map(|s| vec![s.schluessel.clone()]).unwrap_or_default(),
             auch: vec![],
-            tief: None,
+            tief: None, beliebt_stufe: None,
         });
     }
     Ok(rows)
+}
+
+/// The number of downloads per row id of an answer; a record without a
+/// whole number from 0 is left out. An unreadable answer has none.
+pub fn downloads_from_answer(_answer: &[u8]) -> BTreeMap<String, i64> {
+    BTreeMap::new()
 }
 
 /// One row per record over several shelf answers, with every shelf it

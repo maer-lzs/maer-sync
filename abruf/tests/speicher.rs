@@ -30,7 +30,7 @@ fn memory_of_a_full_run() {
         art: "musik".into(), titel: Some(format!("A title of some length, number {i}")),
         urheber: Some("Performer One; Orchestra Two; Composer Three".into()), sprache: Some("English".into()),
         jahr: Some(1920 + (i % 30) as i64), rechte_kennung: "unbekannt".into(), rechte_url: None, laden: false,
-        reihen: vec!["shellac-jazz".into()], auch: vec![], tief: None,
+        reihen: vec!["shellac-jazz".into()], auch: vec![], tief: None, beliebt_stufe: None,
     }).collect();
     let before = peak_kib();
     k.write_run("schellack", &rows, false).unwrap();

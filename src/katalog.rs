@@ -114,6 +114,9 @@ pub struct Row {
     pub auch: Vec<String>,
     /// The deep part as JSON text; `None` while the row is flat.
     pub tief: Option<String>,
+    /// The tenth of the source by popularity, 1 the most popular; `None`
+    /// when the source states no number for the row.
+    pub beliebt_stufe: Option<i64>,
 }
 
 /// A row as the file holds it.
@@ -314,7 +317,7 @@ fn stored_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<(Row, String, String, 
             laden: r.get::<_, i64>(9)? == 1,
             reihen: vec![],
             auch: vec![],
-            tief: r.get(12)?,
+            tief: r.get(12)?, beliebt_stufe: None,
         },
         r.get(10)?,
         r.get(11)?,

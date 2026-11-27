@@ -17,6 +17,8 @@ use maer_sync::katalog::{Katalog, MAX_PAGE};
 use maer_sync_abruf::lauf::{lauf, Einstellungen, LaufFehler};
 use maer_sync_abruf::netz::{decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr};
 use maer_sync_abruf::plan::{Art, BACKOFF_S};
+#[allow(unused_imports)]
+use maer_sync_abruf::lauf::Laufbericht;
 use maer_sync_abruf::programm::{Programm, QUELLEN};
 use serde_json::{json, Value};
 
@@ -273,4 +275,75 @@ fn a_shellac_delta_keeps_the_other_shelves() {
     assert_eq!(reihen(&k), vec!["shellac-jazz", "shellac-swing"]);
     assert_eq!(lauf(&mut a.programm.netz, &mut k, "schellack", Art::Delta, &settings()).ausgang, Ok(()));
     assert_eq!(reihen(&k), vec!["shellac-jazz", "shellac-swing"], "the delta dropped a shelf");
+}
+
+// ---------------------------------------------------------------- the popularity step
+
+/// archive.org with `n` records whose downloads are `base - 10 * i`; every
+/// URL asked is kept.
+fn archive_downloads(n: usize, base: i64, urls: Rc<RefCell<Vec<String>>>) -> Handler {
+    let mut inner = archive(n, 1920);
+    Box::new(move |a, p| {
+        urls.borrow_mut().push(a.url.clone());
+        let mut r = inner(a, p)?;
+        let mut v: Value = serde_json::from_slice(&r.koerper).unwrap();
+        let list = if v.get("items").is_some() { v["items"].as_array_mut() } else { v["response"]["docs"].as_array_mut() };
+        if let Some(list) = list {
+            for (i, it) in list.iter_mut().enumerate() {
+                let id = it["identifier"].as_str().unwrap().to_string();
+                let k: i64 = id.rsplit('-').next().unwrap().parse().unwrap_or(i as i64);
+                it["downloads"] = json!(base - 10 * k);
+            }
+        }
+        r.koerper = v.to_string().into_bytes();
+        Ok(r)
+    })
+}
+
+#[test]
+fn a_full_pass_asks_for_downloads_and_sets_the_steps() {
+    let urls = Rc::new(RefCell::new(vec![]));
+    let mut a = aufbau("stufe-voll", archive_downloads(20, 1000, urls.clone()), T0_MS);
+    let b = a.programm.ein_lauf("librivox", Art::Voll, false);
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    let asked: Vec<String> = urls.borrow().iter().filter(|u| u.contains("archive.org") && !u.contains("rows=0")).cloned().collect();
+    assert!(!asked.is_empty());
+    for u in &asked {
+        assert!(u.contains("downloads"), "downloads not asked for: {u}");
+    }
+    let k = Katalog::open_read(&a.path).unwrap();
+    let rows = k.full("librivox", None, MAX_PAGE).unwrap().zeilen;
+    assert_eq!(rows.len(), 20);
+    for s in &rows {
+        let i: i64 = s.row.id.rsplit('-').next().unwrap().parse().unwrap();
+        assert_eq!(s.row.beliebt_stufe, Some(1 + i / 2), "{}", s.row.id);
+    }
+}
+
+#[test]
+fn the_line_counts_the_rows_whose_step_changed() {
+    let urls = Rc::new(RefCell::new(vec![]));
+    let mut a = aufbau("stufe-zeile", archive_downloads(20, 1000, urls.clone()), T0_MS);
+    let b = a.programm.ein_lauf("librivox", Art::Voll, false);
+    assert!(b.zeile().contains(" stufen_gewechselt=0"), "{}", b.zeile());
+    // The order turns round: every row moves to the mirrored tenth.
+    *a.handler.borrow_mut() = Box::new({
+        let mut inner = archive_downloads(20, 1000, urls.clone());
+        move |r, p| {
+            let mut x = inner(r, p)?;
+            let mut v: Value = serde_json::from_slice(&x.koerper).unwrap();
+            if let Some(list) = v.get_mut("items").and_then(Value::as_array_mut) {
+                for it in list.iter_mut() {
+                    it["downloads"] = json!(2000 - it["downloads"].as_i64().unwrap());
+                }
+            }
+            x.koerper = v.to_string().into_bytes();
+            Ok(x)
+        }
+    });
+    let b = a.programm.ein_lauf("librivox", Art::Voll, false);
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    assert!(b.zeile().contains(" stufen_gewechselt=20"), "{}", b.zeile());
+    let b = a.programm.ein_lauf("librivox", Art::Voll, false);
+    assert!(b.zeile().contains(" stufen_gewechselt=0"), "{}", b.zeile());
 }
