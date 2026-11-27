@@ -185,6 +185,9 @@ fn katalog_zeile(s: &crate::katalog::Stored, delta: bool, unlesbar: &mut Vec<Str
         "jahr": r.jahr, "rechte": { "kennung": r.rechte_kennung, "url": r.rechte_url },
         "laden": r.laden, "reihen": r.reihen, "auch": r.auch, "tief": tief,
     });
+    if let Some(s) = r.beliebt_stufe {
+        z["beliebt_stufe"] = json!(s);
+    }
     if delta {
         z["geloescht"] = json!(false);
     }

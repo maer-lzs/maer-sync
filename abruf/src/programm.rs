@@ -109,7 +109,7 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
     pub fn ein_lauf(&mut self, quelle: &str, art: Art, bestaetigt: bool) -> Laufbericht {
         let ohne = |ausgang| Laufbericht {
             quelle: quelle.into(), art, gelesen: 0, version_vorher: -1, version_nachher: -1, dauer_ms: 0,
-            ausgang: Err(ausgang), bestaetigt,
+            ausgang: Err(ausgang), bestaetigt, stufen_gewechselt: 0,
         };
         let _sperre = match Katalog::laufsperre(&self.path) {
             Ok(s) => s,

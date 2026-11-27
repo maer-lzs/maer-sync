@@ -64,8 +64,14 @@ fn trimmed(v: Option<&Value>) -> &str {
 
 /// The votes per row id of a page, as the app orders its rows; a station
 /// without a whole number from 0 is left out.
-pub fn votes_from_page(_answer: &[u8]) -> std::collections::BTreeMap<String, i64> {
-    std::collections::BTreeMap::new()
+pub fn votes_from_page(answer: &[u8]) -> std::collections::BTreeMap<String, i64> {
+    let Ok(v) = serde_json::from_slice::<Value>(answer) else { return Default::default() };
+    let Some(list) = v.as_array() else { return Default::default() };
+    list.iter().filter_map(|x| {
+        let uuid = x.get("stationuuid").and_then(Value::as_str).filter(|s| !s.is_empty())?;
+        let n = x.get("votes").filter(|v| v.is_i64() || v.is_u64()).and_then(Value::as_i64).filter(|n| *n >= 0)?;
+        Some((format!("radio:rb:{uuid}"), n))
+    }).collect()
 }
 
 pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {

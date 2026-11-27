@@ -27,14 +27,15 @@
 //! start begins it again. Every run leaves one line (`Laufbericht::zeile`)
 //! without any answer text.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use maer_sync::katalog::{Katalog, KatalogError, Row, MAX_PAGE};
 use serde_json::Value;
 
-use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
+use crate::archive::{downloads_from_answer, merge_shelves, rows_from_answer, ReadError, Shelf};
 use crate::musopen::{self, MusopenFehler};
 use crate::radio;
+use crate::stufe::stufen;
 use crate::netz::{encode, gewichtigster, HolFehler, Holer, Netz, Uhr};
 use crate::plan::{Art, DELTA_S};
 
@@ -48,9 +49,9 @@ pub const OHNE_DELTA: [&str; 2] = ["musopen", "radio"];
 
 const ADV: &str = "https://archive.org/advancedsearch.php";
 const SCRAPE: &str = "https://archive.org/services/search/v1/scrape";
-const FIELDS: [&str; 11] = [
+const FIELDS: [&str; 12] = [
     "identifier", "title", "creator", "date", "year", "licenseurl", "addeddate", "publicdate", "collection",
-    "language", "subject",
+    "language", "subject", "downloads",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +98,10 @@ pub struct Laufbericht {
     pub ausgang: Result<(), LaufFehler>,
     /// The operator confirmed this run (`--bestaetigt`).
     pub bestaetigt: bool,
+    /// Rows the catalog held live before a full pass whose popularity
+    /// step it changed; new rows do not count. Two regular runs side by
+    /// side measure how often the tenths move.
+    pub stufen_gewechselt: usize,
 }
 
 impl Laufbericht {
@@ -117,6 +122,7 @@ impl Laufbericht {
         let mut zeile = format!(
             "lauf quelle={} art={} gelesen={} version={}->{} dauer_ms={} ausgang={ausgang}",
             self.quelle, self.art.name(), self.gelesen, self.version_vorher, self.version_nachher, self.dauer_ms);
+        zeile.push_str(&format!(" stufen_gewechselt={}", self.stufen_gewechselt));
         if self.bestaetigt {
             zeile.push_str(" bestaetigt=ja");
         }
@@ -205,8 +211,8 @@ fn adv_page<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, q: &str, rows: usize, page:
 }
 
 /// Every record of an advanced search query, page by page, with the count.
-fn adv_all<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, q: &str, e: &Einstellungen, shelf: Option<&Shelf>)
-    -> Result<Vec<Row>, LaufFehler> {
+fn adv_all<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, q: &str, e: &Einstellungen, shelf: Option<&Shelf>,
+                             zahlen: &mut BTreeMap<String, i64>) -> Result<Vec<Row>, LaufFehler> {
     let mut rows = vec![];
     let mut page = 1;
     loop {
@@ -215,6 +221,7 @@ fn adv_all<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, q: &str, e: &E
             return Err(LaufFehler::Quelle(format!("advancedsearch answers {n} records, more than {ADV_GRENZE} are not read")));
         }
         let got = rows_from_answer(quelle, &body, e.kalenderjahr, shelf)?;
+        zahlen.extend(downloads_from_answer(&body));
         let empty = got.is_empty();
         rows.extend(got);
         if rows.len() >= n || empty {
@@ -332,7 +339,8 @@ fn radio_count<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'st
 /// All stations in pages of `adv_rows`, ordered by uuid; counted against the
 /// statistics (`stations`, which leaves the broken out). A uuid on two pages (a station moved
 /// while paging) repeats the pass once, then refuses.
-fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
+fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen, zahlen: &mut BTreeMap<String, i64>)
+    -> Result<Vec<Row>, LaufFehler> {
     let mut server = None;
     let limit = e.adv_rows;
     for versuch in 0..2 {
@@ -348,8 +356,10 @@ fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Res
         let mut seiten = 0;
         loop {
             seiten += 1;
-            let s = radio::rows_from_page(&radio_get(netz, &mut server,
-                &format!("/json/stations?offset={offset}&limit={limit}&hidebroken=true&order=stationuuid"))?)?;
+            let body = radio_get(netz, &mut server,
+                &format!("/json/stations?offset={offset}&limit={limit}&hidebroken=true&order=stationuuid"))?;
+            let s = radio::rows_from_page(&body)?;
+            zahlen.extend(radio::votes_from_page(&body));
             for u in &s.uuids {
                 if !uuids.insert(u.clone()) { doppelt = true; }
             }
@@ -375,16 +385,25 @@ fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Res
     unreachable!("the loop returns in its second pass")
 }
 
+/// A full pass sees every row of the source, so it alone sets the steps.
 fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
+    let mut zahlen = BTreeMap::new();
+    let mut rows = full_rows(netz, quelle, e, &mut zahlen)?;
+    stufen(&mut rows, &zahlen);
+    Ok(rows)
+}
+
+fn full_rows<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstellungen,
+                               zahlen: &mut BTreeMap<String, i64>) -> Result<Vec<Row>, LaufFehler> {
     match quelle {
         "musopen" => return musopen_pass(netz, e),
-        "radio" => return radio_pass(netz, e),
+        "radio" => return radio_pass(netz, e, zahlen),
         _ => {}
     }
     if quelle == "schellack" {
         let mut parts = vec![];
         for s in regale_der_app() {
-            parts.push(adv_all(netz, quelle, &shelf_query(&s), e, Some(&s))?);
+            parts.push(adv_all(netz, quelle, &shelf_query(&s), e, Some(&s), zahlen)?);
         }
         return Ok(merge_shelves(parts));
     }
@@ -395,6 +414,7 @@ fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstell
     loop {
         let a = netz.get(&scrape_url(q, e.scrape_count, cursor.as_deref()))?;
         rows.extend(rows_from_answer(quelle, &a.koerper, e.kalenderjahr, None)?);
+        zahlen.extend(downloads_from_answer(&a.koerper));
         cursor = parse(&a.koerper)?.get("cursor").and_then(Value::as_str).map(str::to_string);
         if cursor.is_none() {
             break;
@@ -446,14 +466,14 @@ fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &st
     if quelle == "schellack" {
         let mut parts = vec![];
         for s in regale_der_app() {
-            parts.push(adv_all(netz, quelle, &format!("{}{since}", shelf_query(&s)), e, Some(&s))?);
+            parts.push(adv_all(netz, quelle, &format!("{}{since}", shelf_query(&s)), e, Some(&s), &mut BTreeMap::new())?);
         }
         let mut rows = merge_shelves(parts);
         keep_known_shelves(&mut rows, |id| katalog.stored(quelle, id).map(|s| s.map(|s| s.row.reihen)))?;
         return Ok(rows);
     }
     let q = base_query(quelle).ok_or_else(|| LaufFehler::Quelle(quelle.into()))?;
-    adv_all(netz, quelle, &format!("{q}{since}"), e, None)
+    adv_all(netz, quelle, &format!("{q}{since}"), e, None, &mut BTreeMap::new())
 }
 
 /// Run one source once and report it. Nothing is written unless the whole
@@ -476,6 +496,7 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
     let start = netz.uhr.jetzt_ms();
     let vorher = katalog.version(quelle).unwrap_or(-1);
     let mut gelesen = 0;
+    let mut stufen_gewechselt = 0;
     let ausgang = (|| -> Result<(), LaufFehler> {
         // Musopen and Radio Browser have no delta: their day is a full pass.
         let voll = art == Art::Voll || OHNE_DELTA.contains(&quelle);
@@ -483,9 +504,13 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         gelesen = rows.len();
         let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
         if voll {
+            let vorher = katalog.stufen(quelle).map_err(k)?;
             if let Err(err) = katalog.write_run(quelle, &rows, bestaetigt) {
                 return Err(sperre(katalog, quelle, err));
             }
+            stufen_gewechselt = rows.iter()
+                .filter(|r| vorher.get(&r.id).is_some_and(|s| *s != r.beliebt_stufe))
+                .count();
         } else {
             katalog.write_delta(quelle, &rows).map_err(k)?;
         }
@@ -501,6 +526,7 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         dauer_ms: netz.uhr.jetzt_ms() - start,
         ausgang,
         bestaetigt,
+        stufen_gewechselt,
     }
 }
 

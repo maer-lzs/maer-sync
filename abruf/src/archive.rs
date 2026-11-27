@@ -248,8 +248,14 @@ pub fn rows_from_answer(quelle: &str, answer: &[u8], calendar_year: i32, shelf: 
 
 /// The number of downloads per row id of an answer; a record without a
 /// whole number from 0 is left out. An unreadable answer has none.
-pub fn downloads_from_answer(_answer: &[u8]) -> BTreeMap<String, i64> {
-    BTreeMap::new()
+pub fn downloads_from_answer(answer: &[u8]) -> BTreeMap<String, i64> {
+    let Ok(parsed) = serde_json::from_slice::<Value>(answer) else { return BTreeMap::new() };
+    let Ok(list) = records(&parsed) else { return BTreeMap::new() };
+    list.iter().filter_map(|d| {
+        let id = d.get("identifier").and_then(Value::as_str).filter(|s| !s.is_empty())?;
+        let n = d.get("downloads").filter(|v| v.is_i64() || v.is_u64()).and_then(Value::as_i64).filter(|n| *n >= 0)?;
+        Some((format!("lva:{id}"), n))
+    }).collect()
 }
 
 /// One row per record over several shelf answers, with every shelf it

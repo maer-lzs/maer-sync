@@ -742,8 +742,11 @@ fn a_delta_never_sets_a_step() {
     assert_eq!((a.titel.as_deref(), a.beliebt_stufe), (Some("A changed"), Some(2)));
     assert_eq!(k.stored("librivox", "lva:c").unwrap().unwrap().row.beliebt_stufe, None);
     let v = k.version("librivox").unwrap();
-    assert_eq!(k.write_delta("librivox", &[mit_stufe(row("librivox", "lva:a", "A changed"), Some(9))]).unwrap(), v,
-               "a step in a delta changed the row");
+    // The same row once more, only with another step: no change.
+    let mut again = a.clone();
+    again.beliebt_stufe = Some(9);
+    assert_eq!(k.write_delta("librivox", &[again]).unwrap(), v, "a step in a delta changed the row");
+    assert_eq!(k.stored("librivox", "lva:a").unwrap().unwrap().row.beliebt_stufe, Some(2));
 }
 
 /// The table of the catalog as it stood before the popularity step: a probe
