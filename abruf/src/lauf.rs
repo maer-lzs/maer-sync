@@ -77,6 +77,10 @@ pub enum LaufFehler {
     /// The pages of a pass did not end: a cursor came back, or there were
     /// more pages than the count allows. Nothing is written.
     Seiten(String),
+    /// More works than a run may ask the records of; asked before the first.
+    Deckel(String),
+    /// More than a tenth of the records failed: nothing is written.
+    Ausfall { ausgefallen: usize, gesamt: usize },
 }
 
 impl From<HolFehler> for LaufFehler {
@@ -131,6 +135,17 @@ impl Laufbericht {
 }
 
 /// The query of a source of the index; shellac has none (shelves only).
+/// The catalog dump of Project Gutenberg, on the mirror the app takes.
+pub const GUTENBERG_KATALOG: &str = "https://gutenberg.pglaf.org/cache/epub/feeds/pg_catalog.csv";
+
+/// At most this many records of works in one run.
+pub const GUTENBERG_RDF_DECKEL: usize = 2000;
+
+/// The record of work `nummer` on the mirror.
+pub fn gutenberg_rdf_url(nummer: &str) -> String {
+    format!("https://gutenberg.pglaf.org/cache/epub/{nummer}/pg{nummer}.rdf")
+}
+
 pub fn base_query(quelle: &str) -> Option<&'static str> {
     match quelle {
         "librivox" => Some("collection:librivoxaudio"),

@@ -89,6 +89,30 @@ fn split_list(cell: &str) -> Vec<String> {
     cell.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
 }
 
+/// What the record of a work states about its rights.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rechte {
+    /// "Public domain in the USA."
+    Pd,
+    /// A text that begins with "Copyrighted": the work stays out.
+    Copyrighted,
+    /// Any other text.
+    Andere,
+}
+
+/// The record of one work (`pg<n>.rdf`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rdf {
+    pub rechte: Rechte,
+    pub downloads: Option<i64>,
+}
+
+/// Read the record of work `nummer`; a record of another work, or one that
+/// is not XML, is an error.
+pub fn rdf_lesen(_xml: &[u8], _nummer: &str) -> Result<Rdf, ReadError> {
+    Err(ReadError::Unreadable("not built".into()))
+}
+
 /// A class of the Library of Congress exactly `M`.
 pub fn is_music(locc: Option<&str>) -> bool {
     locc.is_some_and(|l| l.split(';').any(|c| c.trim() == "M"))

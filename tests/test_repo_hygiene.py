@@ -36,6 +36,8 @@ def locked_crates(lock):
 FABLE_FIXTURES = {
     "vektoren/katalog/gutenberg/art-music.json": "4f44fffe011d",
     "vektoren/katalog/gutenberg/pg_catalog-excerpt.csv": "b129fc5b3b48",
+    "vektoren/katalog/gutenberg/pg3002.rdf": "53c7105c7846",
+    "vektoren/katalog/gutenberg/pg5884.rdf": "fbf9849b3c2b",
 }
 
 
