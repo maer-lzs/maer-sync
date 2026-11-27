@@ -95,6 +95,9 @@ ACCESS = [
 # The one hex string that is no access value: the digest src/contract.rs holds
 # the contract file to. Only this line, only in this file, in its whole form.
 DIGEST_LINE = ("src/contract.rs", re.compile(r'pub const DIGEST: &str = "[0-9a-f]{64}";'))
+# The checksum of a crate in a lock file is a hash, not an access value: only
+# that line, only in the two lock files, in its whole form.
+LOCK_LINE = ({"Cargo.lock", "abruf/Cargo.lock"}, re.compile(r'checksum = "[0-9a-f]{64}"'))
 
 
 def without_allowed(text):
@@ -227,6 +230,7 @@ def check_staged():
             continue
         where = f"{path}: {line.strip()[:80]}"
         digest = path == DIGEST_LINE[0] and DIGEST_LINE[1].fullmatch(line.rstrip("\r\n"))
+        digest = digest or (path in LOCK_LINE[0] and LOCK_LINE[1].fullmatch(line.rstrip("\r\n")))
         if not digest and any(pattern.search(line) for pattern in ACCESS):
             found.append(f"an access value: {where}")
         if path.endswith(".md") and DASH.search(line):
