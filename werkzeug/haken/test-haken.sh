@@ -304,6 +304,26 @@ fi
 verdict refuse "$(LAUF_PUSH=1 plain_push origin :refs/notes/lauf)" "P12 deletion of the notes"
 verdict refuse "$(LAUF_PUSH=1 plain_push --force origin refs/notes/lauf~1:refs/notes/lauf)" "P12 notes moved back"
 
+# P14 to P16: a commit made in a clone without the hooks. The hooks are a
+# setting of the clone and do not travel with it; push.sh is the gate.
+"$GIT" config --unset core.hooksPath
+printf 'one\n' > docs/m.md && "$GIT" add docs/m.md && "$GIT" commit -q -m "A line from a clone without hooks"
+verdict refuse "$(run_push "$green")" "P14 push from a clone without the hooks"
+"$GIT" config core.hooksPath "$HAKEN"
+verdict pass "$(run_push "$green")" "P16 a clean commit made without the hooks passes once they are set"
+"$GIT" fetch -q origin
+"$GIT" config --unset core.hooksPath
+mkdir -p src && printf 'let token = "abcdef0123456789abcdef0123";\n' > src/p15.rs && "$GIT" add src/p15.rs
+"$GIT" commit -q -m "A constant in the source"
+"$GIT" config core.hooksPath "$HAKEN"
+verdict refuse "$(run_push "$green")" "P15 a commit with an access value made without the hooks"
+"$GIT" reset -q --hard origin/dev
+"$GIT" config --unset core.hooksPath
+printf 'one\n' > docs/n.md && "$GIT" add docs/n.md && "$GIT" commit -q -m "A line by someone else" --author "Someone <someone@example.com>"
+"$GIT" config core.hooksPath "$HAKEN"
+verdict refuse "$(run_push "$green")" "P15 a commit by another author made without the hooks"
+"$GIT" reset -q --hard origin/dev
+
 # --- What the hooks cannot know
 mv tests/role-names.txt "$WORK/role-names.txt"
 expect refuse "N1 the list of names is missing"     docs/j.md "one" "A line without the list"
