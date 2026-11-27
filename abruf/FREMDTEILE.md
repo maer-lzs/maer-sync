@@ -7,6 +7,8 @@ The crates the fetch program (`abruf/`) adds to those of the service, each with 
 | `adler2 2.0.1` | 0BSD OR MIT OR Apache-2.0 | yes | https://github.com/oyvindln/adler2 |
 | `base64 0.23.1` | MIT OR Apache-2.0 | yes | https://github.com/marshallpierce/rust-base64 |
 | `crc32fast 1.5.6` | MIT OR Apache-2.0 | yes | https://github.com/srijs/rust-crc32fast |
+| `csv 1.4.0` | Unlicense/MIT | yes | https://github.com/BurntSushi/rust-csv |
+| `csv-core 0.1.13` | Unlicense/MIT | yes | https://github.com/BurntSushi/rust-csv |
 | `flate2 1.1.11` | MIT OR Apache-2.0 | yes | https://github.com/rust-lang/flate2-rs |
 | `getrandom 0.2.17` | MIT OR Apache-2.0 | yes | https://github.com/rust-random/getrandom |
 | `miniz_oxide 0.9.1` | MIT OR Zlib OR Apache-2.0 | yes | https://github.com/Frommi/miniz_oxide |
@@ -15,6 +17,7 @@ The crates the fetch program (`abruf/`) adds to those of the service, each with 
 | `rustls 0.23.46` | Apache-2.0 OR ISC OR MIT | yes | https://github.com/rustls/rustls |
 | `rustls-pki-types 1.16.0` | MIT OR Apache-2.0 | yes | https://github.com/rustls/pki-types |
 | `rustls-webpki 0.103.17` | ISC | yes | https://github.com/rustls/webpki |
+| `ryu 1.0.23` | Apache-2.0 OR BSL-1.0 | yes | https://github.com/dtolnay/ryu |
 | `simd-adler32 0.3.10` | MIT | yes | https://github.com/mcountryman/simd-adler32 |
 | `untrusted 0.9.0` | ISC | yes | https://github.com/briansmith/untrusted |
 | `ureq 3.5.2` | MIT OR Apache-2.0 | yes | https://github.com/algesten/ureq |
