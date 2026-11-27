@@ -484,3 +484,25 @@ fn musopen_rows_have_no_step() {
     assert!(!rows.is_empty());
     assert!(rows.iter().all(|s| s.row.beliebt_stufe.is_none()));
 }
+
+// ---------------------------------------------------------------- gathering the numbers
+
+#[test]
+fn radio_gathers_the_votes_of_every_page() {
+    // Seven stations on three pages of three; the votes fall with the number.
+    let list: Vec<Value> = (0..7).map(|i| {
+        let mut s = station(i);
+        s["votes"] = json!(100 - i as i64);
+        s
+    }).collect();
+    let (mut net, log) = net(radio_api(Rc::new(RefCell::new(list)), Rc::new(RefCell::new((7, 0))), vec![]));
+    let mut k = katalog("radio-sammeln");
+    let b = lauf(&mut net, &mut k, "radio", Art::Voll, &e(3));
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    let pages = log.borrow().iter().filter(|a| a.url.contains("/json/stations?")).count();
+    assert_eq!(pages, 3, "the witness needs three pages");
+    for s in k.full("radio", None, MAX_PAGE).unwrap().zeilen {
+        let i: i64 = s.row.id.rsplit('-').next().unwrap().parse().unwrap();
+        assert_eq!(s.row.beliebt_stufe, Some(1 + 10 * i / 7), "{}", s.row.id);
+    }
+}

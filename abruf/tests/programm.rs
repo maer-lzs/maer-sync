@@ -420,3 +420,59 @@ fn the_line_counts_the_rows_whose_step_changed() {
     let b = a.programm.ein_lauf("librivox", Art::Voll, false);
     assert!(b.zeile().contains(" stufen_gewechselt=0"), "{}", b.zeile());
 }
+
+// ---------------------------------------------------------------- gathering the numbers
+
+/// Shellac on two shelves, two records to a page: jazz holds a, both and c,
+/// opera holds both, d and e; every other shelf is empty. `umgekehrt` turns
+/// the downloads round, for a delta that must not move a step.
+fn zwei_regale(umgekehrt: bool) -> Handler {
+    Box::new(move |_, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        let word = q.split("subject:\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or("").to_string();
+        let ids: Vec<(&str, i64)> = match word.as_str() {
+            "jazz" => vec![("78_a", 50), ("78_both", 40), ("78_c", 30)],
+            "opera" => vec![("78_both", 40), ("78_d", 20), ("78_e", 10)],
+            _ => vec![],
+        };
+        let rows: usize = p["rows"].parse().unwrap();
+        let page: usize = p["page"].parse().unwrap();
+        let docs: Vec<Value> = ids.iter().skip((page - 1) * rows).take(rows).map(|(id, d)| {
+            let d = if umgekehrt { 60 - d } else { *d };
+            json!({"identifier": id, "title": id, "collection": ["georgeblood"], "subject": [word], "year": 1925, "downloads": d})
+        }).collect();
+        ok(adv(&q, ids.len(), docs))
+    })
+}
+
+fn zwei_je_seite() -> Einstellungen { Einstellungen { scrape_count: 10_000, adv_rows: 2, kalenderjahr: 2026 } }
+
+fn stufen_von(k: &Katalog, q: &str) -> BTreeMap<String, Option<i64>> {
+    k.full(q, None, MAX_PAGE).unwrap().zeilen.into_iter().map(|s| (s.row.id, s.row.beliebt_stufe)).collect()
+}
+
+#[test]
+fn shellac_gathers_the_numbers_of_every_shelf_and_page() {
+    let mut a = aufbau("sammeln-regale", zwei_regale(false), T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    let b = lauf(&mut a.programm.netz, &mut k, "schellack", Art::Voll, &zwei_je_seite());
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    // Five records; the one on two shelves is one row with one number and
+    // one step. Ranks 0 to 4 of 5 give the steps 1, 3, 5, 7, 9.
+    let want: BTreeMap<String, Option<i64>> = [("lva:78_a", 1), ("lva:78_both", 3), ("lva:78_c", 5), ("lva:78_d", 7), ("lva:78_e", 9)]
+        .into_iter().map(|(id, s)| (id.to_string(), Some(s))).collect();
+    assert_eq!(stufen_von(&k, "schellack"), want);
+}
+
+#[test]
+fn a_shellac_delta_gathers_no_numbers() {
+    let mut a = aufbau("sammeln-delta", zwei_regale(false), T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    assert_eq!(lauf(&mut a.programm.netz, &mut k, "schellack", Art::Voll, &zwei_je_seite()).ausgang, Ok(()));
+    let vorher = stufen_von(&k, "schellack");
+    *a.handler.borrow_mut() = zwei_regale(true);
+    let b = lauf(&mut a.programm.netz, &mut k, "schellack", Art::Delta, &zwei_je_seite());
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    assert_eq!(stufen_von(&k, "schellack"), vorher, "a delta moved a step");
+    assert!(b.zeile().contains(" stufen_gewechselt=0"), "{}", b.zeile());
+}
