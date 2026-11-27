@@ -404,7 +404,7 @@ impl Katalog {
     pub fn open_read(path: &str) -> Result<Self, KatalogError> {
         let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
         if !check_file(&db)? {
-            return Err(KatalogError::Invalid("no catalog in this file".into()));
+            return Err(KatalogError::NoCatalog);
         }
         db.busy_timeout(Duration::from_millis(DEFAULT_WAIT_MS))?;
         Ok(Katalog { db, read_only: true })

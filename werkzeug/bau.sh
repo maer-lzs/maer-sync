@@ -6,10 +6,12 @@
 # Baut den Rust-Dienst im gepinnten Abbild, damit auf dem Wirt keine
 # Werkzeugkette liegt.
 #
-# Gepinnt wird der INDEX-Digest, nicht das Etikett: `rust:1.85-alpine` wandert
-# mit der naechsten Punktfassung, der Digest nicht. Der Index deckt
-# linux/amd64 und linux/arm64/v8, also beide Wirte mit einer Angabe. Ein
-# A new digest is a new dependency and goes through the same gate as a crate.
+# The INDEX digest is pinned, not the tag: `rust:1.85-alpine` moves with
+# the next point release, the digest does not. The index covers
+# linux/amd64 and linux/arm64/v8, so one value serves both hosts.
+# A new digest is a new dependency and is approved on its own, like a
+# crate; no hook holds it. tests/abbild.rs only checks that the three
+# places name the same digest.
 #
 # Das Ziel wird AUSDRUECKLICH gesetzt, und der frueheste Stand dieses Skripts
 # begruendete das Gegenteil. Gemessen: ohne `--target` gilt

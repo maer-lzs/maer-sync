@@ -259,7 +259,8 @@ fn commons_url(params: &[(&str, &str)]) -> String {
 fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Result<Vec<Row>, LaufFehler> {
     let mut rows: Vec<Row> = vec![];
     let mut ids = BTreeSet::new();
-    let limit = e.adv_rows.min(COMMONS_SEITE).to_string();
+    let seite = e.adv_rows.min(COMMONS_SEITE).max(1);
+    let limit = seite.to_string();
     for cat in musopen::KATEGORIEN {
         let a = netz.get(&commons_url(&[("prop", "categoryinfo"), ("titles", cat)]))?;
         let v = parse(&a.koerper)?;
@@ -273,7 +274,7 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
         // The pages a category may take: its count in pages of `limit`, and
         // two more for a count that moved. A cursor that came back, or a page
         // above the cap, ends the pass.
-        let deckel = files.div_ceil(e.adv_rows.min(COMMONS_SEITE).max(1)) + 2;
+        let deckel = files.div_ceil(seite) + 2;
         let mut seiten = 0;
         let mut cursors = BTreeSet::new();
         loop {
@@ -292,7 +293,7 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
             }
             let Some(w) = s.weiter else { break };
             if !cursors.insert(w.clone()) {
-                return Err(LaufFehler::Seiten(format!("{cat}: the cursor {w} came back after {seiten} pages")));
+                return Err(LaufFehler::Seiten(format!("{cat}: a cursor came back after {seiten} pages")));
             }
             if seiten > deckel {
                 return Err(LaufFehler::Seiten(format!("{cat}: more than {deckel} pages for {files} files")));

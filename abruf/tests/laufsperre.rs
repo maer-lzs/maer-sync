@@ -95,6 +95,17 @@ fn frisch(name: &str) -> String {
     p.to_string_lossy().into_owned()
 }
 
+/// Clears a catalog and its side files when the witness ends, green or not.
+struct Weg(String);
+
+impl Drop for Weg {
+    fn drop(&mut self) {
+        for s in ["", "-wal", "-shm", "-journal", ".lauf"] {
+            let _ = std::fs::remove_file(format!("{}{s}", self.0));
+        }
+    }
+}
+
 /// A catalog with `n` LibriVox rows, closed cleanly, in which only LibriVox
 /// is due (its full pass eight days old, every other source run just now).
 fn bereit(name: &str, n: usize) -> String {
@@ -126,7 +137,11 @@ fn seitendateien(path: &str) -> Vec<String> {
 /// Start the helper `name` in a second process and wait until it marks
 /// that it holds what it was told to hold.
 fn helfer(name: &str, env: &[(&str, String)]) -> std::process::Child {
-    let mark = frisch(&format!("mark-{name}"));
+    // One mark per call: two witnesses start the same helper side by side,
+    // and a shared mark let one of them see the other's.
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let call = CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let mark = frisch(&format!("mark-{name}-{call}"));
     let mut c = std::process::Command::new(std::env::current_exe().unwrap());
     c.args(["--ignored", "--exact", name, "--nocapture"]).env("LS_MARKE", &mark)
         .stdout(std::process::Stdio::piped());
@@ -142,6 +157,7 @@ fn helfer(name: &str, env: &[(&str, String)]) -> std::process::Child {
         assert!(t.elapsed() < Duration::from_secs(30), "the helper {name} never marked");
         std::thread::sleep(Duration::from_millis(10));
     }
+    let _ = std::fs::remove_file(&mark);
     child
 }
 
@@ -205,6 +221,7 @@ fn helfer_liest() {
 #[test]
 fn a_run_finds_the_catalog_taken_and_fetches_nothing() {
     let path = bereit("taken", 100);
+    let _weg = Weg(path.clone());
     let v = Katalog::open_read(&path).unwrap().version("librivox").unwrap();
     let h = helfer("helfer_haelt_die_laufsperre", &[("LS_DATEI", path.clone()), ("LS_MS", "20000".into())]);
     let n = netz(99, None);
@@ -225,6 +242,7 @@ fn a_run_finds_the_catalog_taken_and_fetches_nothing() {
 #[test]
 fn the_program_takes_a_taken_catalog_as_later() {
     let path = bereit("later", 100);
+    let _weg = Weg(path.clone());
     let mut h = helfer("helfer_haelt_die_laufsperre", &[("LS_DATEI", path.clone()), ("LS_MS", "20000".into())]);
     let n = netz(99, None);
     let scheitert = n.scheitert.clone();
@@ -247,6 +265,7 @@ fn the_program_takes_a_taken_catalog_as_later() {
 #[test]
 fn a_confirmed_run_ends_when_the_catalog_is_taken() {
     let path = bereit("confirmed-taken", 100);
+    let _weg = Weg(path.clone());
     let v = Katalog::open_read(&path).unwrap().version("librivox").unwrap();
     let mut h = helfer("helfer_haelt_die_laufsperre", &[("LS_DATEI", path.clone()), ("LS_MS", "20000".into())]);
     let n = netz(10, None);
@@ -269,6 +288,7 @@ fn no_two_runs_interleave() {
     // Measured 26.11.2026 without the lock: the confirmed run wrote 50, the
     // program wrote its 150 over it, both lines said ok.
     let path = bereit("interleave", 150);
+    let _weg = Weg(path.clone());
     let v = Katalog::open_read(&path).unwrap().version("librivox").unwrap();
     let p2 = path.clone();
     let helfer_zeile = Rc::new(RefCell::new(String::new()));
@@ -291,6 +311,7 @@ fn no_two_runs_interleave() {
 #[test]
 fn the_lock_goes_with_its_process() {
     let path = bereit("dies", 10);
+    let _weg = Weg(path.clone());
     let mut h = helfer("helfer_haelt_die_laufsperre", &[("LS_DATEI", path.clone()), ("LS_MS", "20000".into())]);
     // While it lives, the lock is taken.
     assert!(matches!(Katalog::laufsperre(&path), Err(KatalogError::Busy)), "the lock is not held by its process");
@@ -303,6 +324,7 @@ fn the_lock_goes_with_its_process() {
 #[test]
 fn the_program_starts_beside_a_run() {
     let path = bereit("start", 10);
+    let _weg = Weg(path.clone());
     let mut h = helfer("helfer_haelt_die_laufsperre", &[
         ("LS_DATEI", path.clone()), ("LS_MS", "20000".into()), ("LS_AUCH_SCHREIBEN", "1".into())]);
     let neu = Programm::new(netz(10, None).netz, &path);
@@ -321,6 +343,7 @@ fn a_whole_run_closes_clean_beside_a_reader() {
     // close succeeded; opened after it, it failed at once and the side
     // files stayed). The run waits for such a reader instead.
     let path = bereit("reader", 100);
+    let _weg = Weg(path.clone());
     let p2 = path.clone();
     let leser: Rc<RefCell<Option<std::process::Child>>> = Rc::new(RefCell::new(None));
     let l2 = leser.clone();

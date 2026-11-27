@@ -52,6 +52,7 @@ fn probe_run_librivox_against_archive_org() {
         panic!("{e}");
     }
     let p = std::env::temp_dir().join(format!("maer-sync-probelauf-{}", std::process::id()));
+    let _weg = Weg(p.clone());
     // As the program runs: under the run lock, closed cleanly.
     let mut prog = Programm::new(Netz::new(UreqHoler::new(), SystemUhr), p.to_str().unwrap()).unwrap();
     let b = prog.ein_lauf("librivox", Art::Voll, false);
@@ -73,8 +74,15 @@ fn probe_run_librivox_against_archive_org() {
         }
         println!("PROBELAUF zeilen={rows} rechte={kinds:?}");
     }
-    drop(k);
-    for s in ["", "-wal", "-shm", ".lauf"] {
-        let _ = std::fs::remove_file(format!("{}{s}", p.display()));
+}
+
+/// Clears the files of the probe run, also when it failed.
+struct Weg(std::path::PathBuf);
+
+impl Drop for Weg {
+    fn drop(&mut self) {
+        for s in ["", "-wal", "-shm", ".lauf"] {
+            let _ = std::fs::remove_file(format!("{}{s}", self.0.display()));
+        }
     }
 }
