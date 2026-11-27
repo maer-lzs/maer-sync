@@ -59,6 +59,14 @@ L_AUTH="$(printf '%s: Bearer %s' Authorization "$TOKVAL")"
 L_DIGEST="$(printf 'pub const DIGEST: &str = "%s";' "$HEX64")"
 L_LOCK="$(printf 'checksum = "%s"' "$HEX64")"
 L_SHORT="$(printf 'token = "%s"' short)"
+HEX64_UPPER="$(printf 'D%.0s' $(seq 64))"
+L_DIGEST_UPPER="$(printf 'pub const DIGEST: &str = "%s";' "$HEX64_UPPER")"
+L_LOCK_UPPER="$(printf 'checksum = "%s"' "$HEX64_UPPER")"
+
+# What rules.py says of the head commit of the witness clone.
+rules_verdict() {
+    if python3 -I "$HAKEN/rules.py" commit HEAD > /dev/null 2>"$WORK/rules"; then echo accepted; else echo refused; fi
+}
 
 failures=0
 cases=0
@@ -128,6 +136,15 @@ fresh; add_line src/contract.rs "$L_DIGEST" "Hold the contract to its digest"; n
 verdict accepted "$(push_result origin dev refs/notes/lauf)" "S3 the digest line in src/contract.rs"
 fresh; add_line Cargo.lock "$L_LOCK" "Pin a crate"; note green
 verdict accepted "$(push_result origin dev refs/notes/lauf)" "S3 a checksum line in Cargo.lock"
+
+# The two exceptions are exact: the same lines in capitals are access values
+# for the gate and for rules.py alike.
+fresh; add_line src/contract.rs "$L_DIGEST_UPPER" "Hold the contract to its digest"; note green
+verdict "refused:an access value" "$(push_result origin dev refs/notes/lauf)" "S3 the digest line in capitals"
+verdict refused "$(rules_verdict)" "S3 rules.py refuses the digest line in capitals"
+fresh; add_line Cargo.lock "$L_LOCK_UPPER" "Pin a crate"; note green
+verdict "refused:an access value" "$(push_result origin dev refs/notes/lauf)" "S3 a checksum line in capitals"
+verdict refused "$(rules_verdict)" "S3 rules.py refuses a checksum line in capitals"
 
 fresh; add_line src/other.rs "$L_DIGEST"; note green
 verdict "refused:an access value" "$(push_result origin dev refs/notes/lauf)" "S4 the digest line in another file"
@@ -207,6 +224,37 @@ gate="$(push_result origin lever refs/notes/lauf)"
 if python3 -I "$HAKEN/rules.py" commit HEAD > /dev/null 2>"$WORK/rules"; then clone=accepted; else clone=refused; fi
 verdict refused "$clone" "S11 rules.py reads the pattern the file was taught"
 verdict "refused:an access value" "$gate" "S11 the gate reads the pattern the file was taught"
+
+# S12: without whole patterns the gate lets nothing in and rules.py reads
+# nothing, each with a sentence that says why. The same push goes through
+# once the file is whole again, so the refusals came from the file.
+INSTALLED="$ORIGIN/hooks/pre-receive.muster"
+TRACKED="werkzeug/haken/muster.txt"
+cp "$INSTALLED" "$WORK/installed.kept"
+cp "$TRACKED" "$WORK/tracked.kept"
+fresh; add_line docs/s12.md "a clean line" "Add a clean line"; note green
+# rules.py refused for the named reason, or something else.
+rules_reason() {
+    if python3 -I "$HAKEN/rules.py" commit HEAD > /dev/null 2>"$WORK/out"; then echo accepted
+    elif grep -q "$1" "$WORK/out"; then echo refused
+    else echo "other"; fi
+}
+: > "$INSTALLED"
+verdict "refused:no patterns" "$(push_result origin dev refs/notes/lauf)" "S12 the gate with an empty file of patterns"
+rm -f "$INSTALLED"
+verdict "refused:no patterns" "$(push_result origin dev refs/notes/lauf)" "S12 the gate without a file of patterns"
+{ cat "$WORK/installed.kept"; echo "allow everything"; } > "$INSTALLED"
+verdict "refused:no patterns" "$(push_result origin dev refs/notes/lauf)" "S12 the gate with a line of unknown kind"
+: > "$TRACKED"
+verdict refused "$(rules_reason "holds no access pattern")" "S12 rules.py with an empty file of patterns"
+rm -f "$TRACKED"
+verdict refused "$(rules_reason "list of patterns is missing")" "S12 rules.py without a file of patterns"
+{ cat "$WORK/tracked.kept"; echo "allow everything"; } > "$TRACKED"
+verdict refused "$(rules_reason "unknown kind")" "S12 rules.py with a line of unknown kind"
+cp "$WORK/installed.kept" "$INSTALLED"
+cp "$WORK/tracked.kept" "$TRACKED"
+verdict accepted "$(push_result origin dev refs/notes/lauf)" "S12 the gate takes the same push once the file is whole"
+verdict accepted "$(rules_verdict)" "S12 rules.py takes the same commit once the file is whole"
 
 echo "cases: $cases, failures: $failures"
 [ "$failures" -eq 0 ]
