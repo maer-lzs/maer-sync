@@ -44,15 +44,31 @@ fi
 rm -f "$PROT"
 
 echo "== Rust =="
-# The fetch program (abruf/) is a package of its own; its witnesses run here too.
-{ werkzeug/bau.sh test --offline; werkzeug/bau.sh test --offline --manifest-path abruf/Cargo.toml; } 2>&1 \
-  | grep -E '^test result' \
-  | awk -F'[ ;]+' '{p+=$4; f+=$6; i+=$8}
-      END {printf "  grün: %d  rot: %d  übersprungen: %d\n", p, f, i;
-           if (f > 0 || p == 0) exit 1}' || {
-  echo "HALT: die Rust-Zeugen sind rot oder es wurde nichts gemessen. Nicht committen." >&2
-  exit 1
-}
+# The fetch program (abruf/) is a package of its own; its witnesses run here
+# too. Each package runs on its own, its exit code is read, and it has to
+# have measured something: counted together, a package that did not compile
+# left no result line, the other one counted, and the gate said green.
+RPROT=$(mktemp)
+gp=0; gf=0; gi=0
+for paket in dienst abruf; do
+  if [ "$paket" = abruf ]; then set -- --manifest-path abruf/Cargo.toml; else set --; fi
+  if ! werkzeug/bau.sh test --offline "$@" > "$RPROT" 2>&1; then
+    tail -20 "$RPROT"
+    rm -f "$RPROT"
+    echo "HALT: die Rust-Zeugen von $paket sind rot oder uebersetzen nicht. Nicht committen." >&2
+    exit 1
+  fi
+  set -- $(grep -E '^test result' "$RPROT" | awk -F'[ ;]+' '{p+=$4; f+=$6; i+=$8} END {print p+0, f+0, i+0}')
+  if [ "$1" -eq 0 ] || [ "$2" -ne 0 ]; then
+    tail -20 "$RPROT"
+    rm -f "$RPROT"
+    echo "HALT: $paket hat nichts gemessen oder ist rot ($1 gruen, $2 rot). Nicht committen." >&2
+    exit 1
+  fi
+  gp=$((gp + $1)); gf=$((gf + $2)); gi=$((gi + $3))
+done
+rm -f "$RPROT"
+printf "  grün: %d  rot: %d  übersprungen: %d\n" "$gp" "$gf" "$gi"
 
 echo "== Baum =="
 git diff --cached --stat Cargo.toml Cargo.lock | tail -1

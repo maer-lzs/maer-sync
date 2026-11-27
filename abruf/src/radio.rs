@@ -21,6 +21,7 @@ use maer_sync::katalog::Row;
 use serde_json::{Map, Value};
 
 use crate::archive::ReadError;
+use crate::text::trim_spaces;
 
 /// The servers of the app, in this order; a run falls back to the next.
 /// Measured 26.11.2026: `at1` and `nl1` no longer resolve, `all` is the same
@@ -57,9 +58,8 @@ fn refused_by_url_string(s: &str) -> bool {
     host.starts_with('[') && !host.contains(']')
 }
 
-/// Swift's `.whitespaces`: spaces and tabs, not line breaks.
 fn trimmed(v: Option<&Value>) -> &str {
-    v.and_then(Value::as_str).unwrap_or("").trim_matches(|c: char| c.is_whitespace() && !matches!(c, '\n' | '\r' | '\u{0B}' | '\u{0C}' | '\u{85}' | '\u{2028}' | '\u{2029}'))
+    trim_spaces(v.and_then(Value::as_str).unwrap_or(""))
 }
 
 pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {
@@ -76,8 +76,10 @@ pub fn rows_from_page(answer: &[u8]) -> Result<Seite, ReadError> {
             uuids.push(uuid.to_string());
         }
         let name = trimmed(x.get("name"));
-        let resolved = trimmed(x.get("url_resolved"));
-        let stream = if resolved.is_empty() { trimmed(x.get("url")) } else { resolved };
+        // As the devices: `url_resolved` is asked for empty before it is
+        // trimmed, so one of spaces leaves the station without a stream.
+        let resolved = x.get("url_resolved").and_then(Value::as_str).unwrap_or("");
+        let stream = trim_spaces(if resolved.is_empty() { x.get("url").and_then(Value::as_str).unwrap_or("") } else { resolved });
         if name.is_empty() || stream.is_empty() || refused_by_url_string(stream) || !taken.insert(uuid.to_string()) {
             continue;
         }

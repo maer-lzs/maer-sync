@@ -34,7 +34,7 @@ use std::collections::BTreeMap;
 use maer_sync::katalog::Row;
 use serde_json::Value;
 
-/// A theme shelf of the shellac collection, as `vektoren/katalog/schellack/regale.json` lists it.
+/// A theme shelf of the shellac collection, as `abruf/regale.json` lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shelf {
     pub schluessel: String,

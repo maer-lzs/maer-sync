@@ -73,6 +73,8 @@ EXEMPT = {
     "abruf/Cargo.lock": "cargo writes this file; a header would be rewritten away. It starts as a copy of "
                         "the service's Cargo.lock, so the shared crates have the same versions",
     "abruf/FREMDTEILE.md": "a table of the third-party crates of the fetch program; the LICENSE file covers it",
+    "abruf/regale.json": "the theme shelves the fetch program reads, kept equal to the copy in the vectors; "
+                         "JSON has no comment to put a header in",
     "LICENSE": "it is the licence",
     "LICENSE-ADDITIONAL-TERMS": "it is the additional terms",
     "vektoren/README.md": "prose about the vectors next to them; the LICENSE file covers it",

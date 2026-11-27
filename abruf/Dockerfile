@@ -6,8 +6,7 @@
 # The fetch program of the catalog index as a container, built like the
 # service (same base image digest and musl-dev pin, held by the witness
 # abruf/tests/zaeune.rs). The context is the repository root, because the
-# fetch program builds against the service's library and reads the shelf list
-# of the vectors. The result holds the binary, the catalog directory of its
+# fetch program builds against the service's library. The result holds the binary, the catalog directory of its
 # own uid and the licence texts, nothing else.
 FROM rust@sha256:4333721398de61f53ccbe53b0b855bcc4bb49e55828e8f652d7a8ac33dd0c118 AS bau
 RUN apk add --no-cache musl-dev~1.2.5
@@ -16,8 +15,7 @@ ENV CARGO_HOME=/bau/ziel/cargo-home \
     CARGO_TARGET_DIR=/bau/ziel/abbau
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-COPY vektoren/katalog/schellack/regale.json ./vektoren/katalog/schellack/regale.json
-COPY abruf/Cargo.toml abruf/Cargo.lock ./abruf/
+COPY abruf/Cargo.toml abruf/Cargo.lock abruf/regale.json ./abruf/
 COPY abruf/src ./abruf/src
 RUN set -eu; \
     case "$(uname -m)" in \

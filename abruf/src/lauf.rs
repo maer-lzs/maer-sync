@@ -135,9 +135,13 @@ pub fn base_query(quelle: &str) -> Option<&'static str> {
     }
 }
 
-/// The theme shelves of the app, from the shared list the vectors carry.
+/// The list of the theme shelves the program reads, as the app names them.
+/// It belongs to the program; the vectors keep a copy for the device sides.
+pub const REGALE_JSON: &str = include_str!("../regale.json");
+
+/// The theme shelves of the app.
 pub fn regale_der_app() -> Vec<Shelf> {
-    let v: Value = serde_json::from_str(include_str!("../../vektoren/katalog/schellack/regale.json"))
+    let v: Value = serde_json::from_str(REGALE_JSON)
         .expect("regale.json is JSON");
     v["regale"].as_array().expect("regale.json lists shelves").iter()
         .map(|r| Shelf {

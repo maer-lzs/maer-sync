@@ -404,11 +404,15 @@ fn no_text_names_a_version_the_service_does_not_speak() {
     assert_eq!(VERSION, "6");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut found = vec![];
+    let mut read = 0;
     for dir in ["src", "tests", "abruf/src", "abruf/tests"] {
-        let Ok(entries) = std::fs::read_dir(root.join(dir)) else { continue };
+        // A directory that cannot be read fails the fence: skipped, it would
+        // leave the fence green without having looked.
+        let entries = std::fs::read_dir(root.join(dir)).unwrap_or_else(|e| panic!("{dir}: {e}"));
         for e in entries {
             let p = e.unwrap().path();
             if p.extension().and_then(|x| x.to_str()) != Some("rs") || p.ends_with("tests/vertrag.rs") { continue; }
+            read += 1;
             let text = std::fs::read_to_string(&p).unwrap().to_lowercase();
             for (i, line) in text.lines().enumerate() {
                 if line.contains("version 7") || line.contains("fassung 7") {
@@ -417,5 +421,7 @@ fn no_text_names_a_version_the_service_does_not_speak() {
             }
         }
     }
+    // Measured on 26.11.2026: 73 files in the four directories.
+    assert!(read >= 70, "only {read} files were read");
     assert!(found.is_empty(), "texts that name version 7: {found:?}");
 }

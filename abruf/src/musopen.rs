@@ -22,6 +22,8 @@
 use maer_sync::katalog::Row;
 use serde_json::{json, Value};
 
+use crate::text::{is_newline, trim_spaces};
+
 pub const KATEGORIEN: [&str; 2] = ["Category:Musopen", "Category:Set Chopin Free"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,15 +114,6 @@ pub fn playable(vi: &Value) -> Result<String, Dropped> {
 }
 
 // ---------------------------------------------------------------- text helpers
-
-/// Swift's `.whitespaces`: spaces and tabs, not line breaks.
-fn trim_spaces(s: &str) -> &str {
-    s.trim_matches(|c: char| c.is_whitespace() && !is_newline(c))
-}
-
-fn is_newline(c: char) -> bool {
-    matches!(c, '\n' | '\r' | '\u{000B}' | '\u{000C}' | '\u{0085}' | '\u{2028}' | '\u{2029}')
-}
 
 /// Case and diacritics folded, as Swift's `folding([.caseInsensitive,
 /// .diacriticInsensitive])` for the Latin letters these titles use.
