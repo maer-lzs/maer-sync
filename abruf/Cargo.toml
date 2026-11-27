@@ -22,6 +22,10 @@ serde_json = "=1.0.151"
 # rustls with the compiled-in Mozilla roots (webpki-roots), gzip included.
 # Measured 25.11.2026: 18 new crates, builds with Rust 1.85, +1.76 MB.
 ureq = "=3.5.2"
+# The catalog dump of Project Gutenberg (pg_catalog.csv): quotes and line
+# breaks inside fields. Measured 27.11.2026: csv, csv-core, ryu new, builds
+# with Rust 1.85; Unlicense or MIT, ryu Apache-2.0 or BSL-1.0.
+csv = "=1.4.0"
 
 [dev-dependencies]
 # The witnesses read the catalog file directly; the same pin as the service.

@@ -131,3 +131,6 @@ windows_x86_64_gnu # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the
 windows_x86_64_gnullvm # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
 windows_x86_64_msvc # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
 zlib-rs # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch program
+csv # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump
+csv-core # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump
+ryu # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump

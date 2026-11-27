@@ -33,7 +33,21 @@ def locked_crates(lock):
     return set(re.findall(r'^name = "([^"]+)"', (ROOT / lock).read_text(encoding="utf-8"), re.M))
 
 
+FABLE_FIXTURES = {
+    "vektoren/katalog/gutenberg/art-music.json": "4f44fffe011d",
+    "vektoren/katalog/gutenberg/pg_catalog-excerpt.csv": "b129fc5b3b48",
+}
+
+
 class RepoHygieneTests(unittest.TestCase):
+    def test_the_fixtures_of_the_app_stay_byte_for_byte(self):
+        # They come from the app's tests; a change here would part the two
+        # readers without either seeing it.
+        import subprocess
+        for path, blob in FABLE_FIXTURES.items():
+            got = subprocess.run(["git", "hash-object", str(ROOT / path)], capture_output=True, text=True, check=True).stdout.strip()
+            self.assertTrue(got.startswith(blob), f"{path} is {got[:12]}, the app holds {blob}")
+
     def test_every_crate_in_the_lock_files_is_approved(self):
         # The hook checks a change of a lock file; this checks the stock, so a
         # crate that came in while the hook did not run shows here.

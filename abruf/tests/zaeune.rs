@@ -133,7 +133,8 @@ fn every_built_fetch_crate_carries_its_licence_texts() {
             .filter(|n| n.to_uppercase().starts_with("LICENSE")).collect();
         assert!(!files.is_empty(), "no licence file for {}", cells[1]);
     }
-    assert_eq!(built, 17);
+    // 17 with ureq, three more with csv (csv, csv-core, ryu) on 2026-11-27.
+    assert_eq!(built, 20);
     let cdla = std::fs::read_to_string(root.join("webpki-roots-1.0.12").join("LICENSE")).unwrap();
     assert!(cdla.contains("Community Data License Agreement"), "the CDLA text of webpki-roots is missing");
     assert!(read("Dockerfile").contains("COPY abruf/lizenzen /lizenzen"), "the image does not carry the licence texts");
