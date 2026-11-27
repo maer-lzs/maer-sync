@@ -19,13 +19,19 @@ pub fn stufen(rows: &mut [Row], zahlen: &BTreeMap<String, i64>) {
     let mut ranked: Vec<(i64, &str)> = rows.iter()
         .filter_map(|r| zahlen.get(&r.id).map(|z| (*z, r.id.as_str())))
         .collect();
-    // The most popular first; a tie goes by id, so the order is the same
-    // on every run.
-    ranked.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1)));
+    // The most popular first. The rank of a row is the number of rows with
+    // a greater number, so the same number has the same rank and the same
+    // step, whatever the ids.
+    ranked.sort_by(|a, b| b.0.cmp(&a.0));
     let n = ranked.len() as i64;
-    let stufe: BTreeMap<String, i64> = ranked.iter().enumerate()
-        .map(|(rang, (_, id))| (id.to_string(), 1 + 10 * rang as i64 / n))
-        .collect();
+    let mut stufe: BTreeMap<String, i64> = BTreeMap::new();
+    let mut rang = 0;
+    for (i, (zahl, id)) in ranked.iter().enumerate() {
+        if i == 0 || *zahl != ranked[i - 1].0 {
+            rang = i as i64;
+        }
+        stufe.insert(id.to_string(), 1 + 10 * rang / n);
+    }
     for r in rows.iter_mut() {
         r.beliebt_stufe = stufe.get(&r.id).copied();
     }
