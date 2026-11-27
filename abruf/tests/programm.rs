@@ -476,3 +476,40 @@ fn a_shellac_delta_gathers_no_numbers() {
     assert_eq!(stufen_von(&k, "schellack"), vorher, "a delta moved a step");
     assert!(b.zeile().contains(" stufen_gewechselt=0"), "{}", b.zeile());
 }
+
+/// LibriVox with seven records over scrape pages of `count`, the cursor the
+/// next index; the downloads fall with the number.
+fn scrape_seiten() -> Handler {
+    Box::new(|a, p| {
+        let q = p.get("q").cloned().unwrap_or_default();
+        let n = 7usize;
+        if a.url.starts_with("https://archive.org/advancedsearch.php") {
+            return ok(adv(&q, n, vec![]));
+        }
+        assert!(a.url.starts_with("https://archive.org/services/search/v1/scrape"), "{}", a.url);
+        let count: usize = p["count"].parse().unwrap();
+        let start: usize = p.get("cursor").map(|c| c.parse().unwrap()).unwrap_or(0);
+        let items: Vec<Value> = (start..(start + count).min(n)).map(|i| json!({
+            "identifier": format!("item-{i}"), "title": format!("Title {i}"),
+            "collection": ["librivoxaudio"], "downloads": 100 - i as i64,
+        })).collect();
+        let mut v = json!({"items": items, "count": items.len(), "total": n});
+        if start + count < n { v["cursor"] = json!((start + count).to_string()); }
+        ok(v)
+    })
+}
+
+#[test]
+fn scrape_gathers_the_downloads_of_every_page() {
+    let mut a = aufbau("sammeln-scrape", scrape_seiten(), T0_MS);
+    let mut k = Katalog::open(&a.path).unwrap();
+    let drei = Einstellungen { scrape_count: 3, adv_rows: 10_000, kalenderjahr: 2026 };
+    let b = lauf(&mut a.programm.netz, &mut k, "librivox", Art::Voll, &drei);
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    let rows = k.full("librivox", None, MAX_PAGE).unwrap().zeilen;
+    assert_eq!(rows.len(), 7, "the witness needs three pages of three");
+    for s in rows {
+        let i: i64 = s.row.id.rsplit('-').next().unwrap().parse().unwrap();
+        assert_eq!(s.row.beliebt_stufe, Some(1 + 10 * i / 7), "{}", s.row.id);
+    }
+}
