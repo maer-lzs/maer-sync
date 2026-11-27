@@ -425,3 +425,114 @@ fn no_text_names_a_version_the_service_does_not_speak() {
     assert!(read >= 70, "only {read} files were read");
     assert!(found.is_empty(), "texts that name version 7: {found:?}");
 }
+
+// ---------------------------------------------------------------- always backwards compatible (27.11.2026)
+
+fn text() -> String {
+    String::from_utf8(vertrag()).expect("UTF-8")
+}
+
+/// The text of one section, from its heading to the next one.
+fn abschnitt(text: &str, heading: &str) -> Option<String> {
+    let start = text.find(&format!("\n## {heading}\n"))? + 1;
+    let rest = &text[start + 3 + heading.len()..];
+    let end = rest.find("\n## ").unwrap_or(rest.len());
+    Some(rest[..end].to_string())
+}
+
+#[test]
+fn the_contract_carries_the_rule_of_backwards_compatibility() {
+    let s = abschnitt(&text(), "Always backwards compatible").expect("the section is missing");
+    for n in 1..=4 {
+        assert!(s.lines().any(|l| l.starts_with(&format!("{n}. "))), "point {n} is missing");
+    }
+    assert!(!s.lines().any(|l| l.starts_with("5. ")), "more than four points");
+    assert!(s.contains("states which of the four it touches"), "the line of every delivery is missing");
+}
+
+#[test]
+fn the_rule_names_its_three_exceptions() {
+    let s = abschnitt(&text(), "Always backwards compatible").expect("the section is missing");
+    for name in ["`/v1/key`", "`X-Maer-Format`", "rolled back"] {
+        assert!(s.contains(name), "the exception {name} is not named");
+    }
+}
+
+/// The fields a catalog row carries, as the paragraph that begins "A row
+/// carries" names them in backticks; the words in brackets after a field
+/// (its values) are not fields.
+fn felder_im_vertrag(text: &str) -> std::collections::BTreeSet<String> {
+    let start = text.find("A row carries").expect("the paragraph of the row");
+    let end = start + text[start..].find("Rows come in").expect("the end of the paragraph");
+    let mut flat = String::new();
+    let mut depth = 0;
+    for c in text[start..end].chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ if depth == 0 => flat.push(c),
+            _ => {}
+        }
+    }
+    flat.split('`').skip(1).step_by(2).map(str::to_string).collect()
+}
+
+#[test]
+fn every_field_of_a_catalog_row_stands_in_the_contract() {
+    use maer_sync::katalog::{Katalog, Row};
+    let d = std::env::temp_dir().join(format!("vertrag-zeile-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let katalog = d.join("katalog.db").to_string_lossy().into_owned();
+    let mut k = Katalog::open(&katalog).unwrap();
+    // A row with every field set, so the answer shows all of them.
+    k.write_run("librivox", &[Row {
+        quelle: "librivox".into(), id: "lva:x".into(), art: "hoerbuch".into(), titel: Some("T".into()),
+        urheber: Some("U".into()), sprache: Some("eng".into()), jahr: Some(1900), rechte_kennung: "pd".into(),
+        rechte_url: Some("http://example.org/pd".into()), laden: true, reihen: vec!["r".into()],
+        auch: vec!["a".into()], tief: Some("{\"x\": 1}".into()), beliebt_stufe: Some(1),
+    }], false).unwrap();
+    k.close_clean().unwrap();
+    let mut laden = maer_sync::store::Store::open(
+        d.join("s.sqlite").to_str().unwrap(), maer_sync::store::DEFAULT_KEEP, None).unwrap();
+    laden.create_account("anna", "ein hinreichend langes geheimnis").unwrap();
+    let zeichen = laden.issue_token("anna", "ein hinreichend langes geheimnis", "g1").unwrap().unwrap();
+    let mut app = maer_sync::wege::App::neu(laden).mit_katalog(&katalog);
+    app.plain_ways = true;
+    let a = app.http(&maer_sync::wege::Anfrage::neu("GET", "/v1/katalog/librivox")
+        .mit_kopf("authorization", &format!("Bearer {zeichen}")));
+    assert_eq!(a.status, 200);
+    let v = a.als_json().unwrap();
+    let geschrieben: std::collections::BTreeSet<String> =
+        v["zeilen"][0].as_object().unwrap().keys().cloned().collect();
+    let _ = std::fs::remove_dir_all(&d);
+    assert_eq!(felder_im_vertrag(&text()), geschrieben,
+               "the fields the contract names for a row and the fields the service writes differ");
+}
+
+#[test]
+fn a_write_at_an_older_format_is_409_and_the_contract_says_so() {
+    let wo = std::env::temp_dir().join(format!("vertrag-form-{}.sqlite", std::process::id()));
+    let _ = std::fs::remove_file(&wo);
+    let mut laden = maer_sync::store::Store::open(wo.to_str().unwrap(), maer_sync::store::DEFAULT_KEEP, None).unwrap();
+    laden.create_account("anna", "ein hinreichend langes geheimnis").unwrap();
+    let zeichen = laden.issue_token("anna", "ein hinreichend langes geheimnis", "g1").unwrap().unwrap();
+    let mut app = maer_sync::wege::App::neu(laden);
+    let schrieb = |form: &str, etag: Option<&str>| {
+        let mut a = maer_sync::wege::Anfrage::neu("PUT", "/v1/doc/playback").mit_frage("scope=g1")
+            .mit_kopf("authorization", &format!("Bearer {zeichen}"))
+            .mit_kopf("x-maer-format", form).mit_koerper(b"{\"a\": 1, \"b\": 2}");
+        if let Some(e) = etag {
+            a = a.mit_kopf("if-match", e);
+        }
+        a
+    };
+    let neu = app.http(&schrieb("2", None));
+    assert_eq!(neu.status, 200, "the first write at format 2 must pass, or this case measures nothing");
+    let etag = neu.kopf("etag").expect("ETag").to_string();
+    let alt = app.http(&schrieb("1", Some(&etag)));
+    let _ = std::fs::remove_file(&wo);
+    assert_eq!(alt.status, 409, "a write at format 1 over format 2");
+    let zeile = text().lines().find(|l| l.starts_with("| 409 |")).expect("the line of 409").to_string();
+    assert!(zeile.contains("`X-Maer-Format`"), "the contract names only the shrink for 409: {zeile}");
+}
