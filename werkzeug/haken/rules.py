@@ -95,6 +95,9 @@ ACCESS = [
     re.compile(r"[\"'][0-9A-Fa-f]{32,}[\"']"),
     re.compile(r"(?i)authorization:\s*(token|bearer|basic)\s+\S{8,}"),
 ]
+# The one hex string that is no access value: the digest src/contract.rs holds
+# the contract file to. Only this line, only in this file, in its whole form.
+DIGEST_LINE = ("src/contract.rs", re.compile(r'pub const DIGEST: &str = "[0-9a-f]{64}";'))
 
 
 def without_allowed(text):
@@ -226,7 +229,8 @@ def check_staged():
         if path in CONTENT_EXEMPT:
             continue
         where = f"{path}: {line.strip()[:80]}"
-        if any(pattern.search(line) for pattern in ACCESS):
+        digest = path == DIGEST_LINE[0] and DIGEST_LINE[1].fullmatch(line.rstrip("\r\n"))
+        if not digest and any(pattern.search(line) for pattern in ACCESS):
             found.append(f"an access value: {where}")
         if path.endswith(".md") and DASH.search(line):
             found.append(f"a dash in a new markdown line: {where}")
