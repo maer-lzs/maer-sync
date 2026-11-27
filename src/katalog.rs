@@ -151,6 +151,8 @@ pub enum KatalogError {
     UnknownFormat(String),
     /// The file is the user store, not a catalog.
     UserStore,
+    /// The file exists and holds no catalog yet: no bytes, or no table `meta`.
+    NoCatalog,
     /// A run without rows and without the caller's sign.
     EmptyRun,
     /// A run that would delete too many live rows without the caller's sign.
@@ -167,6 +169,7 @@ impl std::fmt::Display for KatalogError {
             KatalogError::Sql(e) => write!(f, "sqlite: {e}"),
             KatalogError::UnknownFormat(v) => write!(f, "catalog format {v} is not {KATALOG_FORMAT}"),
             KatalogError::UserStore => write!(f, "this file is the user store, not a catalog"),
+            KatalogError::NoCatalog => write!(f, "no catalog in this file"),
             KatalogError::EmptyRun => write!(f, "a run without rows needs the caller's sign"),
             KatalogError::MassDelete { would_delete, live } =>
                 write!(f, "the run would delete {would_delete} of {live} live rows"),

@@ -274,3 +274,77 @@ fn a_shellac_delta_keeps_the_other_shelves() {
     assert_eq!(lauf(&mut a.programm.netz, &mut k, "schellack", Art::Delta, &settings()).ausgang, Ok(()));
     assert_eq!(reihen(&k), vec!["shellac-jazz", "shellac-swing"], "the delta dropped a shelf");
 }
+
+/// A catalog file laid down before the start; `fill` writes into it.
+fn vor_dem_start(name: &str, fill: impl FnOnce(&str)) -> (String, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("maer-sync-programm-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("katalog.db").to_string_lossy().into_owned();
+    fill(&path);
+    (path, dir)
+}
+
+fn netz_mit(handler: Handler) -> Netz<Fake, Clock> {
+    let clock = Clock(Rc::new(RefCell::new(T0_MS)));
+    Netz::new(Fake { clock: clock.clone(), handler: Rc::new(RefCell::new(handler)) }, clock)
+}
+
+#[test]
+fn the_program_starts_beside_an_empty_catalog_file() {
+    // An empty file is what a first run leaves when it ends between laying
+    // the file down and writing the schema. It held the program off at every
+    // start, and the container restarted into the same end.
+    let (path, dir) = vor_dem_start("leer", |p| std::fs::write(p, b"").unwrap());
+    let mut p = Programm::new(netz_mit(archive(2, 1920)), &path)
+        .unwrap_or_else(|e| panic!("the program did not start beside an empty file: {e}"));
+    let (b, _) = p.schritt();
+    assert_eq!(b.expect("every source is due").ausgang, Ok(()));
+    let k = Katalog::open_read(&path).expect("the first run lays the catalog down");
+    assert!(k.version("archive-buch").unwrap() > 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_confirmation_starts_beside_an_empty_catalog_file() {
+    let (path, dir) = vor_dem_start("leer-bestaetigt", |p| std::fs::write(p, b"").unwrap());
+    let mut p = Programm::new(netz_mit(archive(2, 1920)), &path)
+        .unwrap_or_else(|e| panic!("the confirmation did not start beside an empty file: {e}"));
+    let b = p.bestaetigt("archive-buch");
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    assert!(Katalog::open_read(&path).unwrap().version("archive-buch").unwrap() > 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_program_starts_beside_a_file_without_tables() {
+    let (path, dir) = vor_dem_start("ohne-tabellen", |p| {
+        rusqlite::Connection::open(p).unwrap().execute_batch("PRAGMA user_version = 1;").unwrap();
+    });
+    let mut p = Programm::new(netz_mit(archive(2, 1920)), &path)
+        .unwrap_or_else(|e| panic!("the program did not start beside a file without tables: {e}"));
+    assert_eq!(p.schritt().0.expect("due").ausgang, Ok(()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_program_still_refuses_the_user_store() {
+    let (path, dir) = vor_dem_start("nutzer", |p| {
+        rusqlite::Connection::open(p).unwrap()
+            .execute_batch("CREATE TABLE documents (x); CREATE TABLE meta (key TEXT, value TEXT);").unwrap();
+    });
+    let neu = Programm::new(netz_mit(archive(2, 1920)), &path);
+    assert!(neu.is_err(), "the user store was taken as an empty catalog");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_program_still_refuses_an_unknown_format() {
+    let (path, dir) = vor_dem_start("format", |p| {
+        rusqlite::Connection::open(p).unwrap()
+            .execute_batch("CREATE TABLE meta (key TEXT, value TEXT); INSERT INTO meta VALUES ('katalog_format', '99');").unwrap();
+    });
+    let neu = Programm::new(netz_mit(archive(2, 1920)), &path);
+    assert!(neu.is_err(), "a catalog of an unknown format was taken as empty");
+    let _ = std::fs::remove_dir_all(&dir);
+}
