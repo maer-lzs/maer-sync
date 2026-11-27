@@ -63,9 +63,13 @@ ROLES = re.compile(r"\b(" + "|".join(map(re.escape, NAMES)) + r")\b", re.I)
 TRAILER = re.compile(r"^(co-authored-by|generated with|signed-off-by: claude)", re.I | re.M)
 CHANNEL_CODE = re.compile(r"(^|[^A-Za-z])[A-Z]{1,4}[0-9]{0,3}-[A-Za-z0-9]{1,6}(-[A-Za-z0-9]{1,6})*([^A-Za-z0-9]|$)")
 HASH = re.compile(r"\b(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b")
-# A work-order code as K3a-4 or K3c: a capital K, digits, an optional small
-# letter and an optional dash with digits.
-ORDER_CODE = re.compile(r"\bK[0-9]+[a-z]?(-[0-9]+)?\b")
+# A work-order code: a capital K, digits, an optional small letter and an
+# optional dash with digits; a lone D with digits names a past choice; any
+# capital letters with digits in brackets are a code. The cases stand in
+# test-haken.sh, not here.
+ORDER_CODE = re.compile(r"\b[KD][0-9]+[a-z]?(-[0-9]+)?\b|\(\s*[A-Z]{1,3}[0-9]+[a-z]?\s*\)")
+# Names of encodings and algorithms carry a dash and digits but are no code.
+TECHNICAL = re.compile(r"\b(UTF|UCS|ISO|SHA|AES|ECMA|RFC)-[0-9]+\b")
 DECISION = re.compile(r"\bentscheid|\bdecided\b|\bdecisions?\b", re.I)
 DASH = re.compile(r"[—–]")
 GERMAN_WORDS = {
@@ -114,7 +118,8 @@ def check_message(text):
         found.append("the message names a role or a person")
     if TRAILER.search(body):
         found.append("the message carries an attribution trailer")
-    if CHANNEL_CODE.search(body) or ORDER_CODE.search(body) or HASH.search(body):
+    plain = TECHNICAL.sub(" ", body)
+    if CHANNEL_CODE.search(plain) or ORDER_CODE.search(plain) or HASH.search(plain):
         found.append("the message carries a channel code or a hash")
     if DECISION.search(body):
         found.append("the message cites a decision")

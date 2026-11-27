@@ -74,6 +74,24 @@ fn comments_carry_no_order_codes_and_no_decisions() {
     for f in ["Cargo.toml", "abruf/Cargo.toml", "abruf/Dockerfile", "Dockerfile", "compose.yaml"] {
         files.push((root.join(f), true));
     }
+    // The tools: scripts, hooks and probes, at any depth.
+    let mut stack = vec![root.join("werkzeug")];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                if !p.ends_with("__pycache__") { stack.push(p); }
+                continue;
+            }
+            let name = p.file_name().and_then(|x| x.to_str()).unwrap_or("");
+            match p.extension().and_then(|x| x.to_str()) {
+                Some("rs") => files.push((p, false)),
+                Some("sh") | Some("py") => files.push((p, true)),
+                None if ["Dockerfile", "commit-msg", "pre-commit", "pre-push"].contains(&name) => files.push((p, true)),
+                _ => {}
+            }
+        }
+    }
     for (p, hash) in files {
         let text = std::fs::read_to_string(&p).unwrap();
         for (n, line) in text.lines().enumerate() {
@@ -85,7 +103,10 @@ fn comments_carry_no_order_codes_and_no_decisions() {
             let who = low.contains("operator's decision") || low.contains("decision of the operator") || low.contains("operator decided");
             // ... or a decision named by its code ("decision D4").
             let coded = low.split("decision d").skip(1).any(|r| r.starts_with(|c: char| c.is_ascii_digit()));
-            let decision = who || coded || (word && has_date(&low));
+            // The German noun "Entscheid" names a decision taken somewhere
+            // else; "Entscheidung" and "entscheidet" say what code decides.
+            let german = low.match_indices("entscheid").any(|(i, m)| !low[i + m.len()..].starts_with(|c: char| c.is_alphabetic()));
+            let decision = who || coded || german || (word && has_date(&low));
             if !codes.is_empty() || decision {
                 found.push(format!("{}:{} {:?}{}", p.strip_prefix(root).unwrap().display(), n + 1, codes,
                                    if decision { " decision" } else { "" }));
@@ -101,4 +122,5 @@ fn the_scan_finds_what_it_should() {
     assert_eq!(code_tokens("// see K10"), vec!["K10"]);
     assert!(code_tokens("// Kotlin 3 and K-pop").is_empty());
     assert!(has_date("decision of 25.11.2026") && has_date("2026-11-25") && !has_date("version 6.2"));
+    assert!(comment_of("# a hash comment", true).is_some() && comment_of("let x = 1;", true).is_none());
 }
