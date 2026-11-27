@@ -26,6 +26,20 @@ tree="$(git rev-parse "$sha^{tree}")"
 [ "$(git rev-parse HEAD)" = "$sha" ] || { echo "push.sh: HEAD is not $branch; switch to it first" >&2; exit 1; }
 [ -z "$(git status --porcelain --untracked-files=all)" ] \
     || { echo "push.sh: the tree has changes that are not committed; nothing is run or pushed" >&2; exit 1; }
+# The hooks are a setting of the clone and do not travel with it: a clone
+# without them pushes nothing, and every commit the push carries meets the
+# rules of the hooks here, also one made where they were not set.
+hooks="$(git config --get core.hooksPath)"
+[ -n "$hooks" ] || { echo "push.sh: this clone has no hooks; set them: git config core.hooksPath werkzeug/haken" >&2; exit 1; }
+case "$hooks" in /*) ;; *) hooks="$root/$hooks";; esac
+[ -x "$hooks/pre-commit" ] && [ -x "$hooks/pre-push" ] && [ -f "$hooks/rules.py" ] \
+    || { echo "push.sh: the hooks at $hooks are not whole" >&2; exit 1; }
+at="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+if [ -n "$at" ] && git cat-file -e "$at^{commit}" 2>/dev/null; then range=("$at..$sha"); else range=("$sha" --not --remotes=origin); fi
+for commit in $(git rev-list "${range[@]}"); do
+    why="$(python3 -I "$hooks/rules.py" commit "$commit" 2>&1)" \
+        || { echo "push.sh: commit $(git rev-parse --short "$commit") breaks the rules of the hooks: $why" >&2; exit 1; }
+done
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
