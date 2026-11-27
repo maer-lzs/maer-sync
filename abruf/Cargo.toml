@@ -26,6 +26,9 @@ ureq = "=3.5.2"
 # breaks inside fields. Measured 27.11.2026: csv, csv-core, ryu new, builds
 # with Rust 1.85; Unlicense or MIT, ryu Apache-2.0 or BSL-1.0.
 csv = "=1.4.0"
+# The record of a Gutenberg work (pg<n>.rdf). Measured 27.11.2026: one new
+# crate, MIT OR Apache-2.0, builds with Rust 1.85.
+roxmltree = "=0.21.2"
 
 [dev-dependencies]
 # The witnesses read the catalog file directly; the same pin as the service.

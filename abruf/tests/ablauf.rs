@@ -602,7 +602,7 @@ fn the_program_takes_one_argument_to_confirm() {
     assert_eq!(befehl(&a(&[])), Ok(Befehl::Dauerlauf));
     assert_eq!(befehl(&a(&["--bestaetigt", "schellack"])), Ok(Befehl::Bestaetigt("schellack".into())));
     let bad: [&[&str]; 5] = [
-        &["--bestaetigt"], &["--bestaetigt", "gutenberg"], &["--bestaetigt", "librivox", "otr"],
+        &["--bestaetigt"], &["--bestaetigt", "hoerspiel-feed"], &["--bestaetigt", "librivox", "otr"],
         &["librivox"], &["--confirm", "librivox"],
     ];
     for b in bad {
@@ -619,7 +619,7 @@ fn the_program_ends_on_an_argument_it_does_not_know() {
     // would end with 1 there, never reach the network, and never pass.
     let path = dir.join("fehlt").join("katalog.db");
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_maer-sync-abruf"))
-        .args(["--bestaetigt", "gutenberg"])
+        .args(["--bestaetigt", "hoerspiel-feed"])
         .env("MAER_SYNC_KATALOG", &path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())

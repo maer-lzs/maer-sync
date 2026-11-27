@@ -14,6 +14,7 @@ The crates the fetch program (`abruf/`) adds to those of the service, each with 
 | `miniz_oxide 0.9.1` | MIT OR Zlib OR Apache-2.0 | yes | https://github.com/Frommi/miniz_oxide |
 | `percent-encoding 2.3.2` | MIT OR Apache-2.0 | yes | https://github.com/servo/rust-url |
 | `ring 0.17.14` | Apache-2.0 AND ISC | yes | https://github.com/briansmith/ring |
+| `roxmltree 0.21.2` | MIT OR Apache-2.0 | yes | https://github.com/RazrFalcon/roxmltree |
 | `rustls 0.23.46` | Apache-2.0 OR ISC OR MIT | yes | https://github.com/rustls/rustls |
 | `rustls-pki-types 1.16.0` | MIT OR Apache-2.0 | yes | https://github.com/rustls/pki-types |
 | `rustls-webpki 0.103.17` | ISC | yes | https://github.com/rustls/webpki |

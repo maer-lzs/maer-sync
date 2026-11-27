@@ -34,6 +34,7 @@ use serde_json::Value;
 
 use crate::archive::{downloads_from_answer, merge_shelves, rows_from_answer, ReadError, Shelf};
 use crate::musopen::{self, MusopenFehler};
+use crate::gutenberg::{self, Rechte};
 use crate::radio;
 use crate::stufe::stufen;
 use crate::netz::{encode, gewichtigster, HolFehler, Holer, Netz, Uhr};
@@ -77,6 +78,10 @@ pub enum LaufFehler {
     /// The pages of a pass did not end: a cursor came back, or there were
     /// more pages than the count allows. Nothing is written.
     Seiten(String),
+    /// More works than a run may ask the records of; asked before the first.
+    Deckel(String),
+    /// More than a tenth of the records failed: nothing is written.
+    Ausfall { ausgefallen: usize, gesamt: usize },
 }
 
 impl From<HolFehler> for LaufFehler {
@@ -131,6 +136,74 @@ impl Laufbericht {
 }
 
 /// The query of a source of the index; shellac has none (shelves only).
+/// The catalog dump of Project Gutenberg, on the mirror the app takes.
+pub const GUTENBERG_KATALOG: &str = "https://gutenberg.pglaf.org/cache/epub/feeds/pg_catalog.csv";
+
+/// At most this many records of works in one run.
+pub const GUTENBERG_RDF_DECKEL: usize = 2000;
+
+/// The record of work `nummer` on the mirror.
+pub fn gutenberg_rdf_url(nummer: &str) -> String {
+    format!("https://gutenberg.pglaf.org/cache/epub/{nummer}/pg{nummer}.rdf")
+}
+
+/// The full pass of Gutenberg: the dump, then the record of every work of
+/// type `Sound`, one by one (the net keeps them a second apart). A
+/// copyrighted work stays out. A failed record leaves a living work as the
+/// last run had it and keeps a new one out; more than a tenth failed
+/// refuses the run.
+fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog) -> Result<Vec<Row>, LaufFehler> {
+    let dump = netz.get(GUTENBERG_KATALOG)?;
+    let rows = gutenberg::rows_from_catalog(&dump.koerper)?;
+    if rows.len() > GUTENBERG_RDF_DECKEL {
+        return Err(LaufFehler::Deckel(format!("{} works of type Sound, at most {GUTENBERG_RDF_DECKEL} records a run", rows.len())));
+    }
+    let gesamt = rows.len();
+    let mut out = Vec::with_capacity(gesamt);
+    let mut zahlen = BTreeMap::new();
+    let mut behalten = BTreeMap::new();
+    let mut ausgefallen = 0;
+    for mut r in rows {
+        let nummer = r.id.trim_start_matches("gut:").to_string();
+        let gelesen = netz.get(&gutenberg_rdf_url(&nummer)).map_err(LaufFehler::from)
+            .and_then(|a| gutenberg::rdf_lesen(&a.koerper, &nummer).map_err(LaufFehler::from));
+        match gelesen {
+            Ok(rdf) => {
+                match rdf.rechte {
+                    Rechte::Copyrighted => continue,
+                    Rechte::Pd => { r.rechte_kennung = "pd".into(); r.laden = true; }
+                    Rechte::Andere => {}
+                }
+                if let Some(d) = rdf.downloads {
+                    zahlen.insert(r.id.clone(), d);
+                }
+                out.push(r);
+            }
+            Err(_) => {
+                ausgefallen += 1;
+                let alt = katalog.stored("gutenberg", &r.id).map_err(|e| LaufFehler::Katalog(e.to_string()))?;
+                if let Some(s) = alt.filter(|s| !s.geloescht) {
+                    r.rechte_kennung = s.row.rechte_kennung;
+                    r.rechte_url = s.row.rechte_url;
+                    r.laden = s.row.laden;
+                    behalten.insert(r.id.clone(), s.row.beliebt_stufe);
+                    out.push(r);
+                }
+            }
+        }
+    }
+    if ausgefallen * 10 > gesamt {
+        return Err(LaufFehler::Ausfall { ausgefallen, gesamt });
+    }
+    stufen(&mut out, &zahlen);
+    for r in out.iter_mut() {
+        if let Some(s) = behalten.get(&r.id) {
+            r.beliebt_stufe = *s;
+        }
+    }
+    Ok(out)
+}
+
 pub fn base_query(quelle: &str) -> Option<&'static str> {
     match quelle {
         "librivox" => Some("collection:librivoxaudio"),
@@ -501,7 +574,14 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
     let ausgang = (|| -> Result<(), LaufFehler> {
         // Musopen and Radio Browser have no delta: their day is a full pass.
         let voll = art == Art::Voll || OHNE_DELTA.contains(&quelle);
-        let rows = if voll { full_pass(netz, quelle, e)? } else { delta(netz, katalog, quelle, e)? };
+        // Gutenberg has no delta: a due one asks nothing and keeps its time.
+        if quelle == "gutenberg" && !voll {
+            let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
+            katalog.set_last_run(quelle, art.name(), netz.uhr.jetzt_ms().div_euclid(1000)).map_err(k)?;
+            return Ok(());
+        }
+        let rows = if quelle == "gutenberg" { gutenberg_pass(netz, katalog)? }
+            else if voll { full_pass(netz, quelle, e)? } else { delta(netz, katalog, quelle, e)? };
         gelesen = rows.len();
         let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
         if voll {

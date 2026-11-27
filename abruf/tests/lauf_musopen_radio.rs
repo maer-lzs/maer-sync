@@ -61,8 +61,8 @@ fn live(k: &Katalog, q: &str) -> Vec<String> {
 }
 
 #[test]
-fn seven_sources_are_planned() {
-    assert_eq!(QUELLEN, ["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
+fn eight_sources_are_planned() {
+    assert_eq!(QUELLEN, ["archive-buch", "gutenberg", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
 }
 
 // ---------------------------------------------------------------- Musopen

@@ -134,3 +134,4 @@ zlib-rs # in abruf/Cargo.lock on 2026-11-27, the tree of ureq for the fetch prog
 csv # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump
 csv-core # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump
 ryu # approved for the fetch program on 2026-11-27, the reader of the Gutenberg dump
+roxmltree # approved for the fetch program on 2026-11-27, the reader of the Gutenberg records

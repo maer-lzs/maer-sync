@@ -71,6 +71,14 @@ fn commons_or_radio(a: &Anfrage, p: &BTreeMap<String, String>) -> Option<Result<
         let v = if offset == 0 { json!([{"stationuuid": "00000000-0000-0000-0000-000000000001", "name": "S", "url": "http://s"}]) } else { json!([]) };
         return Some(ok(v));
     }
+    if a.url == maer_sync_abruf::lauf::GUTENBERG_KATALOG {
+        let csv = "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n1,Sound,2003-01-01,T,en,A,,PR,\n";
+        return Some(Ok(Antwort { status: 200, koerper: csv.as_bytes().to_vec(), ..Default::default() }));
+    }
+    if a.url == maer_sync_abruf::lauf::gutenberg_rdf_url("1") {
+        let rdf = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:pgterms="http://www.gutenberg.org/2009/pgterms/" xmlns:dcterms="http://purl.org/dc/terms/"><pgterms:ebook rdf:about="ebooks/1"><dcterms:rights>Public domain in the USA.</dcterms:rights></pgterms:ebook></rdf:RDF>"#;
+        return Some(Ok(Antwort { status: 200, koerper: rdf.as_bytes().to_vec(), ..Default::default() }));
+    }
     None
 }
 
@@ -134,7 +142,7 @@ fn side_files(dir: &std::path::Path) -> Vec<String> {
 
 #[test]
 fn only_sources_with_a_reader_are_planned() {
-    assert_eq!(QUELLEN, ["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
+    assert_eq!(QUELLEN, ["archive-buch", "gutenberg", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
 }
 
 #[test]
@@ -144,12 +152,12 @@ fn a_step_runs_the_due_source_and_answers_the_sleep() {
     let b = b.expect("a new catalog has a source due");
     assert_eq!((b.quelle.as_str(), b.art, b.ausgang.clone()), ("archive-buch", Art::Voll, Ok(())));
     assert!((60..=3_600).contains(&schlaf), "{schlaf}");
-    // All seven run one after another, then nothing is due for a day.
+    // All eight run one after another, then nothing is due for a day.
     let mut done = vec![b.quelle];
-    for _ in 0..6 {
+    for _ in 0..7 {
         done.push(a.programm.schritt().0.expect("still due").quelle);
     }
-    assert_eq!(done, ["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
+    assert_eq!(done, ["archive-buch", "gutenberg", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"]);
     let (none, schlaf) = a.programm.schritt();
     assert!(none.is_none());
     assert_eq!(schlaf, 3_600);
@@ -171,7 +179,7 @@ fn a_failed_step_backs_off() {
     assert!(matches!(b.unwrap().ausgang, Err(LaufFehler::Holen(HolFehler::Status(503)))));
     // The failed source is not asked again before its backoff; the next one is.
     let (b2, _) = a.programm.schritt();
-    assert_eq!(b2.unwrap().quelle, "librivox");
+    assert_eq!(b2.unwrap().quelle, "gutenberg");
     *a.handler.borrow_mut() = archive(2, 1920);
     for _ in 0..6 { a.programm.schritt(); }
     assert!(a.programm.schritt().0.is_none(), "the failed source came back before its backoff");
@@ -185,7 +193,7 @@ fn retry_after_postpones_the_source() {
     let mut a = aufbau("later", Box::new(|_, _| Ok(Antwort { status: 429, retry_after_s: Some(7_200), ..Default::default() })), T0_MS);
     a.programm.schritt();
     *a.handler.borrow_mut() = archive(2, 1920);
-    for _ in 0..6 { a.programm.schritt(); }
+    for _ in 0..7 { a.programm.schritt(); }
     *a.clock.0.borrow_mut() += BACKOFF_S[0] * 1000 + 1000;
     assert!(a.programm.schritt().0.is_none(), "asked again before Retry-After");
     *a.clock.0.borrow_mut() += 7_200 * 1000;
@@ -195,7 +203,7 @@ fn retry_after_postpones_the_source() {
 #[test]
 fn run_times_come_back_from_the_catalog() {
     let mut a = aufbau("times", archive(2, 1920), T0_MS);
-    for _ in 0..7 { a.programm.schritt(); }
+    for _ in 0..8 { a.programm.schritt(); }
     let path = a.path.clone();
     let clock = Clock(Rc::new(RefCell::new(*a.clock.0.borrow())));
     let handler: Rc<RefCell<Handler>> = Rc::new(RefCell::new(Box::new(|a, _| panic!("asked after a restart: {}", a.url))));
@@ -209,7 +217,7 @@ fn the_calendar_year_comes_from_the_clock() {
     // 2027-01-01 00:00:10 UTC: a record of 1926 is free by its year now.
     let mut a = aufbau("year", archive(1, 1926), 1_798_761_610_000);
     assert_eq!(a.programm.kalenderjahr(), 2027);
-    for _ in 0..7 { a.programm.schritt(); }
+    for _ in 0..8 { a.programm.schritt(); }
     let k = Katalog::open_read(&a.path).unwrap();
     let rows = k.full("schellack", None, MAX_PAGE).unwrap().zeilen;
     assert!(!rows.is_empty());
