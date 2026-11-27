@@ -421,3 +421,35 @@ fn the_pages_within_the_cap_still_pass() {
     assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
     assert_eq!(live(&k, "musopen").len(), 7);
 }
+
+#[test]
+fn musopen_pages_without_end_stop() {
+    // The category says 2; every page is empty and names a new cursor, so no
+    // cursor comes back and nothing is counted. Only the cap ends it.
+    let h: Handler = Box::new(|_, p| {
+        if let Some(a) = category(p, 2) { return a; }
+        let c: i64 = p.get("gcmcontinue").map(|c| c.parse().unwrap()).unwrap_or(0);
+        ok(json!({"query": {"pages": []}, "continue": {"gcmcontinue": (c + 1).to_string()}}))
+    });
+    let (mut n, log) = net(braked(h));
+    let mut k = katalog("mus-no-end");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(1));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
+    // One count, then the cap of 2 / 1 + 2 = 4 pages and the one beyond it.
+    assert!(log.borrow().len() <= 6, "{} requests", log.borrow().len());
+    assert_eq!(k.version("musopen").unwrap(), 0);
+}
+
+#[test]
+fn the_line_of_a_cursor_that_came_back_carries_no_text_of_the_answer() {
+    let cursor = "file|4d555349434f50454e2d61-cursor-text|17";
+    let h: Handler = Box::new(move |_, p| {
+        if let Some(a) = category(p, 4) { return a; }
+        ok(json!({"query": {"pages": [file(1), file(2)]}, "continue": {"gcmcontinue": cursor}}))
+    });
+    let (mut n, _) = net(braked(h));
+    let mut k = katalog("mus-line");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(2));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
+    assert!(!b.zeile().contains("cursor-text"), "the line carries the cursor: {}", b.zeile());
+}

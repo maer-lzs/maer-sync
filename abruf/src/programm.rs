@@ -30,7 +30,6 @@ use crate::lauf::{datum, lauf, lauf_bestaetigt, Einstellungen, LaufFehler, Laufb
 use crate::netz::{HolFehler, Holer, Netz, Uhr};
 use crate::plan::{naechster, schlaf_s, Art, Zustand, MIN_SCHLAF_S};
 
-/// The sources that have a reader today, in the order of their names.
 /// What the program was started to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Befehl {
@@ -50,6 +49,7 @@ pub fn befehl(args: &[String]) -> Result<Befehl, String> {
     }
 }
 
+/// The sources that have a reader today, in the order of their names.
 pub const QUELLEN: &[&str] = &["archive-buch", "librivox", "musopen", "netlabel", "otr", "radio", "schellack"];
 
 pub struct Programm<H: Holer, U: Uhr> {
@@ -62,10 +62,16 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
     /// Read the run times, reading only: a run of another process may hold
     /// the catalog (measured 26.11.2026: opened for writing beside a writer
     /// it failed at once, and the program ended at its start). A file that
-    /// is not there yet has no run times; the first run lays it down.
+    /// is not there yet has no run times; the first run lays it down. A
+    /// file that holds no catalog yet (no bytes, or no table `meta`, as a
+    /// first run leaves it when it ends before the schema) is the same.
     pub fn new(netz: Netz<H, U>, path: &str) -> Result<Self, String> {
         let k = if std::path::Path::new(path).exists() {
-            Some(Katalog::open_read(path).map_err(|e| e.to_string())?)
+            match Katalog::open_read(path) {
+                Ok(k) => Some(k),
+                Err(KatalogError::NoCatalog) => None,
+                Err(e) => return Err(e.to_string()),
+            }
         } else {
             None
         };

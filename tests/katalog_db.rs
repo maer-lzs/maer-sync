@@ -680,3 +680,26 @@ fn the_writer_runs_in_wal() {
     let _k = Katalog::open(&p).unwrap();
     assert_eq!(mode(&p).to_lowercase(), "wal", "the writer did not switch back to WAL");
 }
+
+#[test]
+fn reading_an_empty_file_says_there_is_no_catalog() {
+    let p = scratch("leer-lesen");
+    std::fs::write(&p, b"").unwrap();
+    match Katalog::open_read(&p) {
+        Err(KatalogError::NoCatalog) => {}
+        Err(e) => panic!("wrong error: {e:?}"),
+        Ok(_) => panic!("an empty file was read as a catalog"),
+    }
+    assert_eq!(std::fs::metadata(&p).unwrap().len(), 0, "reading wrote to the file");
+}
+
+#[test]
+fn reading_a_file_without_tables_says_there_is_no_catalog() {
+    let p = scratch("ohne-tabellen");
+    rusqlite::Connection::open(&p).unwrap().execute_batch("PRAGMA user_version = 1;").unwrap();
+    match Katalog::open_read(&p) {
+        Err(KatalogError::NoCatalog) => {}
+        Err(e) => panic!("wrong error: {e:?}"),
+        Ok(_) => panic!("a file without tables was read as a catalog"),
+    }
+}

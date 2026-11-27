@@ -543,8 +543,14 @@ It runs one full pass of that source, writes it, prints its line with
 `bestaetigt=ja` and ends with 0 (1 if the run failed). The confirmation
 holds for that run only; the next large loss is refused again. While the
 program is in a run of its own, the command ends at once with 1 and
-`grund=Belegt`, nothing fetched or written; run it again a minute later.
+`grund=Belegt`, nothing fetched or written; run it again once the running
+run has ended.
 One run at a time holds the file `katalog.db.lauf` beside the catalog.
+
+**When the pages of a source do not end.** A pass reads at most the pages
+its count calls for and two more. A source that answers past that, or names
+a cursor a second time, is refused with `grund=Seiten(...)`; nothing is
+written, and the run is tried again later.
 
 **Switch it off:** `docker compose --profile katalog stop maer-sync-abruf`,
 unset `MAER_SYNC_KATALOG`, and `docker compose up -d`; the catalog paths

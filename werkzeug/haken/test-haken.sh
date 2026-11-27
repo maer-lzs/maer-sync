@@ -90,6 +90,8 @@ expect refuse "M4 message names a code in brackets"  docs/b.md "seven" "Reads th
 expect refuse "M4 message names a decision code"    docs/b.md "eight" "Keeps the rule of D4 in the reader"
 expect pass   "M8 message names protocols and hashes" docs/c.md "ten" "Speaks H2 and IPv6, reads UTF-8, hashes with SHA256"
 expect pass   "M8 message names a file format"      docs/c.md "nine" "Reads MP3 and FLAC titles, decides the order"
+expect pass   "M8 message names algorithms in brackets" docs/c.md "eleven" "Seals with the static key (X25519) and hashes it (SHA256)"
+expect pass   "M8 message names a codec in brackets" docs/c.md "twelve" "Plays the stream as it comes (MP3) or (H264)"
 expect refuse "M6 message carries a dash"           docs/c.md "two" "The store — one file"
 expect refuse "M7 message is German"                docs/c.md "three" "Die Sitzung wird nicht mehr gehalten"
 expect pass   "M8 English message"                  docs/c.md "four" "Keeps the session for one hour"

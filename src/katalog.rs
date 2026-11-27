@@ -151,6 +151,8 @@ pub enum KatalogError {
     UnknownFormat(String),
     /// The file is the user store, not a catalog.
     UserStore,
+    /// The file exists and holds no catalog yet: no bytes, or no table `meta`.
+    NoCatalog,
     /// A run without rows and without the caller's sign.
     EmptyRun,
     /// A run that would delete too many live rows without the caller's sign.
@@ -167,6 +169,7 @@ impl std::fmt::Display for KatalogError {
             KatalogError::Sql(e) => write!(f, "sqlite: {e}"),
             KatalogError::UnknownFormat(v) => write!(f, "catalog format {v} is not {KATALOG_FORMAT}"),
             KatalogError::UserStore => write!(f, "this file is the user store, not a catalog"),
+            KatalogError::NoCatalog => write!(f, "no catalog in this file"),
             KatalogError::EmptyRun => write!(f, "a run without rows needs the caller's sign"),
             KatalogError::MassDelete { would_delete, live } =>
                 write!(f, "the run would delete {would_delete} of {live} live rows"),
@@ -401,7 +404,7 @@ impl Katalog {
     pub fn open_read(path: &str) -> Result<Self, KatalogError> {
         let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
         if !check_file(&db)? {
-            return Err(KatalogError::Invalid("no catalog in this file".into()));
+            return Err(KatalogError::NoCatalog);
         }
         db.busy_timeout(Duration::from_millis(DEFAULT_WAIT_MS))?;
         Ok(Katalog { db, read_only: true })

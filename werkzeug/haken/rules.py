@@ -65,11 +65,14 @@ CHANNEL_CODE = re.compile(r"(^|[^A-Za-z])[A-Z]{1,4}[0-9]{0,3}-[A-Za-z0-9]{1,6}(-
 HASH = re.compile(r"\b(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b")
 # A work-order code: a capital K, digits, an optional small letter and an
 # optional dash with digits; a lone D with digits names a past choice; any
-# capital letters with digits in brackets are a code. The cases stand in
-# test-haken.sh, not here.
+# capital letters with digits in brackets are a code, unless they name an
+# algorithm or a codec (TECHNICAL). The cases stand in test-haken.sh, not
+# here.
 ORDER_CODE = re.compile(r"\b[KD][0-9]+[a-z]?(-[0-9]+)?\b|\(\s*[A-Z]{1,3}[0-9]+[a-z]?\s*\)")
-# Names of encodings and algorithms carry a dash and digits but are no code.
-TECHNICAL = re.compile(r"\b(UTF|UCS|ISO|SHA|AES|ECMA|RFC)-[0-9]+\b")
+# Names of encodings, algorithms and codecs carry digits but are no code,
+# with a dash or without one.
+TECHNICAL = re.compile(r"\b(UTF|UCS|ISO|SHA|AES|ECMA|RFC)-[0-9]+\b"
+                       r"|\b(X25519|X448|Ed25519|SHA(1|224|256|384|512)|UTF(8|16|32)|MP[34]|H26[45]|P(256|384|521)|ID3)\b")
 DECISION = re.compile(r"\bentscheid|\bdecided\b|\bdecisions?\b", re.I)
 DASH = re.compile(r"[—–]")
 GERMAN_WORDS = {
