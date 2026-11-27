@@ -447,14 +447,17 @@ fn the_contract_carries_the_rule_of_backwards_compatibility() {
         assert!(s.lines().any(|l| l.starts_with(&format!("{n}. "))), "point {n} is missing");
     }
     assert!(!s.lines().any(|l| l.starts_with("5. ")), "more than four points");
-    assert!(s.contains("states which of the four it touches"), "the line of every delivery is missing");
+    // The text wraps its lines; a sentence is looked for with its spaces made one.
+    let flach = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flach.contains("states which of the four it touches"), "the line of every delivery is missing");
 }
 
 #[test]
 fn the_rule_names_its_three_exceptions() {
     let s = abschnitt(&text(), "Always backwards compatible").expect("the section is missing");
+    let flach = s.split_whitespace().collect::<Vec<_>>().join(" ");
     for name in ["`/v1/key`", "`X-Maer-Format`", "rolled back"] {
-        assert!(s.contains(name), "the exception {name} is not named");
+        assert!(flach.contains(name), "the exception {name} is not named");
     }
 }
 
