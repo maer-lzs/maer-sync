@@ -106,7 +106,7 @@ impl<H: Holer, U: Uhr> Programm<H, U> {
 
     /// One run under the run lock: take it, open the catalog, run, close
     /// cleanly, and only then let the lock go.
-    fn ein_lauf(&mut self, quelle: &str, art: Art, bestaetigt: bool) -> Laufbericht {
+    pub fn ein_lauf(&mut self, quelle: &str, art: Art, bestaetigt: bool) -> Laufbericht {
         let ohne = |ausgang| Laufbericht {
             quelle: quelle.into(), art, gelesen: 0, version_vorher: -1, version_nachher: -1, dauer_ms: 0,
             ausgang: Err(ausgang), bestaetigt,

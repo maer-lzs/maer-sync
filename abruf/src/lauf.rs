@@ -73,6 +73,9 @@ pub enum LaufFehler {
     Gesperrt { grund: String, lebend: usize },
     /// Another run holds the catalog: nothing was fetched or written.
     Belegt,
+    /// The pages of a pass did not end: a cursor came back, or there were
+    /// more pages than the count allows. Nothing is written.
+    Seiten(String),
 }
 
 impl From<HolFehler> for LaufFehler {
@@ -263,17 +266,34 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
             .ok_or_else(|| LaufFehler::Lesen(ReadError::Unreadable(format!("no count for {cat}"))))? as usize;
         let mut seen = 0;
         let mut weiter: Option<String> = None;
+        // The pages a category may take: its count in pages of `limit`, and
+        // two more for a count that moved. A cursor that came back, or a page
+        // above the cap, ends the pass.
+        let deckel = files.div_ceil(e.adv_rows.min(COMMONS_SEITE).max(1)) + 2;
+        let mut seiten = 0;
+        let mut cursors = BTreeSet::new();
         loop {
+            seiten += 1;
             let mut p = vec![("generator", "categorymembers"), ("gcmtitle", cat), ("gcmtype", "file"),
                              ("gcmlimit", limit.as_str()), ("prop", "videoinfo"), ("viprop", "url|size|mime|derivatives|extmetadata")];
             if let Some(w) = weiter.as_deref() { p.push(("gcmcontinue", w)); }
             let a = netz.get(&commons_url(&p))?;
             let s = musopen::rows_from_answer(&a.koerper)?;
             seen += s.gesehen;
+            if seen > files {
+                return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len() });
+            }
             for r in s.zeilen {
                 if ids.insert(r.id.clone()) { rows.push(r); }
             }
-            match s.weiter { Some(w) => weiter = Some(w), None => break }
+            let Some(w) = s.weiter else { break };
+            if !cursors.insert(w.clone()) {
+                return Err(LaufFehler::Seiten(format!("{cat}: the cursor {w} came back after {seiten} pages")));
+            }
+            if seiten > deckel {
+                return Err(LaufFehler::Seiten(format!("{cat}: more than {deckel} pages for {files} files")));
+            }
+            weiter = Some(w);
         }
         if seen != files {
             return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len() });
@@ -317,7 +337,13 @@ fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Res
         let mut uuids = BTreeSet::new();
         let mut doppelt = false;
         let mut offset = 0;
+        // The count in pages of `limit`, and two more for a count that moved;
+        // a page above it ends the pass (a server that ignores the offset
+        // would page on without end).
+        let deckel = erwartet.div_ceil(limit.max(1)) + 2;
+        let mut seiten = 0;
         loop {
+            seiten += 1;
             let s = radio::rows_from_page(&radio_get(netz, &mut server,
                 &format!("/json/stations?offset={offset}&limit={limit}&hidebroken=true&order=stationuuid"))?)?;
             for u in &s.uuids {
@@ -325,6 +351,9 @@ fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> Res
             }
             rows.extend(s.zeilen);
             if s.roh < limit { break; }
+            if seiten > deckel {
+                return Err(LaufFehler::Seiten(format!("more than {deckel} pages for {erwartet} stations")));
+            }
             offset += limit;
         }
         if doppelt {

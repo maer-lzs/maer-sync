@@ -11,7 +11,7 @@
 use std::time::Duration;
 
 use maer_sync::katalog::{Katalog, MAX_PAGE};
-use maer_sync_abruf::lauf::{lauf, Einstellungen};
+use maer_sync_abruf::programm::Programm;
 use maer_sync_abruf::netz::{Netz, SystemUhr, Uhr};
 use maer_sync_abruf::plan::Art;
 use maer_sync_abruf::ureq_holer::UreqHoler;
@@ -37,12 +37,14 @@ fn probe_run_librivox_against_archive_org() {
         return;
     }
     let p = std::env::temp_dir().join(format!("maer-sync-probelauf-{}", std::process::id()));
-    let mut k = Katalog::open(p.to_str().unwrap()).unwrap();
-    let mut n = Netz::new(UreqHoler::new(), SystemUhr);
-    let jahr = 2026;
-    let b = lauf(&mut n, &mut k, "librivox", Art::Voll, &Einstellungen { scrape_count: 10_000, adv_rows: 10_000, kalenderjahr: jahr });
+    // As the program runs: under the run lock, closed cleanly.
+    let mut prog = Programm::new(Netz::new(UreqHoler::new(), SystemUhr), p.to_str().unwrap()).unwrap();
+    let b = prog.ein_lauf("librivox", Art::Voll, false);
     println!("PROBELAUF {}", b.zeile());
-    if b.ausgang.is_ok() {
+    // A run that failed is no measurement; the line above says why.
+    assert_eq!(b.ausgang, Ok(()), "the probe run failed");
+    let k = Katalog::open_read(p.to_str().unwrap()).unwrap();
+    {
         let mut rows = 0;
         let mut kinds = std::collections::BTreeMap::new();
         let mut nach: Option<String> = None;
@@ -56,7 +58,8 @@ fn probe_run_librivox_against_archive_org() {
         }
         println!("PROBELAUF zeilen={rows} rechte={kinds:?}");
     }
-    for s in ["", "-wal", "-shm"] {
+    drop(k);
+    for s in ["", "-wal", "-shm", ".lauf"] {
         let _ = std::fs::remove_file(format!("{}{s}", p.display()));
     }
 }
