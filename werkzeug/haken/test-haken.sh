@@ -371,6 +371,39 @@ verdict refuse "$(cat "$WORK/p18")" "P18 a commit in a throwaway clone without .
 ) > "$WORK/p19"
 verdict pass "$(cat "$WORK/p19")" "P19 a commit in a throwaway clone with .wegwerf"
 
+# P20 to P22: each of the two layers on its own. push.sh calls git push and
+# with it the push hook, so a witness through push.sh alone stays green while
+# either layer holds. Each witness here switches the other layer off.
+"$GIT" reset -q --hard origin/dev
+NUR="$WORK/nur-push"
+mkdir -p "$NUR" && cp "$HAKEN/pre-commit" "$HAKEN/commit-msg" "$HAKEN/rules.py" "$NUR/"
+printf '#!/bin/sh\nexit 0\n' > "$NUR/pre-push" && chmod +x "$NUR/pre-push"
+"$GIT" config core.hooksPath "$NUR"
+mkdir -p src && printf 'let token = "abcdef0123456789abcdef0123";\n' > src/p20.rs && "$GIT" add src/p20.rs
+"$GIT" commit -q --no-verify -m "A constant in the source"
+verdict refuse "$(run_push "$green")" "P20 push.sh holds back a commit the push hook lets through"
+"$GIT" reset -q --hard origin/dev
+printf 'one\n' > docs/p22.md && "$GIT" add docs/p22.md && "$GIT" commit -q -m "A clean line past a silent push hook"
+verdict pass "$(run_push "$green")" "P22 a clean commit passes push.sh with a silent push hook"
+"$GIT" config core.hooksPath "$HAKEN"
+"$GIT" fetch -q origin
+"$GIT" reset -q --hard origin/dev
+hook_alone() {
+    local c; c="$("$GIT" rev-parse HEAD)"
+    "$GIT" notes --ref=lauf add -f -m "kind=final result=green cases=5 tree=$("$GIT" rev-parse "$c^{tree}")" "$c"
+    if printf 'refs/heads/dev %s refs/heads/dev %s\n' "$c" "$("$GIT" rev-parse origin/dev)" \
+        | LAUF_PUSH=1 "$HAKEN/pre-push" origin "$ORIGIN" >/dev/null 2>"$WORK/err"; then echo pass
+    elif grep -q "rules of the content" "$WORK/err"; then echo refuse
+    else echo "refuse-for-another-reason"; fi
+}
+mkdir -p src && printf 'let token = "abcdef0123456789abcdef0123";\n' > src/p21.rs && "$GIT" add src/p21.rs
+"$GIT" commit -q --no-verify -m "A constant in the source"
+verdict refuse "$(hook_alone)" "P21 the push hook alone holds back a commit with an access value"
+"$GIT" reset -q --hard origin/dev
+printf 'one\n' > docs/p22b.md && "$GIT" add docs/p22b.md && "$GIT" commit -q -m "A clean line for the push hook alone"
+verdict pass "$(hook_alone)" "P22 a clean commit passes the push hook alone"
+"$GIT" reset -q --hard origin/dev
+
 # --- What the hooks cannot know
 mv tests/role-names.txt "$WORK/role-names.txt"
 expect refuse "N1 the list of names is missing"     docs/j.md "one" "A line without the list"
