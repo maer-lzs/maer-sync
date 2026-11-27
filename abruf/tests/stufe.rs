@@ -4,7 +4,8 @@
 // Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 
 //! The popularity step: the tenth of a source by its number, 1 the most
-//! popular, ties by id; rows without a number get none and do not count.
+//! popular; the same number has the same step. Rows without a number get
+//! none and do not count.
 
 use std::collections::BTreeMap;
 
@@ -34,11 +35,29 @@ fn twenty_rows_two_to_a_tenth() {
 }
 
 #[test]
-fn a_tie_goes_by_id() {
+fn the_same_number_has_the_same_step() {
     let mut rows = vec![row("lva:b"), row("lva:a")];
     let zahlen = BTreeMap::from([("lva:a".to_string(), 5), ("lva:b".to_string(), 5)]);
     stufen(&mut rows, &zahlen);
-    assert_eq!(steps(&rows), BTreeMap::from([("lva:a".into(), Some(1)), ("lva:b".into(), Some(6))]));
+    assert_eq!(steps(&rows), BTreeMap::from([("lva:a".into(), Some(1)), ("lva:b".into(), Some(1))]));
+}
+
+#[test]
+fn a_tie_across_the_border_of_a_tenth_takes_the_upper_step() {
+    // Twenty rows, two to a tenth: ranks 0 and 1 are the first tenth, 2 and
+    // 3 the second. Ranks 1, 2 and 3 share a number: all three take the
+    // step of the first of them, whatever their ids.
+    let mut rows: Vec<Row> = (0..20).map(|i| row(&format!("lva:{i:02}"))).collect();
+    let mut zahlen: BTreeMap<String, i64> = (0..20).map(|i| (format!("lva:{i:02}"), 1000 - i * 10)).collect();
+    for i in [1, 2, 3] {
+        zahlen.insert(format!("lva:{i:02}"), 990);
+    }
+    stufen(&mut rows, &zahlen);
+    let s = steps(&rows);
+    for i in [0, 1, 2, 3] {
+        assert_eq!(s[&format!("lva:{i:02}")], Some(1), "rank {i}");
+    }
+    assert_eq!(s["lva:04"], Some(3), "the next number keeps its own rank");
 }
 
 #[test]
