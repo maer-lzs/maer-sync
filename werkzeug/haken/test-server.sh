@@ -174,6 +174,13 @@ fresh; add_line docs/s8.md "a line with a red note"; note red
 verdict "refused:no note of a green run" "$(push_result origin dev refs/notes/lauf)" "S8 a head with the note of a red run"
 fresh; add_line docs/s8.md "a line whose note names another tree"; note green HEAD "$("$GIT" rev-parse HEAD^^{tree})"
 verdict "refused:no note of a green run" "$(push_result origin dev refs/notes/lauf)" "S8 a head whose green note names another tree"
+# A run without cases is no green run, whatever its note says.
+fresh; add_line docs/s8.md "a line whose green note counts no cases"
+"$GIT" notes --ref=lauf add -f -m "kind=final result=green cases=0 tree=$("$GIT" rev-parse HEAD^{tree})" HEAD
+verdict "refused:no note of a green run" "$(push_result origin dev refs/notes/lauf)" "S8 a head whose green note counts no cases"
+fresh; add_line docs/s8.md "a line whose green note names no count"
+"$GIT" notes --ref=lauf add -f -m "kind=final result=green tree=$("$GIT" rev-parse HEAD^{tree})" HEAD
+verdict "refused:no note of a green run" "$(push_result origin dev refs/notes/lauf)" "S8 a head whose green note names no count"
 
 fresh
 add_line docs/s9.md "first" "Add the first line"
