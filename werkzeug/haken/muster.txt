@@ -11,7 +11,8 @@
 #   exempt <path> <reason>    the added lines of this file are not read
 # Patterns are extended regular expressions that Python and BusyBox grep read
 # alike: no \s, no \w, no classes in brackets; the brackets below hold a
-# space and a tab. They match without regard to case.
+# space and a tab. An access pattern matches without regard to case; an
+# except line matches exactly as written, small letters stay small.
 access (token|secret|password|passwd|api[_-]?key|apikey|key)[A-Za-z0-9_]*[ 	]*(:[ 	]*&?'?[A-Za-z0-9_]*[ 	]*)?[:=][ 	]*["'][^"' 	]{16,}["']
 access ["'][0-9A-Fa-f]{32,}["']
 access authorization:[ 	]*(token|bearer|basic)[ 	]+[^ 	]{8,}

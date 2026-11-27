@@ -100,7 +100,7 @@ def read_patterns(path):
             access.append(re.compile(rest, re.I))
         elif kind == "except":
             paths, _, pattern = rest.partition(" ")
-            exceptions.append((set(paths.split(",")), re.compile(pattern, re.I)))
+            exceptions.append((set(paths.split(",")), re.compile(pattern)))
         elif kind == "exempt":
             name, _, reason = rest.partition(" ")
             exempt[name] = reason

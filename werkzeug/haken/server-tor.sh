@@ -93,7 +93,7 @@ check_path() {
     while IFS= read -r entry; do
         paths="${entry%% *}"; pattern="${entry#* }"
         case ",$paths," in *",$path,"*)
-            grep -vixE -e "$pattern" "$TMP/lines" > "$TMP/kept"
+            grep -vxE -e "$pattern" "$TMP/lines" > "$TMP/kept"
             mv "$TMP/kept" "$TMP/lines" ;;
         esac
     done < "$TMP/except"
