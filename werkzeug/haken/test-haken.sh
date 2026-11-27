@@ -345,6 +345,32 @@ printf 'one\n' > docs/n.md && "$GIT" add docs/n.md && "$GIT" commit -q -m "A lin
 verdict refuse "$(run_push "$green")" "P15 a commit by another author made without the hooks"
 "$GIT" reset -q --hard origin/dev
 
+# P17 to P19: a clone under a throwaway path. Before a commit the hook asks
+# the index for .wegwerf; a commit that is already made has no working tree
+# to ask, so reading it never depends on the path of the clone.
+WEG="$WORK/ablage/scratchpad/klon"
+mkdir -p "$(dirname "$WEG")" && "$GIT" clone -q -b dev "$ORIGIN" "$WEG"
+(
+    cd "$WEG" || exit 2
+    "$GIT" config user.name "$AUTHOR_NAME"; "$GIT" config user.email "$AUTHOR_MAIL"
+    "$GIT" config core.hooksPath "$HAKEN"
+    "$GIT" rm -q --cached .wegwerf
+    if python3 -I "$HAKEN/rules.py" commit HEAD >/dev/null 2>"$WORK/err"; then echo pass; else echo refuse; fi
+) > "$WORK/p17"
+verdict pass "$(cat "$WORK/p17")" "P17 a made commit is read the same in a clone under a throwaway path"
+(
+    cd "$WEG" || exit 2
+    printf 'one\n' > docs/p18.md && "$GIT" add docs/p18.md
+    if "$GIT" commit -q -m "A line in a throwaway clone" >/dev/null 2>"$WORK/err"; then echo pass; else echo refuse; fi
+) > "$WORK/p18"
+verdict refuse "$(cat "$WORK/p18")" "P18 a commit in a throwaway clone without .wegwerf"
+(
+    cd "$WEG" || exit 2
+    "$GIT" add .wegwerf
+    if "$GIT" commit -q -m "A line in a throwaway clone" >/dev/null 2>"$WORK/err"; then echo pass; else echo refuse; fi
+) > "$WORK/p19"
+verdict pass "$(cat "$WORK/p19")" "P19 a commit in a throwaway clone with .wegwerf"
+
 # --- What the hooks cannot know
 mv tests/role-names.txt "$WORK/role-names.txt"
 expect refuse "N1 the list of names is missing"     docs/j.md "one" "A line without the list"
