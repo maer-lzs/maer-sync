@@ -20,9 +20,10 @@ use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 
-/// Der Digest des Vertrags, wie er in beiden Repos steht. Eine Aenderung hier
-/// ist eine Aenderung am Vertrag und damit ein Schritt auf `main` mit dem
-/// App-Nachzug im selben Zug, nie ein Commit auf einem Bau-Zweig.
+/// The digest of the contract as both repositories hold it. A change here is
+/// a change of the contract: the text and this digest in one commit on a
+/// branch, merged after review, and the app takes the same file byte for byte
+/// in the same step.
 pub const DIGEST: &str = "109620ba364d1ff50d8e121c7da6c97516e71e97d5ffdf98e8ad6c1e8c5d54f7";
 
 /// Die Fassung, die dieser Bau bedient.

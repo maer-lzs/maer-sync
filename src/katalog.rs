@@ -155,8 +155,11 @@ pub enum KatalogError {
     UnknownFormat(String),
     /// The file is the user store, not a catalog.
     UserStore,
-    /// The file exists and holds no catalog yet: no bytes, or no table `meta`.
+    /// The file exists and holds no catalog yet: no bytes, or no table at all.
     NoCatalog,
+    /// The file holds tables of its own and none of a catalog: it belongs to
+    /// something else and is left as it is.
+    Foreign,
     /// A run without rows and without the caller's sign.
     EmptyRun,
     /// A run that would delete too many live rows without the caller's sign.
@@ -174,6 +177,7 @@ impl std::fmt::Display for KatalogError {
             KatalogError::UnknownFormat(v) => write!(f, "catalog format {v} is not {KATALOG_FORMAT}"),
             KatalogError::UserStore => write!(f, "this file is the user store, not a catalog"),
             KatalogError::NoCatalog => write!(f, "no catalog in this file"),
+            KatalogError::Foreign => write!(f, "this file holds tables of something else, no catalog"),
             KatalogError::EmptyRun => write!(f, "a run without rows needs the caller's sign"),
             KatalogError::MassDelete { would_delete, live } =>
                 write!(f, "the run would delete {would_delete} of {live} live rows"),
@@ -216,7 +220,10 @@ fn check_file(db: &Connection) -> Result<bool, KatalogError> {
         return Err(KatalogError::UserStore);
     }
     if !has_table(db, "meta")? {
-        return Ok(false);
+        // Reader and writer ask this one place: a file without any table is
+        // a catalog not laid down yet; one with tables of its own is not ours.
+        let tables: i64 = db.query_row("SELECT count(*) FROM sqlite_master WHERE type='table'", [], |r| r.get(0))?;
+        return if tables == 0 { Ok(false) } else { Err(KatalogError::Foreign) };
     }
     let found: Option<String> = db
         .query_row("SELECT value FROM meta WHERE key='katalog_format'", [], |r| r.get(0))
