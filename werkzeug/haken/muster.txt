@@ -1,0 +1,28 @@
+# Mär — an audio player for self-hosted open ecosystems
+# Copyright (C) 2026 Laurenz Schröder
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Additional terms apply — see LICENSE-ADDITIONAL-TERMS
+# The patterns of access values, read by rules.py in every clone and by the
+# gate on the server, so the two cannot drift apart. One rule per line, the
+# kind first, then a single space:
+#   access <pattern>          an added line that matches holds an access value
+#   except <paths> <pattern>  an added line of one of these files (comma
+#                             separated) that matches as a whole is no value
+#   exempt <path> <reason>    the added lines of this file are not read
+# Patterns are extended regular expressions that Python and BusyBox grep read
+# alike: no \s, no \w, no classes in brackets; the brackets below hold a
+# space and a tab. An access pattern matches without regard to case; an
+# except line matches exactly as written, small letters stay small.
+access (token|secret|password|passwd|api[_-]?key|apikey|key)[A-Za-z0-9_]*[ 	]*(:[ 	]*&?'?[A-Za-z0-9_]*[ 	]*)?[:=][ 	]*["'][^"' 	]{16,}["']
+access ["'][0-9A-Fa-f]{32,}["']
+access authorization:[ 	]*(token|bearer|basic)[ 	]+[^ 	]{8,}
+# The digest src/contract.rs holds the contract file to: only this line, only
+# in this file, in its whole form.
+except src/contract.rs pub const DIGEST: &str = "[0-9a-f]{64}";
+# The checksum of a crate in a lock file is a hash, not an access value.
+except Cargo.lock,abruf/Cargo.lock checksum = "[0-9a-f]{64}"
+exempt tests/role-names.txt it is the list of names
+exempt tests/role-names-allowed.txt it holds the phrases in which a name is allowed
+exempt werkzeug/haken/test-haken.sh the witnesses carry each forbidden form on purpose
+exempt werkzeug/haken/rules.py it spells out the patterns it refuses
+exempt werkzeug/haken/muster.txt it is the list of patterns

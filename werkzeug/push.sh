@@ -6,7 +6,8 @@
 #
 # push.sh <branch>: the one command for every push. Measures the commit the
 # branch names now, runs the Rust witnesses in the pinned image, the fences
-# of the repository and the witnesses of the hooks in this checkout, which
+# of the repository and the witnesses of the hooks and of the gate on the
+# server in this checkout, which
 # has to be exactly that commit, writes the note of the run, and pushes that commit
 # by its hash, so a later commit on the branch cannot ride along.
 # PUSH_RUN replaces the run and PUSH_AFTER_RUN runs a command after it; both
@@ -41,7 +42,7 @@ for commit in $(git rev-list "${range[@]}"); do
         || { echo "push.sh: commit $(git rev-parse --short "$commit") breaks the rules of the hooks: $why" >&2; exit 1; }
 done
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+trap 'rm -f "$log" "$log.gate"' EXIT
 
 if [ -n "${PUSH_RUN:-}" ]; then
     bash -c "$PUSH_RUN" > "$log" 2>&1; rc=$?
@@ -58,8 +59,13 @@ else
     fences="$(sed -n 's/^Ran \([0-9][0-9]*\) tests\{0,1\} in .*/\1/p' "$log" | tail -1)"
     ( cd "$run" && bash werkzeug/haken/test-haken.sh ) >> "$log" 2>&1 || rc=1
     hook_cases="$(sed -n 's/^cases: \([0-9][0-9]*\), failures: 0$/\1/p' "$log" | tail -1)"
-    if [ -n "${rust:-}" ] && [ -n "${fences:-}" ] && [ -n "${hook_cases:-}" ]; then
-        cases=$((rust + fences + hook_cases))
+    # The witnesses of the gate on the server end with a line of the same
+    # form, so they are counted from their own log.
+    ( cd "$run" && bash werkzeug/haken/test-server.sh ) > "$log.gate" 2>&1 || rc=1
+    cat "$log.gate" >> "$log"
+    gate_cases="$(sed -n 's/^cases: \([0-9][0-9]*\), failures: 0$/\1/p' "$log.gate" | tail -1)"
+    if [ -n "${rust:-}" ] && [ -n "${fences:-}" ] && [ -n "${hook_cases:-}" ] && [ -n "${gate_cases:-}" ]; then
+        cases=$((rust + fences + hook_cases + gate_cases))
     else
         cases=""; rc=1
     fi
