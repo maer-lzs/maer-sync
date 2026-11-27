@@ -510,7 +510,7 @@ fn shellac_row(id: &str, reihen: &[&str]) -> Row {
     Row {
         quelle: "schellack".into(), id: id.into(), art: "musik".into(), titel: None, urheber: None,
         sprache: None, jahr: None, rechte_kennung: "pd".into(), rechte_url: None, laden: true,
-        reihen: reihen.iter().map(|s| s.to_string()).collect(), auch: vec![], tief: None,
+        reihen: reihen.iter().map(|s| s.to_string()).collect(), auch: vec![], tief: None, beliebt_stufe: None,
     }
 }
 

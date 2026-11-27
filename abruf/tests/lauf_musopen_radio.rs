@@ -421,7 +421,6 @@ fn the_pages_within_the_cap_still_pass() {
     assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
     assert_eq!(live(&k, "musopen").len(), 7);
 }
-
 #[test]
 fn musopen_pages_without_end_stop() {
     // The category says 2; every page is empty and names a new cursor, so no
@@ -452,4 +451,36 @@ fn the_line_of_a_cursor_that_came_back_carries_no_text_of_the_answer() {
     let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(2));
     assert!(matches!(b.ausgang, Err(LaufFehler::Seiten(_))), "{}", b.zeile());
     assert!(!b.zeile().contains("cursor-text"), "the line carries the cursor: {}", b.zeile());
+}
+
+// ---------------------------------------------------------------- the popularity step
+
+#[test]
+fn radio_steps_follow_the_votes_not_the_clicks() {
+    let list: Vec<Value> = (0..10).map(|i| {
+        let mut s = station(i);
+        s["votes"] = json!(100 - i as i64);
+        s["clickcount"] = json!(i as i64);
+        s
+    }).collect();
+    let n = list.len();
+    let (mut net, _) = net(radio_api(Rc::new(RefCell::new(list)), Rc::new(RefCell::new((n, 0))), vec![]));
+    let mut k = katalog("radio-stufe");
+    let b = lauf(&mut net, &mut k, "radio", Art::Voll, &e(100));
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    for s in k.full("radio", None, MAX_PAGE).unwrap().zeilen {
+        let i: i64 = s.row.id.rsplit('-').next().unwrap().parse().unwrap();
+        assert_eq!(s.row.beliebt_stufe, Some(1 + i), "{}", s.row.id);
+    }
+}
+
+#[test]
+fn musopen_rows_have_no_step() {
+    let (mut n, _) = net(commons(two(), BTreeMap::new()));
+    let mut k = katalog("mus-stufe");
+    let b = lauf(&mut n, &mut k, "musopen", Art::Voll, &e(10_000));
+    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
+    let rows = k.full("musopen", None, MAX_PAGE).unwrap().zeilen;
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|s| s.row.beliebt_stufe.is_none()));
 }

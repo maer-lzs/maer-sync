@@ -9,6 +9,7 @@
 //! user store.
 
 use maer_sync::katalog::{Katalog, Row};
+use std::path::Path;
 use maer_sync::store::Store;
 use maer_sync::wege::{Anfrage, Antwort, App};
 use rusqlite::Connection;
@@ -36,7 +37,7 @@ fn row(quelle: &str, id: &str, titel: &str) -> Row {
         quelle: quelle.into(), id: id.into(), art: "hoerbuch".into(), titel: Some(titel.into()),
         urheber: Some("A; B".into()), sprache: Some("eng".into()), jahr: Some(1901),
         rechte_kennung: "pdm".into(), rechte_url: Some("http://creativecommons.org/publicdomain/mark/1.0/".into()),
-        laden: true, reihen: vec![], auch: vec![], tief: None,
+        laden: true, reihen: vec![], auch: vec![], tief: None, beliebt_stufe: None,
     }
 }
 
@@ -414,4 +415,83 @@ fn the_run_lock_beside_the_catalog_leaves_the_service_reading() {
     // The service's code never names the lock.
     let wege = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/wege.rs")).unwrap();
     assert!(!wege.contains("laufsperre") && !wege.contains("LAUFSPERRE") && !wege.contains(".lauf\""));
+}
+
+// ---------------------------------------------------------------- the popularity step
+
+#[test]
+fn a_row_names_its_step_and_a_row_without_one_has_no_field() {
+    let mut st = stand("stufe", |k| {
+        let mut r = rows("librivox", 2);
+        r[0].beliebt_stufe = Some(2);
+        k.write_run("librivox", &r, false).unwrap();
+    });
+    for q in ["", "seit=0"] {
+        let v = body(&get(&mut st, "/v1/katalog/librivox", q));
+        let z = v["zeilen"].as_array().unwrap();
+        assert_eq!(z[0]["beliebt_stufe"], json!(2), "{q}");
+        assert!(z[1].get("beliebt_stufe").is_none(), "{q}: a row without a step carries the field: {}", z[1]);
+    }
+}
+
+/// A row of the vectors, in the form of the answer, as the fetch program
+/// hands it to the catalog.
+fn row_of(quelle: &str, z: &Value) -> Row {
+    let s = |k: &str| z[k].as_str().map(str::to_string);
+    let list = |k: &str| z[k].as_array().map(|a| a.iter().map(|x| x.as_str().unwrap().to_string()).collect()).unwrap_or_default();
+    Row {
+        quelle: quelle.into(), id: s("id").unwrap(), art: s("art").unwrap(), titel: s("titel"),
+        urheber: s("urheber"), sprache: s("sprache"), jahr: z["jahr"].as_i64(),
+        rechte_kennung: z["rechte"]["kennung"].as_str().unwrap().into(),
+        rechte_url: z["rechte"]["url"].as_str().map(str::to_string),
+        laden: z["laden"].as_bool().unwrap(), reihen: list("reihen"), auch: list("auch"),
+        tief: (!z["tief"].is_null()).then(|| z["tief"].to_string()),
+        beliebt_stufe: z.get("beliebt_stufe").and_then(Value::as_i64),
+    }
+}
+
+#[test]
+fn the_catalog_ways_match_the_vectors() {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("vektoren/katalog/wege.json");
+    let all: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let faelle = all["faelle"].as_array().unwrap();
+    assert!(faelle.len() >= 10, "{} cases", faelle.len());
+    for (i, f) in faelle.iter().enumerate() {
+        let name = f["name"].as_str().unwrap();
+        let laeufe = f["laeufe"].as_array().unwrap().clone();
+        let mut st = stand(&format!("vektor-{i}"), |k| {
+            for l in &laeufe {
+                let q = l["quelle"].as_str().unwrap();
+                let rows: Vec<Row> = l["zeilen"].as_array().unwrap().iter().map(|z| row_of(q, z)).collect();
+                match l["art"].as_str().unwrap() {
+                    "voll" => { k.write_run(q, &rows, false).unwrap(); }
+                    "delta" => { k.write_delta(q, &rows).unwrap(); }
+                    other => panic!("{name}: run kind {other}"),
+                }
+            }
+        });
+        let a = &f["anfrage"];
+        let mut anfrage = Anfrage::neu("GET", a["pfad"].as_str().unwrap())
+            .mit_frage(a["frage"].as_str().unwrap_or(""))
+            .mit_kopf("Authorization", &format!("Bearer {}", st.token));
+        if let Some(k) = a["kopf"].as_object() {
+            for (n, v) in k {
+                anfrage = anfrage.mit_kopf(n, v.as_str().unwrap());
+            }
+        }
+        let got = st.app.http(&anfrage);
+        let want = &f["erwartet"];
+        assert_eq!(got.status as i64, want["status"].as_i64().unwrap(), "{name}");
+        if let Some(k) = want["kopf"].as_object() {
+            for (n, v) in k {
+                assert_eq!(got.kopf(&n.to_lowercase()), v.as_str(), "{name}: header {n}");
+            }
+        }
+        match want.get("koerper") {
+            Some(Value::Null) => assert!(got.body.is_empty(), "{name}: a body where none belongs"),
+            Some(b) => assert_eq!(&body(&got), b, "{name}"),
+            None => {}
+        }
+        let _ = std::fs::remove_dir_all(&st.dir);
+    }
 }

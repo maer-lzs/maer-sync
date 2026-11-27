@@ -36,7 +36,7 @@ fn expected(v: &Value) -> Row {
         titel: opt(&v["titel"]), urheber: opt(&v["urheber"]), sprache: opt(&v["sprache"]), jahr: v["jahr"].as_i64(),
         rechte_kennung: v["rechte"]["kennung"].as_str().unwrap().into(), rechte_url: opt(&v["rechte"]["url"]),
         laden: v["laden"].as_bool().unwrap(), reihen: strings(&v["reihen"]), auch: strings(&v["auch"]),
-        tief: if v["tief"].is_null() { None } else { Some(v["tief"].to_string()) },
+        tief: if v["tief"].is_null() { None } else { Some(v["tief"].to_string()) }, beliebt_stufe: None,
     }
 }
 

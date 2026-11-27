@@ -85,6 +85,7 @@ CREATE TABLE eintrag (
   tief           TEXT,
   version        INTEGER NOT NULL,
   geloescht      INTEGER NOT NULL DEFAULT 0 CHECK (geloescht IN (0, 1)),
+  beliebt_stufe  INTEGER CHECK (beliebt_stufe BETWEEN 1 AND 10),
   PRIMARY KEY (quelle, id)
 ) WITHOUT ROWID;
 CREATE INDEX eintrag_delta ON eintrag (quelle, version);
@@ -114,6 +115,9 @@ pub struct Row {
     pub auch: Vec<String>,
     /// The deep part as JSON text; `None` while the row is flat.
     pub tief: Option<String>,
+    /// The tenth of the source by popularity, 1 the most popular; `None`
+    /// when the source states no number for the row.
+    pub beliebt_stufe: Option<i64>,
 }
 
 /// A row as the file holds it.
@@ -195,6 +199,9 @@ impl From<rusqlite::Error> for KatalogError {
 pub struct Katalog {
     db: Connection,
     read_only: bool,
+    /// The columns a read asks for: a reader of a catalog of the form
+    /// before the popularity step reads it without one.
+    spalten: &'static str,
 }
 
 fn has_table(db: &Connection, name: &str) -> Result<bool, KatalogError> {
@@ -250,6 +257,9 @@ fn checked<'a>(quelle: &str, rows: &'a [Row]) -> Result<BTreeSet<&'a str>, Katal
         if !KINDS.contains(&r.art.as_str()) {
             return Err(KatalogError::Invalid(format!("row {} has kind {:?}", r.id, r.art)));
         }
+        if r.beliebt_stufe.is_some_and(|s| !(1..=10).contains(&s)) {
+            return Err(KatalogError::Invalid(format!("row {} has the step {:?}, not 1 to 10", r.id, r.beliebt_stufe)));
+        }
         if r.id.is_empty() || !seen.insert(r.id.as_str()) {
             return Err(KatalogError::Invalid(format!("id {:?} is empty or twice in the run", r.id)));
         }
@@ -270,16 +280,17 @@ fn raise(tx: &Connection, quelle: &str, version: i64, voll_ab: i64) -> Result<i6
 /// Write changed rows with a version; a row written here is live.
 fn upsert(tx: &Connection, changed: &[&Row], version: i64) -> Result<(), KatalogError> {
     let mut up = tx.prepare(&format!(
-        "INSERT INTO eintrag ({COLUMNS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,0)
+        "INSERT INTO eintrag ({COLUMNS}) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,0,?15)
          ON CONFLICT(quelle, id) DO UPDATE SET
            art=excluded.art, titel=excluded.titel, urheber=excluded.urheber, sprache=excluded.sprache,
            jahr=excluded.jahr, rechte_kennung=excluded.rechte_kennung, rechte_url=excluded.rechte_url,
            laden=excluded.laden, reihen=excluded.reihen, auch=excluded.auch, tief=excluded.tief,
-           version=excluded.version, geloescht=0"))?;
+           version=excluded.version, geloescht=0, beliebt_stufe=excluded.beliebt_stufe"))?;
     for r in changed {
         up.execute(params![
             r.quelle, r.id, r.art, r.titel, r.urheber, r.sprache, r.jahr, r.rechte_kennung,
             r.rechte_url, r.laden as i64, list_json(&r.reihen), list_json(&r.auch), r.tief, version,
+            r.beliebt_stufe,
         ])?;
     }
     Ok(())
@@ -300,7 +311,27 @@ fn normalised(r: &Row) -> Result<Row, KatalogError> {
 }
 
 const COLUMNS: &str =
-    "quelle, id, art, titel, urheber, sprache, jahr, rechte_kennung, rechte_url, laden, reihen, auch, tief, version, geloescht";
+    "quelle, id, art, titel, urheber, sprache, jahr, rechte_kennung, rechte_url, laden, reihen, auch, tief, version, geloescht, beliebt_stufe";
+
+/// The columns as a reader asks them of a catalog laid down before the
+/// popularity step: the reader cannot add the column, so it reads none.
+const COLUMNS_VOR_DER_STUFE: &str =
+    "quelle, id, art, titel, urheber, sprache, jahr, rechte_kennung, rechte_url, laden, reihen, auch, tief, version, geloescht, NULL AS beliebt_stufe";
+
+/// The column of the popularity step, added to a catalog of the form
+/// before it when a writer opens it.
+const SPALTE_STUFE: &str = "ALTER TABLE eintrag ADD COLUMN beliebt_stufe INTEGER CHECK (beliebt_stufe BETWEEN 1 AND 10)";
+
+fn has_column(db: &Connection, table: &str, column: &str) -> Result<bool, KatalogError> {
+    let mut s = db.prepare(&format!("PRAGMA table_info({table})"))?;
+    let names = s.query_map([], |r| r.get::<_, String>(1))?;
+    for n in names {
+        if n? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 
 fn stored_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<(Row, String, String, i64, bool)> {
     Ok((
@@ -317,7 +348,7 @@ fn stored_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<(Row, String, String, 
             laden: r.get::<_, i64>(9)? == 1,
             reihen: vec![],
             auch: vec![],
-            tief: r.get(12)?,
+            tief: r.get(12)?, beliebt_stufe: r.get(15)?,
         },
         r.get(10)?,
         r.get(11)?,
@@ -383,7 +414,15 @@ impl Katalog {
             }
             tx.commit()?;
         }
-        Ok(Katalog { db, read_only: false })
+        if !has_column(&db, "eintrag", "beliebt_stufe")? {
+            let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // Another writer may have added it while this one waited.
+            if !has_column(&tx, "eintrag", "beliebt_stufe")? {
+                tx.execute_batch(SPALTE_STUFE)?;
+            }
+            tx.commit()?;
+        }
+        Ok(Katalog { db, read_only: false, spalten: COLUMNS })
     }
 
     /// Take the run lock of the catalog at `path`, without waiting: a
@@ -407,7 +446,8 @@ impl Katalog {
             return Err(KatalogError::NoCatalog);
         }
         db.busy_timeout(Duration::from_millis(DEFAULT_WAIT_MS))?;
-        Ok(Katalog { db, read_only: true })
+        let spalten = if has_column(&db, "eintrag", "beliebt_stufe")? { COLUMNS } else { COLUMNS_VOR_DER_STUFE };
+        Ok(Katalog { db, read_only: true, spalten })
     }
 
     /// How long this writer waits for another one before `Busy`.
@@ -435,6 +475,7 @@ impl Katalog {
     /// JSON. Their order carries no meaning, and a run that only reorders
     /// them must not raise the version.
     pub fn write_run(&mut self, quelle: &str, rows: &[Row], confirmed: bool) -> Result<i64, KatalogError> {
+        let spalten = COLUMNS;
         self.writable()?;
         let rows: Vec<Row> = rows.iter().map(normalised).collect::<Result<_, _>>()?;
         let seen = checked(quelle, &rows)?;
@@ -445,7 +486,7 @@ impl Katalog {
         let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let (version, voll_ab) = stand_of(&tx, quelle)?;
         let before: BTreeMap<String, Stored> = read_rows(
-            &tx, &format!("SELECT {COLUMNS} FROM eintrag WHERE quelle=?1"), &[&quelle])?
+            &tx, &format!("SELECT {spalten} FROM eintrag WHERE quelle=?1"), &[&quelle])?
             .into_iter().map(|s| (s.row.id.clone(), s)).collect();
 
         let live = before.values().filter(|s| !s.geloescht).count();
@@ -484,16 +525,21 @@ impl Katalog {
     /// mark it names again lives again. An empty delta is no change, not an
     /// empty run; the version rises only on a change.
     pub fn write_delta(&mut self, quelle: &str, rows: &[Row]) -> Result<i64, KatalogError> {
+        let spalten = COLUMNS;
         self.writable()?;
         let rows: Vec<Row> = rows.iter().map(normalised).collect::<Result<_, _>>()?;
         checked(quelle, &rows)?;
         let tx = self.db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let (version, voll_ab) = stand_of(&tx, quelle)?;
-        let mut changed: Vec<&Row> = vec![];
+        let mut changed: Vec<Row> = vec![];
         for r in &rows {
             let found = read_rows(
-                &tx, &format!("SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND id=?2"), &[&quelle as &dyn rusqlite::ToSql, &r.id])?;
-            if !matches!(found.first(), Some(s) if !s.geloescht && s.row == *r) {
+                &tx, &format!("SELECT {spalten} FROM eintrag WHERE quelle=?1 AND id=?2"), &[&quelle as &dyn rusqlite::ToSql, &r.id])?;
+            // A delta sees only some rows and cannot know a tenth: a live
+            // row keeps its step, any other row has none.
+            let mut r = r.clone();
+            r.beliebt_stufe = found.first().filter(|s| !s.geloescht).and_then(|s| s.row.beliebt_stufe);
+            if !matches!(found.first(), Some(s) if !s.geloescht && s.row == r) {
                 changed.push(r);
             }
         }
@@ -501,7 +547,7 @@ impl Katalog {
             return Ok(version);
         }
         let next = raise(&tx, quelle, version, voll_ab)?;
-        upsert(&tx, &changed, next)?;
+        upsert(&tx, &changed.iter().collect::<Vec<_>>(), next)?;
         tx.commit()?;
         Ok(next)
     }
@@ -569,19 +615,34 @@ impl Katalog {
         if self.read_only { Err(KatalogError::Invalid("opened for reading".into())) } else { Ok(()) }
     }
 
+    /// The step of every live row of a source, by id.
+    pub fn stufen(&self, quelle: &str) -> Result<BTreeMap<String, Option<i64>>, KatalogError> {
+        let spalte = if self.spalten == COLUMNS { "beliebt_stufe" } else { "NULL" };
+        let mut s = self.db.prepare(&format!("SELECT id, {spalte} FROM eintrag WHERE quelle=?1 AND geloescht=0"))?;
+        let rows = s.query_map([quelle], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<i64>>(1)?)))?;
+        let mut out = BTreeMap::new();
+        for r in rows {
+            let (id, stufe) = r?;
+            out.insert(id, stufe);
+        }
+        Ok(out)
+    }
+
     /// One row as the file holds it, deletion marks included.
     pub fn stored(&self, quelle: &str, id: &str) -> Result<Option<Stored>, KatalogError> {
-        Ok(read_rows(&self.db, &format!("SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND id=?2"),
+        let spalten = self.spalten;
+        Ok(read_rows(&self.db, &format!("SELECT {spalten} FROM eintrag WHERE quelle=?1 AND id=?2"),
                      &[&quelle as &dyn rusqlite::ToSql, &id])?.into_iter().next())
     }
 
     /// The live rows of a source in id order, one page after `nach`.
     pub fn full(&self, quelle: &str, nach: Option<&str>, anzahl: usize) -> Result<Page, KatalogError> {
+        let spalten = self.spalten;
         page_size(anzahl)?;
         let tx = self.db.unchecked_transaction()?;
         let (version, _) = stand_of(&tx, quelle)?;
         let rows = read_rows(&tx, &format!(
-            "SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND geloescht=0 AND (?2 IS NULL OR id > ?2)
+            "SELECT {spalten} FROM eintrag WHERE quelle=?1 AND geloescht=0 AND (?2 IS NULL OR id > ?2)
              ORDER BY id LIMIT ?3"), &[&quelle, &nach, &((anzahl + 1) as i64)])?;
         tx.finish()?;
         Ok(paged(rows, anzahl, version))
@@ -590,6 +651,7 @@ impl Katalog {
     /// Every row of a source with a version above `v`, deletion marks
     /// included, in id order, one page after `nach`.
     pub fn since(&self, quelle: &str, v: i64, nach: Option<&str>, anzahl: usize) -> Result<Since, KatalogError> {
+        let spalten = self.spalten;
         page_size(anzahl)?;
         let tx = self.db.unchecked_transaction()?;
         let (version, voll_ab) = stand_of(&tx, quelle)?;
@@ -600,7 +662,7 @@ impl Katalog {
             return Ok(Since::TooOld { floor: voll_ab });
         }
         let rows = read_rows(&tx, &format!(
-            "SELECT {COLUMNS} FROM eintrag WHERE quelle=?1 AND version > ?2 AND (?3 IS NULL OR id > ?3)
+            "SELECT {spalten} FROM eintrag WHERE quelle=?1 AND version > ?2 AND (?3 IS NULL OR id > ?3)
              ORDER BY id LIMIT ?4"), &[&quelle, &v, &nach, &((anzahl + 1) as i64)])?;
         tx.finish()?;
         Ok(Since::Page(paged(rows, anzahl, version)))

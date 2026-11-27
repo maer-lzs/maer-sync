@@ -20,5 +20,8 @@
    "tief": null
   }
  ],
- "_hinweis": "laden ist bei Schellack immer falsch: die Sammlung deklariert keine Lizenz; pd nach Jahr ist nur eine Angabe"
+ "_hinweis": "laden ist bei Schellack immer falsch: die Sammlung deklariert keine Lizenz; pd nach Jahr ist nur eine Angabe",
+ "beliebt": {
+  "lva:78_the-yellow-dog-blues_eddie-peabody-handy_gbia0278921b": 1000
+ }
 }
