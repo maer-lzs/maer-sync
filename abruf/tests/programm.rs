@@ -521,3 +521,13 @@ fn scrape_gathers_the_downloads_of_every_page() {
         assert_eq!(s.row.beliebt_stufe, Some(1 + 10 * i / 7), "{}", s.row.id);
     }
 }
+
+#[test]
+fn the_program_does_not_start_beside_a_file_with_foreign_tables() {
+    let (path, dir) = vor_dem_start("fremd", |p| {
+        rusqlite::Connection::open(p).unwrap().execute_batch("CREATE TABLE fremd (x TEXT);").unwrap();
+    });
+    let neu = Programm::new(netz_mit(archive(2, 1920)), &path);
+    assert!(neu.is_err(), "the program took a foreign file as one without a catalog");
+    let _ = std::fs::remove_dir_all(&dir);
+}

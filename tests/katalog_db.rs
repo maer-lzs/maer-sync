@@ -812,3 +812,37 @@ fn a_catalog_of_the_form_before_the_step_is_read_and_kept() {
     k.write_run("librivox", &[mit_stufe(row("librivox", "lva:alt", "Old"), Some(1))], false).unwrap();
     assert_eq!(k.stored("librivox", "lva:alt").unwrap().unwrap().row.beliebt_stufe, Some(1));
 }
+
+// ---------------------------------------------------------------- a foreign file
+
+/// A SQLite file with tables of its own, none of them a catalog's.
+fn fremde_datei(name: &str) -> String {
+    let p = scratch(name);
+    let c = Connection::open(&p).unwrap();
+    c.execute_batch("CREATE TABLE fremd (x TEXT); INSERT INTO fremd VALUES ('eigen');").unwrap();
+    p
+}
+
+#[test]
+fn the_reader_refuses_a_file_with_foreign_tables_and_leaves_it() {
+    let p = fremde_datei("fremd-lesen");
+    let before = tables(&p);
+    match Katalog::open_read(&p) {
+        Err(KatalogError::NoCatalog) => panic!("a foreign file was taken as one without a catalog"),
+        Err(_) => {}
+        Ok(_) => panic!("a foreign file was read as a catalog"),
+    }
+    assert_eq!(tables(&p), before, "the reader changed the foreign file");
+}
+
+#[test]
+fn the_writer_refuses_a_file_with_foreign_tables_and_leaves_it() {
+    let p = fremde_datei("fremd-schreiben");
+    let before = tables(&p);
+    match Katalog::open(&p) {
+        Err(KatalogError::NoCatalog) => panic!("a foreign file was taken as one without a catalog"),
+        Err(_) => {}
+        Ok(_) => panic!("the writer laid its schema into a foreign file"),
+    }
+    assert_eq!(tables(&p), before, "the writer changed the foreign file");
+}
