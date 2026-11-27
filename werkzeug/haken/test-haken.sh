@@ -220,6 +220,25 @@ if "$GIT" commit -q -m "Moves a dependency to its next version" >/dev/null 2>"$W
 verdict pass "$got" "I16 a listed crate in another version"
 "$GIT" reset -q --hard origin/dev
 
+# I15b and I16b: the crates of the fetch program, its own package with its own lock file.
+mkdir -p abruf && printf '[[package]]\nname = "serde"\nversion = "1.0.0"\n' > abruf/Cargo.lock
+"$GIT" add abruf/Cargo.lock && "$GIT" commit -q -m "The lock file of the fetch program" --no-verify
+"$GIT" push -q origin dev --no-verify
+printf '\n[[package]]\nname = "some-unlisted-crate"\nversion = "0.1.0"\n' >> abruf/Cargo.lock
+"$GIT" add abruf/Cargo.lock
+if "$GIT" commit -q -m "Adds a dependency to the fetch program" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict refuse "$got" "I15b a crate of the fetch program that is not on the list"
+"$GIT" reset -q --hard origin/dev
+printf '[package]\nname = "maer-sync-abruf"\nversion = "0.1.0"\n\n[dependencies]\nsome-unlisted-crate = "0.1"\n' > abruf/Cargo.toml
+"$GIT" add abruf/Cargo.toml
+if "$GIT" commit -q -m "Names a dependency of the fetch program" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict refuse "$got" "I15b a dependency of the fetch program that is not on the list"
+"$GIT" reset -q --hard origin/dev
+sed 's/version = "1.0.0"/version = "1.0.1"/' abruf/Cargo.lock > abruf/Cargo.lock.new && mv abruf/Cargo.lock.new abruf/Cargo.lock && "$GIT" add abruf/Cargo.lock
+if "$GIT" commit -q -m "Moves a dependency of the fetch program to its next version" >/dev/null 2>"$WORK/err"; then got=pass; else got=refuse; fi
+verdict pass "$got" "I16b a listed crate of the fetch program in another version"
+"$GIT" reset -q --hard origin/dev
+
 # I17: an existing German comment stays, another line of the file changes.
 mkdir -p src && printf '// Die alte Zeile bleibt stehen\nfn a() {}\n' > src/m.rs
 "$GIT" add src/m.rs && "$GIT" commit -q -m "An older file" --no-verify

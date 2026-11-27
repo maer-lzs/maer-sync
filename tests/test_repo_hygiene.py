@@ -23,7 +23,25 @@ def tracked():
     return gitquery.tracked()
 
 
+def approved_crates():
+    lines = (ROOT / "werkzeug" / "haken" / "crates.txt").read_text(encoding="utf-8").splitlines()
+    return {l.split(" # ", 1)[0].strip() for l in lines if l.strip() and not l.startswith("#")}
+
+
+def locked_crates(lock):
+    import re
+    return set(re.findall(r'^name = "([^"]+)"', (ROOT / lock).read_text(encoding="utf-8"), re.M))
+
+
 class RepoHygieneTests(unittest.TestCase):
+    def test_every_crate_in_the_lock_files_is_approved(self):
+        # The hook checks a change of a lock file; this checks the stock, so a
+        # crate that came in while the hook did not run shows here.
+        own = {"maer-sync", "maer-sync-abruf"}
+        for lock in ("Cargo.lock", "abruf/Cargo.lock"):
+            missing = sorted(locked_crates(lock) - approved_crates() - own)
+            self.assertEqual(missing, [], f"{lock} holds crates that are not on werkzeug/haken/crates.txt")
+
     def test_no_store_is_tracked(self):
         # The one that is not merely untidy. The store holds scrypt hashes
         # of account secrets and digests of live tokens; committing one

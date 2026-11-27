@@ -265,11 +265,15 @@ def check_staged(rev=None):
                 found.append(f"a comment carries a dash: {where}")
             if is_german(comment):
                 found.append(f"a comment is not English: {where}")
-    if files & {"Cargo.lock", "Cargo.toml"}:
-        approved = set(read_list(os.path.join(ROOT, "werkzeug", "haken", "crates.txt"), "list of crates"))
-        unknown = crate_names(staged_file("Cargo.lock", rev), staged_file("Cargo.toml", rev)) - approved
-        for name in sorted(unknown):
-            found.append(f"a crate without approval: {name}")
+    # Each package with its own lock file: the service at the root, the
+    # fetch program under abruf/.
+    for base in ("", "abruf/"):
+        if files & {f"{base}Cargo.lock", f"{base}Cargo.toml"}:
+            approved = set(read_list(os.path.join(ROOT, "werkzeug", "haken", "crates.txt"), "list of crates"))
+            unknown = crate_names(staged_file(f"{base}Cargo.lock", rev), staged_file(f"{base}Cargo.toml", rev)) - approved
+            unknown -= {"maer-sync", "maer-sync-abruf"}
+            for name in sorted(unknown):
+                found.append(f"a crate without approval in {base or 'the root '}: {name}")
     return found
 
 
