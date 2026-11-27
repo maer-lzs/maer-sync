@@ -381,3 +381,37 @@ fn page_size_measured() {
     let a = get(&mut st, "/v1/katalog/schellack", "");
     println!("MESSUNG volle Seite 5000 Zeilen: {} Bytes", a.body.len());
 }
+
+#[test]
+fn the_run_lock_beside_the_catalog_leaves_the_service_reading() {
+    // The fetch program holds `katalog.db.lauf` during every run, in the
+    // volume of the catalog. The service never opens it, and reads from a
+    // folder it cannot write just as without it.
+    use std::os::unix::fs::PermissionsExt;
+    let mut st = stand("runlock", |k| { k.write_run("otr", &rows("otr", 5), false).unwrap(); });
+    let before = dump(&st.katalog);
+    let folder = std::path::Path::new(&st.katalog).parent().unwrap().join("ro");
+    std::fs::create_dir_all(&folder).unwrap();
+    let moved = folder.join("katalog.db");
+    std::fs::rename(&st.katalog, &moved).unwrap();
+    let sperre = Katalog::laufsperre(moved.to_str().unwrap()).unwrap();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+    st.app = std::mem::replace(&mut st.app, App::neu(Store::open(st.dir.join("x.sqlite").to_str().unwrap(), 10, None).unwrap()))
+        .mit_katalog(moved.to_str().unwrap());
+    for q in ["", "anzahl=2", "seit=0"] {
+        assert_eq!(get(&mut st, "/v1/katalog/otr", q).status, 200, "{q}");
+    }
+    assert_eq!(ids(&body(&get(&mut st, "/v1/katalog/otr", ""))).len(), 5);
+    // The lock is real and still held while the service reads.
+    assert!(matches!(Katalog::laufsperre(moved.to_str().unwrap()), Err(maer_sync::katalog::KatalogError::Busy)));
+    let mut names: Vec<String> = std::fs::read_dir(&folder).unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, vec!["katalog.db".to_string(), "katalog.db.lauf".to_string()], "the service wrote beside the catalog");
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+    drop(sperre);
+    assert_eq!(dump(moved.to_str().unwrap()), before);
+    // The service's code never names the lock.
+    let wege = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/wege.rs")).unwrap();
+    assert!(!wege.contains("laufsperre") && !wege.contains("LAUFSPERRE") && !wege.contains(".lauf\""));
+}

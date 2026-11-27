@@ -12,11 +12,14 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use maer_sync::katalog::{Katalog, MAX_PAGE};
+use maer_sync::katalog::{Katalog, KatalogError, Row, MAX_PAGE};
 use maer_sync_abruf::netz::{
     decode_params, Anfrage, Antwort, HolFehler, Holer, Netz, Uhr, MAX_BYTES, MAX_REDIRECTS, MIN_GAP_MS, USER_AGENT,
 };
-use maer_sync_abruf::lauf::{base_query, datum, lauf, regale_der_app, Einstellungen, LaufFehler};
+use maer_sync_abruf::lauf::{
+    base_query, datum, keep_known_shelves, lauf, lauf_bestaetigt, regale_der_app, Einstellungen, LaufFehler,
+};
+use maer_sync_abruf::programm::{befehl, Befehl};
 use maer_sync_abruf::plan::{faellig, naechster, schlaf_s, wann, Art, Zustand, BACKOFF_S, DELTA_S, VOLL_S};
 use serde_json::{json, Value};
 
@@ -264,7 +267,7 @@ fn a_vanished_record_becomes_a_mark_only_through_a_full_pass() {
     // Half gone at once: the mass bound of the catalog refuses it.
     let (mut n, _, _) = net(archive_source("librivoxaudio", ids(50, "lv"), 40));
     let b = lauf(&mut n, &mut k, "librivox", Art::Voll, &settings());
-    assert!(matches!(b.ausgang, Err(LaufFehler::Katalog(_))), "{:?}", b.ausgang);
+    assert!(matches!(b.ausgang, Err(LaufFehler::Gesperrt { .. })), "{:?}", b.ausgang);
     assert_eq!(live(&k, "librivox").len(), 99);
 }
 
@@ -501,6 +504,145 @@ fn an_end_between_pages_writes_nothing() {
     let k = Katalog::open(&path).unwrap();
     let z = Zustand { letzter_voll: k.last_run("librivox", "voll").unwrap(), ..Default::default() };
     assert_eq!(faellig(T, &z), Some(Art::Voll));
+}
+
+fn shellac_row(id: &str, reihen: &[&str]) -> Row {
+    Row {
+        quelle: "schellack".into(), id: id.into(), art: "musik".into(), titel: None, urheber: None,
+        sprache: None, jahr: None, rechte_kennung: "pd".into(), rechte_url: None, laden: true,
+        reihen: reihen.iter().map(|s| s.to_string()).collect(), auch: vec![], tief: None,
+    }
+}
+
+#[test]
+fn a_shellac_delta_keeps_the_shelves_the_catalog_knows() {
+    let mut shelves = BTreeMap::new();
+    shelves.insert("jazz".to_string(), vec!["78_both".to_string()]);
+    shelves.insert("swing".to_string(), vec!["78_both".to_string()]);
+    let (mut n, _, _) = net(shelf_source(shelves));
+    let (mut k, _) = katalog("shellac-delta-keeps");
+    assert_eq!(lauf(&mut n, &mut k, "schellack", Art::Voll, &settings()).ausgang, Ok(()));
+    // The delta finds the record again, on a third shelf only.
+    let mut again = BTreeMap::new();
+    again.insert("tango".to_string(), vec!["78_both".to_string()]);
+    let (mut n, _, _) = net(shelf_source(again));
+    assert_eq!(lauf(&mut n, &mut k, "schellack", Art::Delta, &settings()).ausgang, Ok(()));
+    let row = k.stored("schellack", "lva:78_both").unwrap().unwrap().row;
+    assert_eq!(row.reihen, vec!["shellac-jazz", "shellac-swing", "shellac-tango"]);
+}
+
+#[test]
+fn a_shellac_delta_refuses_when_a_known_row_cannot_be_read() {
+    // A read that fails is not a row that was never there: taken as unknown,
+    // the record would lose its shelves in the catalog.
+    let mut rows = vec![shellac_row("lva:78_a", &["shellac-tango"]), shellac_row("lva:78_b", &["shellac-tango"])];
+    let r = keep_known_shelves(&mut rows, |id| match id {
+        "lva:78_a" => Ok(Some(vec!["shellac-jazz".to_string()])),
+        _ => Err(KatalogError::Busy),
+    });
+    assert!(matches!(r, Err(LaufFehler::Katalog(_))), "{r:?}");
+}
+
+// ---------------------------------------------------------------- the bound on losses and its way out
+
+fn librivox_with(k: &mut Katalog, records: Vec<String>) -> maer_sync_abruf::lauf::Laufbericht {
+    let (mut n, _, _) = net(archive_source("librivoxaudio", records, 40));
+    lauf(&mut n, k, "librivox", Art::Voll, &settings())
+}
+
+#[test]
+fn a_refused_run_names_the_numbers_and_the_way_out() {
+    let (mut k, _) = katalog("bound-line");
+    assert_eq!(librivox_with(&mut k, ids(100, "lv")).ausgang, Ok(()));
+    let b = librivox_with(&mut k, ids(50, "lv"));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Gesperrt { lebend: 100, .. })), "{:?}", b.ausgang);
+    assert!(!b.bestaetigt);
+    let line = b.zeile();
+    for part in ["gelesen=50", "lebend=100", "bestaetigen=\"maer-sync-abruf --bestaetigt librivox\""] {
+        assert!(line.contains(part), "{line}");
+    }
+    assert_eq!(live(&k, "librivox").len(), 100);
+}
+
+#[test]
+fn a_confirmed_run_writes_what_the_bound_refused_once() {
+    let (mut k, _) = katalog("bound-confirmed");
+    assert_eq!(librivox_with(&mut k, ids(100, "lv")).ausgang, Ok(()));
+    let v = k.version("librivox").unwrap();
+    let (mut n, _, _) = net(archive_source("librivoxaudio", ids(50, "lv"), 40));
+    let b = lauf_bestaetigt(&mut n, &mut k, "librivox", &settings());
+    assert_eq!(b.ausgang, Ok(()));
+    assert!(b.bestaetigt && b.art == Art::Voll, "{b:?}");
+    assert!(b.zeile().contains("bestaetigt=ja"), "{}", b.zeile());
+    assert_eq!(live(&k, "librivox").len(), 50);
+    assert!(k.version("librivox").unwrap() > v);
+    assert!(k.last_run("librivox", "voll").unwrap().is_some());
+    // The sign held for that one run: the next large loss is refused again.
+    let b = librivox_with(&mut k, ids(10, "lv"));
+    assert!(matches!(b.ausgang, Err(LaufFehler::Gesperrt { lebend: 50, .. })), "{:?}", b.ausgang);
+    assert!(!b.zeile().contains("bestaetigt=ja"), "{}", b.zeile());
+    assert_eq!(live(&k, "librivox").len(), 50);
+}
+
+#[test]
+fn an_empty_source_is_refused_and_confirmed_the_same_way() {
+    let (mut k, _) = katalog("bound-empty");
+    assert_eq!(librivox_with(&mut k, ids(100, "lv")).ausgang, Ok(()));
+    let b = librivox_with(&mut k, vec![]);
+    assert!(matches!(b.ausgang, Err(LaufFehler::Gesperrt { lebend: 100, .. })), "{:?}", b.ausgang);
+    assert!(b.zeile().contains("gelesen=0"), "{}", b.zeile());
+    let (mut n, _, _) = net(archive_source("librivoxaudio", vec![], 40));
+    assert_eq!(lauf_bestaetigt(&mut n, &mut k, "librivox", &settings()).ausgang, Ok(()));
+    assert_eq!(live(&k, "librivox").len(), 0);
+}
+
+#[test]
+fn the_program_takes_one_argument_to_confirm() {
+    let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(befehl(&a(&[])), Ok(Befehl::Dauerlauf));
+    assert_eq!(befehl(&a(&["--bestaetigt", "schellack"])), Ok(Befehl::Bestaetigt("schellack".into())));
+    let bad: [&[&str]; 5] = [
+        &["--bestaetigt"], &["--bestaetigt", "gutenberg"], &["--bestaetigt", "librivox", "otr"],
+        &["librivox"], &["--confirm", "librivox"],
+    ];
+    for b in bad {
+        assert!(befehl(&a(b)).is_err(), "{b:?}");
+    }
+}
+
+#[test]
+fn the_program_ends_on_an_argument_it_does_not_know() {
+    let dir = std::env::temp_dir().join(format!("maer-sync-abruf-args-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // A folder that is missing: a program that opened the catalog first
+    // would end with 1 there, never reach the network, and never pass.
+    let path = dir.join("fehlt").join("katalog.db");
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_maer-sync-abruf"))
+        .args(["--bestaetigt", "gutenberg"])
+        .env("MAER_SYNC_KATALOG", &path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn().unwrap();
+    // It must end on its own, before it opens the catalog.
+    let mut status = None;
+    for _ in 0..100 {
+        if let Some(s) = child.try_wait().unwrap() {
+            status = Some(s);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let Some(status) = status else {
+        child.kill().unwrap();
+        child.wait().unwrap();
+        panic!("the program kept running on an unknown argument");
+    };
+    let mut err = String::new();
+    std::io::Read::read_to_string(child.stderr.as_mut().unwrap(), &mut err).unwrap();
+    assert_eq!(status.code(), Some(2), "the arguments are read before the catalog is opened: {err}");
+    assert!(err.contains("--bestaetigt"), "{err}");
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 // ---------------------------------------------------------------- the line of a run

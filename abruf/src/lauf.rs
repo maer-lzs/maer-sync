@@ -29,7 +29,7 @@
 
 use std::collections::BTreeSet;
 
-use maer_sync::katalog::{Katalog, Row};
+use maer_sync::katalog::{Katalog, KatalogError, Row, MAX_PAGE};
 use serde_json::Value;
 
 use crate::archive::{merge_shelves, rows_from_answer, ReadError, Shelf};
@@ -68,6 +68,11 @@ pub enum LaufFehler {
     Echo { gestellt: String, zurueck: Option<String> },
     Katalog(String),
     Quelle(String),
+    /// The catalog refused the run as too large a loss (no rows, or too many
+    /// live rows gone); `lebend` is the number of live rows it holds.
+    Gesperrt { grund: String, lebend: usize },
+    /// Another run holds the catalog: nothing was fetched or written.
+    Belegt,
 }
 
 impl From<HolFehler> for LaufFehler {
@@ -87,6 +92,8 @@ pub struct Laufbericht {
     pub version_nachher: i64,
     pub dauer_ms: i64,
     pub ausgang: Result<(), LaufFehler>,
+    /// The operator confirmed this run (`--bestaetigt`).
+    pub bestaetigt: bool,
 }
 
 impl Laufbericht {
@@ -95,10 +102,22 @@ impl Laufbericht {
     pub fn zeile(&self) -> String {
         let ausgang = match &self.ausgang {
             Ok(()) => "ok".to_string(),
+            // A refusal of the bound on losses names the live rows and the
+            // command that confirms the run.
+            Err(LaufFehler::Gesperrt { grund, lebend }) => format!(
+                "abgewiesen grund=Gesperrt({}) lebend={lebend} bestaetigen=\"maer-sync-abruf --bestaetigt {}\"",
+                format!("{grund:?}").replace(['\n', '\r'], " "), self.quelle),
+            Err(LaufFehler::Belegt) =>
+                "abgewiesen grund=Belegt (another run holds the catalog; nothing fetched or written, later again)".into(),
             Err(e) => format!("abgewiesen grund={}", format!("{e:?}").replace(['\n', '\r'], " ")),
         };
-        format!("lauf quelle={} art={} gelesen={} version={}->{} dauer_ms={} ausgang={ausgang}",
-                self.quelle, self.art.name(), self.gelesen, self.version_vorher, self.version_nachher, self.dauer_ms)
+        let mut zeile = format!(
+            "lauf quelle={} art={} gelesen={} version={}->{} dauer_ms={} ausgang={ausgang}",
+            self.quelle, self.art.name(), self.gelesen, self.version_vorher, self.version_nachher, self.dauer_ms);
+        if self.bestaetigt {
+            zeile.push_str(" bestaetigt=ja");
+        }
+        zeile
     }
 }
 
@@ -362,6 +381,28 @@ fn full_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, e: &Einstell
     Ok(rows)
 }
 
+/// A shellac delta sees a record only on the shelves it was added to again;
+/// the shelves the catalog already knows for it stay (a full pass resets
+/// them). `stored` answers the shelves the catalog holds for an id. A read
+/// that fails refuses the delta: taken as a row that was never there, the
+/// record would lose its known shelves.
+pub fn keep_known_shelves<F>(rows: &mut [Row], mut stored: F) -> Result<(), LaufFehler>
+where
+    F: FnMut(&str) -> Result<Option<Vec<String>>, KatalogError>,
+{
+    for r in rows.iter_mut() {
+        if let Some(old) = stored(&r.id).map_err(|e| LaufFehler::Katalog(e.to_string()))? {
+            for k in old {
+                if !r.reihen.contains(&k) {
+                    r.reihen.push(k);
+                }
+            }
+            r.reihen.sort();
+        }
+    }
+    Ok(())
+}
+
 fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &str, e: &Einstellungen)
     -> Result<Vec<Row>, LaufFehler> {
     let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
@@ -374,19 +415,8 @@ fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &st
         for s in regale_der_app() {
             parts.push(adv_all(netz, quelle, &format!("{}{since}", shelf_query(&s)), e, Some(&s))?);
         }
-        // A delta sees a record only on the shelves it was added to again; the
-        // shelves the catalog already knows for it stay (a full pass resets them).
         let mut rows = merge_shelves(parts);
-        for r in rows.iter_mut() {
-            if let Ok(Some(old)) = katalog.stored(quelle, &r.id) {
-                for k in old.row.reihen {
-                    if !r.reihen.contains(&k) {
-                        r.reihen.push(k);
-                    }
-                }
-                r.reihen.sort();
-            }
-        }
+        keep_known_shelves(&mut rows, |id| katalog.stored(quelle, id).map(|s| s.map(|s| s.row.reihen)))?;
         return Ok(rows);
     }
     let q = base_query(quelle).ok_or_else(|| LaufFehler::Quelle(quelle.into()))?;
@@ -397,6 +427,19 @@ fn delta<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, quelle: &st
 /// run succeeded.
 pub fn lauf<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quelle: &str, art: Art,
                               e: &Einstellungen) -> Laufbericht {
+    lauf_mit(netz, katalog, quelle, art, e, false)
+}
+
+/// A full pass of one source that the operator confirmed: it may empty the
+/// source or delete more live rows than the catalog allows a run on its own.
+/// The sign holds for this run only.
+pub fn lauf_bestaetigt<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quelle: &str,
+                                         e: &Einstellungen) -> Laufbericht {
+    lauf_mit(netz, katalog, quelle, Art::Voll, e, true)
+}
+
+fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quelle: &str, art: Art,
+                              e: &Einstellungen, bestaetigt: bool) -> Laufbericht {
     let start = netz.uhr.jetzt_ms();
     let vorher = katalog.version(quelle).unwrap_or(-1);
     let mut gelesen = 0;
@@ -406,7 +449,13 @@ pub fn lauf<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         let rows = if voll { full_pass(netz, quelle, e)? } else { delta(netz, katalog, quelle, e)? };
         gelesen = rows.len();
         let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
-        if voll { katalog.write_run(quelle, &rows, false).map_err(k)? } else { katalog.write_delta(quelle, &rows).map_err(k)? };
+        if voll {
+            if let Err(err) = katalog.write_run(quelle, &rows, bestaetigt) {
+                return Err(sperre(katalog, quelle, err));
+            }
+        } else {
+            katalog.write_delta(quelle, &rows).map_err(k)?;
+        }
         katalog.set_last_run(quelle, art.name(), netz.uhr.jetzt_ms().div_euclid(1000)).map_err(k)?;
         Ok(())
     })();
@@ -418,5 +467,33 @@ pub fn lauf<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         version_nachher: katalog.version(quelle).unwrap_or(-1),
         dauer_ms: netz.uhr.jetzt_ms() - start,
         ausgang,
+        bestaetigt,
+    }
+}
+
+/// A refusal of the bound on losses becomes `Gesperrt` with the live rows
+/// the catalog holds; any other error stays a catalog error.
+fn sperre(katalog: &Katalog, quelle: &str, err: KatalogError) -> LaufFehler {
+    let lebend = match &err {
+        KatalogError::MassDelete { live, .. } => Ok(*live),
+        KatalogError::EmptyRun => live_rows(katalog, quelle),
+        _ => return LaufFehler::Katalog(err.to_string()),
+    };
+    match lebend {
+        Ok(lebend) => LaufFehler::Gesperrt { grund: err.to_string(), lebend },
+        Err(e) => LaufFehler::Katalog(format!("{err}; the live rows cannot be counted: {e}")),
+    }
+}
+
+fn live_rows(katalog: &Katalog, quelle: &str) -> Result<usize, KatalogError> {
+    let mut n = 0;
+    let mut nach: Option<String> = None;
+    loop {
+        let p = katalog.full(quelle, nach.as_deref(), MAX_PAGE)?;
+        n += p.zeilen.len();
+        match p.weiter {
+            Some(w) => nach = Some(w),
+            None => return Ok(n),
+        }
     }
 }
