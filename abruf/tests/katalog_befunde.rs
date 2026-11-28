@@ -82,8 +82,9 @@ fn archive(echo: fn(&str) -> String) -> Handler {
     Box::new(move |a, p| {
         let q = p.get("q").cloned().unwrap_or_default();
         let ids: Vec<String> = (0..3).map(|i| format!("r-{i}")).collect();
-        let coll = if q.contains("georgeblood") { "georgeblood" } else { "x" };
-        let item = |i: &String| json!({"identifier": i, "title": i, "collection": [coll], "subject": ["78rpm", "jazz"], "year": 1920});
+        let coll = q.split("collection:").nth(1).and_then(|r| r.split(char::is_whitespace).next()).unwrap_or("").to_string();
+        let word = q.split("subject:\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or("jazz").to_string();
+        let item = |i: &String| json!({"identifier": i, "title": i, "collection": [coll], "subject": ["78rpm", word], "year": 1920});
         if a.url.starts_with("https://archive.org/advancedsearch.php") {
             let rows: usize = p.get("rows").and_then(|r| r.parse().ok()).unwrap_or(0);
             let page: usize = p.get("page").and_then(|r| r.parse().ok()).unwrap_or(1);

@@ -362,7 +362,7 @@ fn shellac_reads_every_shelf_and_never_the_collection() {
     let asked: Vec<String> = log.borrow().iter()
         .map(|(_, a)| decode_params(&a.url).into_iter().collect::<BTreeMap<_, _>>()["q"].clone()).collect();
     let mut queries: Vec<String> = regale_der_app().into_iter()
-        .map(|s| format!("collection:georgeblood AND subject:\"{}\" AND mediatype:(audio)", s.schlagwort)).collect();
+        .map(|s| format!("collection:georgeblood AND subject:\"{}\" AND mediatype:audio", s.schlagwort)).collect();
     queries.sort();
     let mut seen = asked.clone();
     seen.sort();
