@@ -13,7 +13,8 @@ Port erscheint, ist es dieser Port. **In dieser Probe nicht gelaufen: der
 Proxy und die App (Schritte 4 und 6).** Die Proxy-Zeilen sind aus den
 Anforderungen des Dienstes geschrieben, Schritt 5 lief ohne Proxy gegen den
 veröffentlichten Port, und die Anmeldung braucht ein Gerät mit der App. Der
-frühere Lauf der Schritte 1 bis 3 am 08.11.2026 gab dieselben Antworten.
+frühere Lauf der Schritte 1 bis 3 am 08.11.2026 gab dieselben Antworten. `v0.4.1` ändert am Dienst nichts,
+deshalb nennen die Befehle unten ihn.
 
 Du brauchst einen Linux-Wirt mit Docker (mit Compose) und git, und einen
 Namen, der auf ihn zeigt, hier `sync.example.com`. Sechs Schritte von nichts
@@ -25,7 +26,7 @@ langsameren dauern sie länger.
 
     git clone https://github.com/maer-lzs/maer-sync.git
     cd maer-sync
-    git checkout v0.4.0
+    git checkout v0.4.1
     docker compose up -d --build
     docker compose exec maer-sync /maer-sync health
 
@@ -177,8 +178,9 @@ Abrufprogramms und der Start beider dauerten 72 Sekunden:
 
 Die Zeile ist hier gekürzt. Ihre Abweisung ist ein Fehler von `v0.4.0`:
 archive.org gibt seine Anfrage in anderer Schreibweise zurück, und `v0.4.0`
-wies deshalb vier Quellen ab. Die Korrektur liegt auf `dev` und kommt mit der
-nächsten Veröffentlichung. Was der Katalog tut und wie du ihn wieder
+wies deshalb vier Quellen ab. Die Korrektur kam mit `v0.4.1`; auf dem Wirt, der diesen Dienst
+trägt (unter systemd, nicht im Container), liefen danach am 28.11.2026 alle
+vier Quellen ohne Abweisung. Was der Katalog tut und wie du ihn wieder
 abschaltest: [Der Katalog-Index (optional)](catalog.de.md).
 
 **Aufräumen nach einer Probe.** `docker compose --profile katalog down -v`

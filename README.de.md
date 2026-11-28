@@ -42,13 +42,13 @@ Aussage für Aussage, mit den Pfaden und dem Vertrag: [docs/design.de.md](docs/d
 
 ## Schnellstart
 
-Gefahren am 28.11.2026 aus einem frischen Klon bei `v0.4.0` auf einem Debian-Wirt; der ganze Lauf mit seiner Ausgabe steht in [docs/container.de.md](docs/container.de.md).
+Gefahren am 28.11.2026 aus einem frischen Klon bei `v0.4.0` auf einem Debian-Wirt; `v0.4.1` ändert am Dienst nichts, deshalb nennen die Schritte ihn. Der ganze Lauf mit seiner Ausgabe steht in [docs/container.de.md](docs/container.de.md).
 
 1. Holen und starten:
 
        git clone https://github.com/maer-lzs/maer-sync.git
        cd maer-sync
-       git checkout v0.4.0
+       git checkout v0.4.1
        docker compose up -d --build
        docker compose exec maer-sync /maer-sync health
 

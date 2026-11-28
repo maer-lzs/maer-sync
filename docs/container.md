@@ -13,7 +13,8 @@ port shows, it is that port. **Not run in that probe: the proxy and the app
 (steps 4 and 6).** The proxy lines are written from the service's
 requirements, step 5 was run against the published port without a proxy,
 and signing in needs a device with the app. The earlier run of steps 1 to 3
-on 08.11.2026 gave the same answers.
+on 08.11.2026 gave the same answers. `v0.4.1` changes nothing in the
+service, so the commands below name it.
 
 You need a Linux host with Docker (with Compose) and git, and a name that
 points at it, here `sync.example.com`. Six steps from nothing to a signed in
@@ -25,7 +26,7 @@ longer on a slower one.
 
     git clone https://github.com/maer-lzs/maer-sync.git
     cd maer-sync
-    git checkout v0.4.0
+    git checkout v0.4.1
     docker compose up -d --build
     docker compose exec maer-sync /maer-sync health
 
@@ -174,7 +175,9 @@ the fetch program and start both:
 
 The line is cut short here. Its refusal is a fault of `v0.4.0`: archive.org
 states its query back in another spelling, and `v0.4.0` refused four sources
-for it. The fix is on `dev` and comes with the next release. What the catalog does, and how to switch it off again:
+for it. The fix came with `v0.4.1`; on the host that carries this service
+(under systemd, not in a container) all four sources then ran without a
+refusal, on 28.11.2026. What the catalog does, and how to switch it off again:
 [the catalog index](catalog.md).
 
 **Clearing up after a probe.** `docker compose --profile katalog down -v`
