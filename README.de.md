@@ -21,7 +21,7 @@ Eine SQLite-Datei hält alles, was der Dienst weiß, je Konto in sechs Arten von
 - `claim`: welches Gerät gerade spielt, damit das andere aufhört
 - `feedauth`: Zugangsdaten zu Feeds, auf dem Gerät versiegelt mit einem Schlüssel, der das Gerät nie verlässt
 
-Der Dienst liest nie, was in einem Dokument steht; er bewahrt es auf und gibt es zurück. Jedes angemeldete Gerät hält über einen Socket Schritt, der ihm sagt, wenn sich etwas geändert hat. Audio geht nie durch den Dienst.
+Der Dienst schaut in ein Dokument nicht weiter hinein als bis zu seiner Größe und seiner Form; er bewahrt es auf und gibt es zurück. Jedes angemeldete Gerät hält über einen Socket Schritt, der ihm sagt, wenn sich etwas geändert hat. Audio geht nie durch den Dienst.
 
 ## Was wohin reist
 
@@ -29,7 +29,7 @@ Der Dienst liest nie, was in einem Dokument steht; er bewahrt es auf und gibt es
 - **Nur verschlüsselt.** Hinter einem TLS-Proxy, wie unten beschrieben. Erreicht ein Gerät den Dienst über einfaches `http`, geht jede Anfrage in einer verschlüsselten Sitzung (Noise `NK`), gebunden an den Schlüssel deines Dienstes, den jedes Gerät beim ersten Kontakt festhält.
 - **Kein Passwort auf dem Dienst.** Seit Vertragsfassung 6 leitet ein Gerät aus dem Passwort einen Beweis ab und meldet sich damit an; der Dienst speichert diesen Beweis noch einmal gestreckt, nie das Passwort.
 - **Was der Dienst außer den Dokumenten festhält:** je Gerät, in welcher Form es sich zuletzt angemeldet hat (`maer-sync devices <owner>` zeigt die Formen, nie einen Wert), und je Anfrage eine Protokollzeile mit Absenderadresse, Methode, Pfad und Status.
-- **Der freiwillige Katalog-Index** ist ein zweites Programm, das öffentliche Kataloge fragt (archive.org, Wikimedia Commons für Musopen, Radio Browser und einen Spiegel von Project Gutenberg), höchstens eine Anfrage pro Sekunde, als `Maer/1.0 (+https://maer.fm)`. Es ist aus, bis du es einschaltest, und sieht die Nutzerdaten nie.
+- **Der freiwillige Katalog-Index** ist ein zweites Programm, das öffentliche Kataloge fragt (archive.org, Wikimedia Commons für Musopen, Radio Browser und einen Spiegel von Project Gutenberg), höchstens eine Anfrage pro Sekunde an jede Quelle, als `Maer/1.0 (+https://maer.fm)`. Es ist aus, bis du es einschaltest, und sieht die Nutzerdaten nie.
 
 Aussage für Aussage, mit den Pfaden und dem Vertrag: [docs/design.de.md](docs/design.de.md) und [docs/accounts.de.md](docs/accounts.de.md).
 
@@ -64,7 +64,7 @@ Gefahren am 28.11.2026 aus einem frischen Klon bei `v0.4.0` auf einem Debian-Wir
 
        account someone laid down
 
-4. Stell einen Proxy mit TLS davor, der den WebSocket-Aufstieg durchreicht, und prüf ihn: ohne Token antwortet der Aufstieg mit `403`; ein `404` heißt, dass der Proxy ihn verschluckt hat. Die Zeilen für Caddy und nginx: [docs/container.de.md](docs/container.de.md).
+4. Stell einen Proxy mit TLS davor, der den WebSocket-Aufstieg durchreicht, und prüf ihn (dieser Schritt war nicht Teil des Laufs vom 28.11.2026: die Zeilen für den Proxy sind aus den Anforderungen des Dienstes geschrieben, und die `403` wurde am veröffentlichten Port ohne Proxy gemessen): ohne Token antwortet der Aufstieg mit `403`; ein `404` heißt, dass der Proxy ihn verschluckt hat. Die Zeilen für Caddy und nginx: [docs/container.de.md](docs/container.de.md).
 
 Ist `8099` auf deinem Wirt belegt, starte mit `MAER_SYNC_HOST_PORT=18099` vor `docker compose up`; der Dienst drinnen bleibt auf `8099`.
 

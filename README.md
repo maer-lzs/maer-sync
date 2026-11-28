@@ -21,7 +21,7 @@ One SQLite file holds everything the service knows, per account, in six kinds of
 - `claim`: which device is playing, so that the other one stops
 - `feedauth`: feed credentials, sealed on the device with a key that never leaves it
 
-The service never reads what is inside a document; it keeps it and hands it back. Every device that signs in keeps up through a socket that tells it when something changed. Audio never goes through the service.
+The service does not look inside a document beyond its size and its form; it keeps it and hands it back. Every device that signs in keeps up through a socket that tells it when something changed. Audio never goes through the service.
 
 ## What travels, and where
 
@@ -29,7 +29,7 @@ The service never reads what is inside a document; it keeps it and hands it back
 - **Only encrypted.** Behind a TLS proxy, as described below. Where a device reaches the service over plain `http`, every request goes inside an encrypted session (Noise `NK`) bound to the key of your service, which each device pins on first contact.
 - **No password on the service.** Since contract version 6 a device derives a proof from the password and signs in with that; the service stores the proof stretched once more, never the password.
 - **What the service writes down besides the documents:** per device, the form in which it last signed in (`maer-sync devices <owner>` shows the forms, never a value), and one log line per request with the source address, method, path and status.
-- **The optional catalog index** is a second program that asks public catalogs (archive.org, Wikimedia Commons for Musopen, Radio Browser and a Project Gutenberg mirror), one request a second at most, as `Maer/1.0 (+https://maer.fm)`. It is off until you switch it on, and it never sees the user data.
+- **The optional catalog index** is a second program that asks public catalogs (archive.org, Wikimedia Commons for Musopen, Radio Browser and a Project Gutenberg mirror), at most one request a second to each source, as `Maer/1.0 (+https://maer.fm)`. It is off until you switch it on, and it never sees the user data.
 
 Statement by statement, with the paths and the contract: [docs/design.md](docs/design.md) and [docs/accounts.md](docs/accounts.md).
 
@@ -64,7 +64,7 @@ Run on 28.11.2026 from a fresh clone at `v0.4.0` on a Debian host; the full run 
 
        account someone laid down
 
-4. Put a proxy with TLS in front that passes the WebSocket upgrade through, and prove it: without a token the upgrade answers `403`; a `404` means the proxy dropped it. The lines for Caddy and nginx: [docs/container.md](docs/container.md#quick-start-with-docker).
+4. Put a proxy with TLS in front that passes the WebSocket upgrade through, and prove it (this step was not part of the run on 28.11.2026: the proxy lines are written from the service's requirements, and the `403` was measured against the published port without a proxy): without a token the upgrade answers `403`; a `404` means the proxy dropped it. The lines for Caddy and nginx: [docs/container.md](docs/container.md#quick-start-with-docker).
 
 If `8099` is taken on your host, start with `MAER_SYNC_HOST_PORT=18099` in front of `docker compose up`; the service inside stays on `8099`.
 
