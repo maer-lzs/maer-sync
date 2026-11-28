@@ -4,7 +4,7 @@
 # Additional terms apply — see LICENSE-ADDITIONAL-TERMS
 """That the documentation stands in English and German, page for page.
 
-The README and every page under docs/ exist twice, `name.md` and
+The README and every page in docs/ (the folder itself, not below it) exist twice, `name.md` and
 `name.de.md`, with the same outline: the same headings at the same levels in
 the same order. A section added to one language and not to the other is the
 fault this fence is for; it would not show anywhere else, because each page

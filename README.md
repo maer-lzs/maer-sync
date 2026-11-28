@@ -42,13 +42,13 @@ Statement by statement, with the paths and the contract: [docs/design.md](docs/d
 
 ## Quick start
 
-Run on 28.11.2026 from a fresh clone at `v0.4.0` on a Debian host; the full run with its output is in [docs/container.md](docs/container.md).
+Run on 28.11.2026 from a fresh clone at `v0.4.0` on a Debian host; `v0.4.1` changes nothing in the service, so the steps name it. The full run with its output is in [docs/container.md](docs/container.md).
 
 1. Fetch it and start it:
 
        git clone https://github.com/maer-lzs/maer-sync.git
        cd maer-sync
-       git checkout v0.4.0
+       git checkout v0.4.1
        docker compose up -d --build
        docker compose exec maer-sync /maer-sync health
 
