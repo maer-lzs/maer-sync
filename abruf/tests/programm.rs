@@ -69,12 +69,11 @@ fn commons_or_radio(a: &Anfrage, p: &BTreeMap<String, String>) -> Option<Result<
         let v = if offset == 0 { json!([{"stationuuid": "00000000-0000-0000-0000-000000000001", "name": "S", "url": "http://s"}]) } else { json!([]) };
         return Some(ok(v));
     }
-    // `www` answers as the mirror would; which one is asked: katalog_befunde.rs.
-    if a.url == maer_sync_abruf::lauf::GUTENBERG_KATALOG || a.url == maer_sync_abruf::lauf::GUTENBERG_KATALOG_WWW {
+    if a.url == maer_sync_abruf::lauf::GUTENBERG_KATALOG {
         let csv = "Text#,Type,Issued,Title,Language,Authors,Subjects,LoCC,Bookshelves\n1,Sound,2003-01-01,T,en,A,,PR,\n";
         return Some(Ok(Antwort { status: 200, koerper: csv.as_bytes().to_vec(), ..Default::default() }));
     }
-    if a.url == maer_sync_abruf::lauf::gutenberg_rdf_url("1") || a.url == maer_sync_abruf::lauf::gutenberg_rdf_url_www("1") {
+    if a.url == maer_sync_abruf::lauf::gutenberg_rdf_url("1") {
         let rdf = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:pgterms="http://www.gutenberg.org/2009/pgterms/" xmlns:dcterms="http://purl.org/dc/terms/"><pgterms:ebook rdf:about="ebooks/1"><dcterms:rights>Public domain in the USA.</dcterms:rights></pgterms:ebook></rdf:RDF>"#;
         return Some(Ok(Antwort { status: 200, koerper: rdf.as_bytes().to_vec(), ..Default::default() }));
     }

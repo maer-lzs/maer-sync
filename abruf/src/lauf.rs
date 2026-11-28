@@ -109,7 +109,7 @@ pub struct Laufbericht {
     /// step it changed; new rows do not count. Two regular runs side by
     /// side measure how often the tenths move.
     pub stufen_gewechselt: usize,
-    /// Gutenberg: the requests that went to `www` and to the mirror.
+    /// Gutenberg: the requests that went to `www` (always 0) and to the mirror.
     pub wege: Option<(usize, usize)>,
 }
 
@@ -142,16 +142,14 @@ impl Laufbericht {
     }
 }
 
-/// The catalog dump of Project Gutenberg on the mirror the app takes when
-/// `www` fails.
+/// The catalog dump of Project Gutenberg on its mirror. A run asks the
+/// mirror alone: the website `www.gutenberg.org` is for people, and its
+/// terms block automated access (mirrors and catalog data excepted).
 pub const GUTENBERG_KATALOG: &str = "https://gutenberg.pglaf.org/cache/epub/feeds/pg_catalog.csv";
 
-/// The same dump at `www`, asked first, as the app does since 3.10.
-pub const GUTENBERG_KATALOG_WWW: &str = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv";
-
 /// The time limit of the dump alone. Measured 28.11.2026: the mirror sends
-/// 23 to 31 KB/s, so the dump of about 21 MB takes some fifteen minutes;
-/// `www` answered 503. Every other request keeps `netz::TIMEOUT_S`.
+/// 23 to 31 KB/s, so the dump of about 21 MB takes some fifteen minutes.
+/// Every other request keeps `netz::TIMEOUT_S`.
 pub const GUTENBERG_KATALOG_GRENZE_S: u64 = 1800;
 
 /// At most this many records of works in one run.
@@ -162,32 +160,19 @@ pub fn gutenberg_rdf_url(nummer: &str) -> String {
     format!("https://gutenberg.pglaf.org/cache/epub/{nummer}/pg{nummer}.rdf")
 }
 
-/// The record of work `nummer` at `www`.
-pub fn gutenberg_rdf_url_www(nummer: &str) -> String {
-    format!("https://www.gutenberg.org/cache/epub/{nummer}/pg{nummer}.rdf")
-}
-
-/// The way of one Gutenberg run: `www` until it fails once (an error, a
-/// status or a pause), then the mirror for the rest of that run. The next
-/// run asks `www` again. Counts the requests to each.
+/// The requests of one Gutenberg run, counted by the host they went to.
+/// The line of the run names both, so `www=0` stands in every line and is
+/// its own fence in operation.
 struct GutenbergWeg {
-    www_aus: bool,
     www: usize,
     spiegel: usize,
 }
 
 impl GutenbergWeg {
-    fn hole<H: Holer, U: Uhr>(&mut self, netz: &mut Netz<H, U>, www: &str, spiegel: &str, grenze_s: u64)
+    fn hole<H: Holer, U: Uhr>(&mut self, netz: &mut Netz<H, U>, url: &str, grenze_s: u64)
         -> Result<Antwort, HolFehler> {
-        if !self.www_aus {
-            self.www += 1;
-            match netz.get_mit_grenze(www, grenze_s) {
-                Ok(a) => return Ok(a),
-                Err(_) => self.www_aus = true,
-            }
-        }
-        self.spiegel += 1;
-        netz.get_mit_grenze(spiegel, grenze_s)
+        if url.starts_with("https://www.gutenberg.org/") { self.www += 1 } else { self.spiegel += 1 }
+        netz.get_mit_grenze(url, grenze_s)
     }
 }
 
@@ -198,7 +183,7 @@ impl GutenbergWeg {
 /// refuses the run.
 fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, wege: &mut Option<(usize, usize)>)
     -> Result<Vec<Row>, LaufFehler> {
-    let mut weg = GutenbergWeg { www_aus: false, www: 0, spiegel: 0 };
+    let mut weg = GutenbergWeg { www: 0, spiegel: 0 };
     let r = gutenberg_mit(netz, katalog, &mut weg);
     *wege = Some((weg.www, weg.spiegel));
     r
@@ -206,7 +191,7 @@ fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, we
 
 fn gutenberg_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, weg: &mut GutenbergWeg)
     -> Result<Vec<Row>, LaufFehler> {
-    let dump = weg.hole(netz, GUTENBERG_KATALOG_WWW, GUTENBERG_KATALOG, GUTENBERG_KATALOG_GRENZE_S)?;
+    let dump = weg.hole(netz, GUTENBERG_KATALOG, GUTENBERG_KATALOG_GRENZE_S)?;
     let rows = gutenberg::rows_from_catalog(&dump.koerper)?;
     if rows.len() > GUTENBERG_RDF_DECKEL {
         return Err(LaufFehler::Deckel(format!("{} works of type Sound, at most {GUTENBERG_RDF_DECKEL} records a run", rows.len())));
@@ -218,7 +203,7 @@ fn gutenberg_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, weg
     let mut ausgefallen = 0;
     for mut r in rows {
         let nummer = r.id.trim_start_matches("gut:").to_string();
-        let gelesen = weg.hole(netz, &gutenberg_rdf_url_www(&nummer), &gutenberg_rdf_url(&nummer), TIMEOUT_S)
+        let gelesen = weg.hole(netz, &gutenberg_rdf_url(&nummer), TIMEOUT_S)
             .map_err(LaufFehler::from)
             .and_then(|a| gutenberg::rdf_lesen(&a.koerper, &nummer).map_err(LaufFehler::from));
         match gelesen {

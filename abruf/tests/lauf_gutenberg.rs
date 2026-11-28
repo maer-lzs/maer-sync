@@ -43,11 +43,6 @@ struct Spiegel {
 
 impl Holer for Spiegel {
     fn hole(&mut self, a: &Anfrage) -> Result<Antwort, HolFehler> {
-        // `www` is asked first and answers 503, as measured on 28.11.2026;
-        // these witnesses read the mirror (www first: katalog_befunde.rs).
-        if a.url.starts_with("https://www.gutenberg.org/") {
-            return Err(HolFehler::Status(503));
-        }
         let now = *self.clock.0.borrow();
         self.log.borrow_mut().push((a.url.clone(), now));
         *self.clock.0.borrow_mut() += 50;
