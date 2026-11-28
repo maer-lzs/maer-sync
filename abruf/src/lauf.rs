@@ -269,6 +269,11 @@ fn parse(body: &[u8]) -> Result<Value, LaufFehler> {
     serde_json::from_slice(body).map_err(|e| LaufFehler::Lesen(ReadError::Unreadable(e.to_string())))
 }
 
+/// Whether the echo of a query is the query (a hull for now: compared as is).
+pub fn echo_gleich(gestellt: &str, zurueck: &str) -> bool {
+    gestellt == zurueck
+}
+
 /// An advanced search page, its echo checked: (numFound, the answer bytes).
 fn adv_page<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, q: &str, rows: usize, page: usize)
     -> Result<(usize, Vec<u8>), LaufFehler> {
