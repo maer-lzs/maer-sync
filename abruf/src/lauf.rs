@@ -37,7 +37,7 @@ use crate::musopen::{self, MusopenFehler};
 use crate::gutenberg::{self, Rechte};
 use crate::radio;
 use crate::stufe::stufen;
-use crate::netz::{encode, gewichtigster, HolFehler, Holer, Netz, Uhr};
+use crate::netz::{encode, gewichtigster, Antwort, HolFehler, Holer, Netz, Uhr, TIMEOUT_S};
 use crate::plan::{Art, DELTA_S};
 
 /// The most records one query of the advanced search is read for. A delta
@@ -66,7 +66,9 @@ pub struct Einstellungen {
 pub enum LaufFehler {
     Holen(HolFehler),
     Lesen(ReadError),
-    Zaehlung { erwartet: usize, gelesen: usize, eindeutig: usize },
+    /// `toleranz` is how far the distinct records may stand off `erwartet`
+    /// (0 but for Radio Browser).
+    Zaehlung { erwartet: usize, gelesen: usize, eindeutig: usize, toleranz: usize },
     Echo { gestellt: String, zurueck: Option<String> },
     Katalog(String),
     Quelle(String),
@@ -107,6 +109,8 @@ pub struct Laufbericht {
     /// step it changed; new rows do not count. Two regular runs side by
     /// side measure how often the tenths move.
     pub stufen_gewechselt: usize,
+    /// Gutenberg: the requests that went to `www` (always 0) and to the mirror.
+    pub wege: Option<(usize, usize)>,
 }
 
 impl Laufbericht {
@@ -128,6 +132,9 @@ impl Laufbericht {
             "lauf quelle={} art={} gelesen={} version={}->{} dauer_ms={} ausgang={ausgang}",
             self.quelle, self.art.name(), self.gelesen, self.version_vorher, self.version_nachher, self.dauer_ms);
         zeile.push_str(&format!(" stufen_gewechselt={}", self.stufen_gewechselt));
+        if let Some((www, spiegel)) = self.wege {
+            zeile.push_str(&format!(" www={www} spiegel={spiegel}"));
+        }
         if self.bestaetigt {
             zeile.push_str(" bestaetigt=ja");
         }
@@ -135,9 +142,15 @@ impl Laufbericht {
     }
 }
 
-/// The query of a source of the index; shellac has none (shelves only).
-/// The catalog dump of Project Gutenberg, on the mirror the app takes.
+/// The catalog dump of Project Gutenberg on its mirror. A run asks the
+/// mirror alone: the website `www.gutenberg.org` is for people, and its
+/// terms block automated access (mirrors and catalog data excepted).
 pub const GUTENBERG_KATALOG: &str = "https://gutenberg.pglaf.org/cache/epub/feeds/pg_catalog.csv";
+
+/// The time limit of the dump alone. Measured 28.11.2026: the mirror sends
+/// 23 to 31 KB/s, so the dump of about 21 MB takes some fifteen minutes.
+/// Every other request keeps `netz::TIMEOUT_S`.
+pub const GUTENBERG_KATALOG_GRENZE_S: u64 = 1800;
 
 /// At most this many records of works in one run.
 pub const GUTENBERG_RDF_DECKEL: usize = 2000;
@@ -147,13 +160,38 @@ pub fn gutenberg_rdf_url(nummer: &str) -> String {
     format!("https://gutenberg.pglaf.org/cache/epub/{nummer}/pg{nummer}.rdf")
 }
 
+/// The requests of one Gutenberg run, counted by the host they went to.
+/// The line of the run names both, so `www=0` stands in every line and is
+/// its own fence in operation.
+struct GutenbergWeg {
+    www: usize,
+    spiegel: usize,
+}
+
+impl GutenbergWeg {
+    fn hole<H: Holer, U: Uhr>(&mut self, netz: &mut Netz<H, U>, url: &str, grenze_s: u64)
+        -> Result<Antwort, HolFehler> {
+        if url.starts_with("https://www.gutenberg.org/") { self.www += 1 } else { self.spiegel += 1 }
+        netz.get_mit_grenze(url, grenze_s)
+    }
+}
+
 /// The full pass of Gutenberg: the dump, then the record of every work of
 /// type `Sound`, one by one (the net keeps them a second apart). A
 /// copyrighted work stays out. A failed record leaves a living work as the
 /// last run had it and keeps a new one out; more than a tenth failed
 /// refuses the run.
-fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog) -> Result<Vec<Row>, LaufFehler> {
-    let dump = netz.get(GUTENBERG_KATALOG)?;
+fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, wege: &mut Option<(usize, usize)>)
+    -> Result<Vec<Row>, LaufFehler> {
+    let mut weg = GutenbergWeg { www: 0, spiegel: 0 };
+    let r = gutenberg_mit(netz, katalog, &mut weg);
+    *wege = Some((weg.www, weg.spiegel));
+    r
+}
+
+fn gutenberg_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog, weg: &mut GutenbergWeg)
+    -> Result<Vec<Row>, LaufFehler> {
+    let dump = weg.hole(netz, GUTENBERG_KATALOG, GUTENBERG_KATALOG_GRENZE_S)?;
     let rows = gutenberg::rows_from_catalog(&dump.koerper)?;
     if rows.len() > GUTENBERG_RDF_DECKEL {
         return Err(LaufFehler::Deckel(format!("{} works of type Sound, at most {GUTENBERG_RDF_DECKEL} records a run", rows.len())));
@@ -165,7 +203,8 @@ fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog) ->
     let mut ausgefallen = 0;
     for mut r in rows {
         let nummer = r.id.trim_start_matches("gut:").to_string();
-        let gelesen = netz.get(&gutenberg_rdf_url(&nummer)).map_err(LaufFehler::from)
+        let gelesen = weg.hole(netz, &gutenberg_rdf_url(&nummer), TIMEOUT_S)
+            .map_err(LaufFehler::from)
             .and_then(|a| gutenberg::rdf_lesen(&a.koerper, &nummer).map_err(LaufFehler::from));
         match gelesen {
             Ok(rdf) => {
@@ -204,12 +243,16 @@ fn gutenberg_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &Katalog) ->
     Ok(out)
 }
 
+/// The query of a source of the index; shellac has none (shelves only).
 pub fn base_query(quelle: &str) -> Option<&'static str> {
     match quelle {
         "librivox" => Some("collection:librivoxaudio"),
-        "archive-buch" => Some("collection:audio_bookspoetry AND mediatype:(audio)"),
-        "netlabel" => Some("collection:netlabels AND mediatype:(audio)"),
-        "otr" => Some("collection:oldtimeradio AND mediatype:(audio)"),
+        // `mediatype:audio` without parentheses: archive.org states the
+        // query back without them, and the count is the same (measured on
+        // all twelve queries, 28.11.2026).
+        "archive-buch" => Some("collection:audio_bookspoetry AND mediatype:audio"),
+        "netlabel" => Some("collection:netlabels AND mediatype:audio"),
+        "otr" => Some("collection:oldtimeradio AND mediatype:audio"),
         _ => None,
     }
 }
@@ -231,7 +274,7 @@ pub fn regale_der_app() -> Vec<Shelf> {
 }
 
 fn shelf_query(s: &Shelf) -> String {
-    format!("collection:georgeblood AND subject:\"{}\" AND mediatype:(audio)", s.schlagwort)
+    format!("collection:georgeblood AND subject:\"{}\" AND mediatype:audio", s.schlagwort)
 }
 
 /// A UTC day as `YYYY-MM-DD` (civil from days, without a calendar crate).
@@ -269,13 +312,38 @@ fn parse(body: &[u8]) -> Result<Value, LaufFehler> {
     serde_json::from_slice(body).map_err(|e| LaufFehler::Lesen(ReadError::Unreadable(e.to_string())))
 }
 
+/// Whether the echo of a query is the query. archive.org masks the
+/// characters of a query in its echo (the quote as `&quot;`, measured
+/// 28.11.2026); the echo is unmasked in ONE pass over five entities, so
+/// `&amp;quot;` stays `&quot;` and unequal, and anything else is compared
+/// as it stands.
+pub fn echo_gleich(gestellt: &str, zurueck: &str) -> bool {
+    const ENTITAETEN: [(&str, char); 5] = [("&quot;", '"'), ("&amp;", '&'), ("&lt;", '<'), ("&gt;", '>'), ("&#39;", '\'')];
+    let mut klar = String::with_capacity(zurueck.len());
+    let mut rest = zurueck;
+    'aussen: while let Some(c) = rest.chars().next() {
+        if c == '&' {
+            for (e, z) in ENTITAETEN {
+                if let Some(r) = rest.strip_prefix(e) {
+                    klar.push(z);
+                    rest = r;
+                    continue 'aussen;
+                }
+            }
+        }
+        klar.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    klar == gestellt
+}
+
 /// An advanced search page, its echo checked: (numFound, the answer bytes).
 fn adv_page<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, q: &str, rows: usize, page: usize)
     -> Result<(usize, Vec<u8>), LaufFehler> {
     let a = netz.get(&adv_url(q, rows, page))?;
     let v = parse(&a.koerper)?;
     let echo = v.pointer("/responseHeader/params/query").and_then(Value::as_str).map(str::to_string);
-    if echo.as_deref() != Some(q) {
+    if !echo.as_deref().is_some_and(|z| echo_gleich(q, z)) {
         return Err(LaufFehler::Echo { gestellt: q.into(), zurueck: echo });
     }
     let n = v.pointer("/response/numFound").and_then(Value::as_u64)
@@ -308,7 +376,7 @@ fn adv_all<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, quelle: &str, q: &str, e: &E
 fn check_count(rows: &[Row], erwartet: usize) -> Result<(), LaufFehler> {
     let eindeutig = rows.iter().map(|r| r.id.as_str()).collect::<BTreeSet<_>>().len();
     if rows.len() != erwartet || eindeutig != erwartet {
-        return Err(LaufFehler::Zaehlung { erwartet, gelesen: rows.len(), eindeutig });
+        return Err(LaufFehler::Zaehlung { erwartet, gelesen: rows.len(), eindeutig, toleranz: 0 });
     }
     Ok(())
 }
@@ -366,7 +434,7 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
             let s = musopen::rows_from_answer(&a.koerper)?;
             seen += s.gesehen;
             if seen > files {
-                return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len() });
+                return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len(), toleranz: 0 });
             }
             for r in s.zeilen {
                 if ids.insert(r.id.clone()) { rows.push(r); }
@@ -381,7 +449,7 @@ fn musopen_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen) -> R
             weiter = Some(w);
         }
         if seen != files {
-            return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len() });
+            return Err(LaufFehler::Zaehlung { erwartet: files, gelesen: seen, eindeutig: rows.len(), toleranz: 0 });
         }
     }
     Ok(rows)
@@ -408,6 +476,12 @@ fn radio_count<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, server: &mut Option<&'st
     // `stations` counts only the stations that are not broken: exactly what
     // the pages with `hidebroken=true` list.
     Ok(n("stations")? as usize)
+}
+
+/// How far the distinct stations may stand off the statistics: a
+/// thousandth of the count, rounded down (0 below a thousand).
+pub fn radio_toleranz(erwartet: usize) -> usize {
+    erwartet / 1000
 }
 
 /// All stations in pages of `adv_rows`, ordered by uuid; counted against the
@@ -446,12 +520,18 @@ fn radio_pass<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, e: &Einstellungen, zahlen
         }
         if doppelt {
             if versuch == 0 { continue; }
-            return Err(LaufFehler::Zaehlung { erwartet, gelesen: rows.len(), eindeutig: uuids.len() });
+            return Err(LaufFehler::Zaehlung { erwartet, gelesen: rows.len(), eindeutig: uuids.len(), toleranz: 0 });
         }
-        if uuids.len() != erwartet {
+        // The distinct uuids, not the rows kept, against the statistics: the
+        // reader drops entries it cannot play. Measured 28.11.2026, twice in
+        // a row: the statistics count one station fewer than the pages list,
+        // so a list may stand a thousandth off its count, either way.
+        let passt = |n: usize| uuids.len().abs_diff(n) <= radio_toleranz(n);
+        if !passt(erwartet) {
             let again = radio_count(netz, &mut server)?;
-            if uuids.len() != again {
-                return Err(LaufFehler::Zaehlung { erwartet: again, gelesen: rows.len(), eindeutig: uuids.len() });
+            if !passt(again) {
+                return Err(LaufFehler::Zaehlung { erwartet: again, gelesen: rows.len(), eindeutig: uuids.len(),
+                                                  toleranz: radio_toleranz(again) });
             }
         }
         return Ok(rows);
@@ -571,6 +651,7 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
     let vorher = katalog.version(quelle).unwrap_or(-1);
     let mut gelesen = 0;
     let mut stufen_gewechselt = 0;
+    let mut wege = None;
     let ausgang = (|| -> Result<(), LaufFehler> {
         // Musopen and Radio Browser have no delta: their day is a full pass.
         let voll = art == Art::Voll || OHNE_DELTA.contains(&quelle);
@@ -580,7 +661,7 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
             katalog.set_last_run(quelle, art.name(), netz.uhr.jetzt_ms().div_euclid(1000)).map_err(k)?;
             return Ok(());
         }
-        let rows = if quelle == "gutenberg" { gutenberg_pass(netz, katalog)? }
+        let rows = if quelle == "gutenberg" { gutenberg_pass(netz, katalog, &mut wege)? }
             else if voll { full_pass(netz, quelle, e)? } else { delta(netz, katalog, quelle, e)? };
         gelesen = rows.len();
         let k = |e: maer_sync::katalog::KatalogError| LaufFehler::Katalog(e.to_string());
@@ -608,6 +689,7 @@ fn lauf_mit<H: Holer, U: Uhr>(netz: &mut Netz<H, U>, katalog: &mut Katalog, quel
         ausgang,
         bestaetigt,
         stufen_gewechselt,
+        wege,
     }
 }
 

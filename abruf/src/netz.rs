@@ -145,6 +145,12 @@ impl<H: Holer, U: Uhr> Netz<H, U> {
 
     /// GET an https address within the bounds above.
     pub fn get(&mut self, url: &str) -> Result<Antwort, HolFehler> {
+        self.get_mit_grenze(url, TIMEOUT_S)
+    }
+
+    /// GET with a time limit of its own, for the one answer that is known
+    /// to take longer than a page (the Gutenberg catalog dump).
+    pub fn get_mit_grenze(&mut self, url: &str, timeout_s: u64) -> Result<Antwort, HolFehler> {
         let mut url = url.to_string();
         if !url.starts_with("https://") {
             return Err(HolFehler::NichtHttps(url));
@@ -163,7 +169,7 @@ impl<H: Holer, U: Uhr> Netz<H, U> {
                 url: url.clone(),
                 user_agent: USER_AGENT.into(),
                 max_bytes: MAX_BYTES,
-                timeout_s: TIMEOUT_S,
+                timeout_s,
             };
             let a = self.holer.hole(&anfrage)?;
             if a.koerper.len() > MAX_BYTES {
