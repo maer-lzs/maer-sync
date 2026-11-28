@@ -109,7 +109,7 @@ pub struct Laufbericht {
     /// step it changed; new rows do not count. Two regular runs side by
     /// side measure how often the tenths move.
     pub stufen_gewechselt: usize,
-    /// Gutenberg: the requests that went to `www` (always 0) and to the mirror.
+    /// Gutenberg: the requests this code addressed to `www` and to the mirror.
     pub wege: Option<(usize, usize)>,
 }
 
@@ -160,9 +160,9 @@ pub fn gutenberg_rdf_url(nummer: &str) -> String {
     format!("https://gutenberg.pglaf.org/cache/epub/{nummer}/pg{nummer}.rdf")
 }
 
-/// The requests of one Gutenberg run, counted by the host they went to.
-/// The line of the run names both, so `www=0` stands in every line and is
-/// its own fence in operation.
+/// The requests of one Gutenberg run, counted by the host of the address
+/// this code asks; a redirect the net follows is not counted. The line of
+/// the run names both counts.
 struct GutenbergWeg {
     www: usize,
     spiegel: usize,
