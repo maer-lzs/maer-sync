@@ -7,3 +7,4 @@
 # occurs anywhere, so an entry cannot outlive its subject.
 static-pie # linker term for a static position independent executable
 Claude (Opus, Sonnet and Fable) # the names of language models in the credit of the README
+Claude (Opus, Sonnet und Fable) # the names of language models in the credit of the German README

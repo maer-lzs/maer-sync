@@ -67,6 +67,7 @@ EXEMPT = {
     "tests/role-names-allowed.txt": "a list the name fence reads; it carries the header as comment lines",
     ".gitignore": "a list of patterns, and comments in it would be read as patterns",
     "README.md": "prose about the service; the LICENSE file covers the repository",
+    "README.de.md": "the German twin of the README, prose about the service; the LICENSE file covers the repository",
     "CONTRACT.md": "byte-identical in both repositories with a fence on each side, "
                    "so a header here is a change to the app's repository too",
     "Cargo.lock": "cargo writes this file; a header would be rewritten away, and the "
@@ -123,6 +124,8 @@ EXEMPT = {
 #: answers holds dozens of files of one kind, and listing each would hide the
 #: one reason they share.
 EXEMPT_UNDER = {
+    "docs/": "pages of prose about setting up and running the service, each in English and German; "
+             "the LICENSE file covers the repository, as for the README they were cut from",
     "abruf/lizenzen/": "the licence files of the third-party crates of the fetch program, copied unchanged "
                        "from each published crate; a header would alter another author's licence text",
     "vektoren/katalog/": "answers of the catalog sources, recorded and cut to one record, and the rows "
