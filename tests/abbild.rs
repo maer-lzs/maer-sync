@@ -69,10 +69,10 @@ fn das_laufabbild_ist_leer_und_nicht_root() {
 
 #[test]
 fn das_leere_abbild_traegt_was_der_dienst_zur_laufzeit_braucht() {
-    // Beides gemessen am 24.09.2026 im ersten Lauf des Abbilds, beides still:
-    // ohne /tmp sagte jede Sicherung `not measured`, und ohne Init endete jeder
-    // Stopp nach zehn Sekunden mit SIGKILL. Der Text hier ist nur der Zaun; der
-    // Beweis ist der Lauf, und der steht im README.
+    // Both measured on 24.09.2026 in the first run of the image, both quiet:
+    // without /tmp every backup said `not measured`, and without an init every
+    // stop ended after ten seconds with SIGKILL. The text here is only the
+    // fence; the proof is the run, and it stands in docs/container.md.
     let befehle = lesen("src/befehle.rs");
     let betrieb = lesen("Dockerfile");
     if befehle.contains("temp_dir()") {
@@ -88,8 +88,8 @@ fn das_leere_abbild_traegt_was_der_dienst_zur_laufzeit_braucht() {
 
 #[test]
 fn der_container_setzt_die_variable_die_der_dienst_liest() {
-    // Die Falle aus dem README: HOST und PORT liest die Rust-Fassung nicht,
-    // und wer sie setzt, bekommt keinen Fehler, sondern einen Dienst auf 8081.
+    // The trap from docs/setup.md (Environment): the Rust build reads neither HOST
+    // nor PORT, and whoever sets them gets no error but a service on 8081.
     let quelltext: String = std::fs::read_dir("src").expect("src/")
         .filter_map(|e| e.ok()).map(|e| e.path())
         .filter(|p| p.extension().map(|x| x == "rs").unwrap_or(false))
