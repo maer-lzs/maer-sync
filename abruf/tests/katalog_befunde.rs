@@ -15,9 +15,9 @@
 //! off its count by a thousandth, either way.
 //!
 //! Gutenberg: the mirror delivers 23 to 31 KB/s, so the catalog dump of about
-//! 21 MB needs some fifteen minutes; `www.gutenberg.org` answers 503 to it.
-//! The dump gets a limit of its own, `www` is asked first, and a run that saw
-//! `www` fail asks the mirror for the rest of that run.
+//! 21 MB needs some fifteen minutes. The dump gets a limit of its own. The
+//! website `www.gutenberg.org` is for people only (its terms for robots); a
+//! run asks the mirror alone, and its line counts the requests to each host.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -246,6 +246,7 @@ fn r6_a_small_list_still_counts_exactly() {
 
 // ---------------------------------------------------------------- Gutenberg
 
+/// The addresses at `www`, which a run must never ask.
 const WWW_KATALOG: &str = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv";
 fn www_rdf(n: &str) -> String { format!("https://www.gutenberg.org/cache/epub/{n}/pg{n}.rdf") }
 
@@ -270,9 +271,9 @@ fn dump(n: u32) -> Vec<u8> {
     s.into_bytes()
 }
 
-/// How `www` answers: every request, or only the dump, then the records.
+/// How `www` would answer, if it were asked.
 #[derive(Clone, Copy)]
-enum Www { Gut, Status503, Pause, Zeit }
+enum Www { Gut, Status503 }
 
 struct Gutenberg { www: Www, dump_s: i64, werke: u32 }
 
@@ -285,8 +286,6 @@ fn gutenberg(g: Gutenberg, clock: Rc<RefCell<Option<Clock>>>) -> Handler {
             match g.www {
                 Www::Gut => {}
                 Www::Status503 => return Err(HolFehler::Status(503)),
-                Www::Pause => return Err(HolFehler::SpaeterWieder(600)),
-                Www::Zeit => return Err(HolFehler::Zeit),
             }
         }
         if a.url == WWW_KATALOG || a.url == GUTENBERG_KATALOG {
@@ -340,42 +339,21 @@ fn g2_a_slow_dump_within_the_limit_passes_and_one_beyond_it_breaks() {
 }
 
 #[test]
-fn g3_www_first_and_the_mirror_only_when_www_fails() {
-    let (b, log, _) = gutenberg_lauf("g3-gut", Gutenberg { www: Www::Gut, dump_s: 1, werke: 3 });
-    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
-    assert_eq!(an(&log, "https://www.gutenberg.org/"), 4, "the dump and three records at www");
-    assert_eq!(an(&log, "https://gutenberg.pglaf.org/"), 0, "the mirror was asked although www answered");
-    assert_eq!(log.borrow()[0].url, WWW_KATALOG);
-    for (name, www) in [("g3-503", Www::Status503), ("g3-pause", Www::Pause), ("g3-zeit", Www::Zeit)] {
-        let (b, log, _) = gutenberg_lauf(name, Gutenberg { www, dump_s: 1, werke: 3 });
+fn g3_no_request_of_a_run_goes_to_www_even_when_www_answers() {
+    // The terms of Project Gutenberg: the website is for people; a run with
+    // up to 2000 records is automated and belongs on the mirror.
+    for (name, www) in [("g3-gut", Www::Gut), ("g3-503", Www::Status503)] {
+        let (b, log, k) = gutenberg_lauf(name, Gutenberg { www, dump_s: 1, werke: 5 });
         assert_eq!(b.ausgang, Ok(()), "{name}: {}", b.zeile());
-        let urls: Vec<String> = log.borrow().iter().map(|a| a.url.clone()).collect();
-        assert_eq!(urls[0], WWW_KATALOG, "{name}");
-        assert_eq!(urls[1], GUTENBERG_KATALOG, "{name}: the same dump from the mirror");
+        assert_eq!(an(&log, "https://www.gutenberg.org/"), 0, "{name}: a request went to www");
+        assert_eq!(an(&log, "https://gutenberg.pglaf.org/"), 6, "{name}: the dump and five records at the mirror");
+        assert_eq!(log.borrow()[0].url, GUTENBERG_KATALOG, "{name}");
+        assert_eq!(live(&k, "gutenberg"), 5, "{name}");
     }
 }
 
 #[test]
-fn g4_after_www_failed_the_rest_of_the_run_asks_the_mirror_and_the_line_counts_both() {
-    let (b, log, _) = gutenberg_lauf("g4", Gutenberg { www: Www::Status503, dump_s: 1, werke: 5 });
-    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
-    assert_eq!(an(&log, "https://www.gutenberg.org/"), 1, "www asked again after it failed");
-    assert_eq!(an(&log, "https://gutenberg.pglaf.org/"), 6, "the dump and five records at the mirror");
-    assert!(b.zeile().contains(" www=1 spiegel=6"), "{}", b.zeile());
-    let (b, _, _) = gutenberg_lauf("g4-gut", Gutenberg { www: Www::Gut, dump_s: 1, werke: 5 });
-    assert!(b.zeile().contains(" www=6 spiegel=0"), "{}", b.zeile());
-}
-
-#[test]
-fn g4_the_next_run_asks_www_again() {
-    let slot = Rc::new(RefCell::new(None));
-    let (mut n, log, clock) = net(gutenberg(Gutenberg { www: Www::Status503, dump_s: 1, werke: 2 }, slot.clone()));
-    *slot.borrow_mut() = Some(clock);
-    let mut k = katalog("g4-next");
-    let b = lauf(&mut n, &mut k, "gutenberg", Art::Voll, &e(10_000));
-    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
-    let vorher = log.borrow().len();
-    let b = lauf(&mut n, &mut k, "gutenberg", Art::Voll, &e(10_000));
-    assert_eq!(b.ausgang, Ok(()), "{}", b.zeile());
-    assert_eq!(log.borrow()[vorher].url, WWW_KATALOG, "the second run went to the mirror first");
+fn g4_the_line_counts_the_requests_to_each_host() {
+    let (b, _, _) = gutenberg_lauf("g4", Gutenberg { www: Www::Gut, dump_s: 1, werke: 5 });
+    assert!(b.zeile().ends_with(" www=0 spiegel=6"), "{}", b.zeile());
 }
