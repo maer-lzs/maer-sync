@@ -15,8 +15,9 @@
 #   - an attribution trailer in a message;
 #   - the deletion of dev, or a push to dev that is not a fast-forward;
 #   - a head of a branch other than main without the note of a green run of
-#     push.sh for exactly its tree (main and tags are guarded by the
-#     protection rules of the server, which only the owner may pass).
+#     push.sh for exactly its tree, with at least one case (main and tags
+#     are guarded by the protection rules of the server, which only the
+#     owner may pass).
 # It needs bash, git and the grep and awk of BusyBox, nothing else. It writes
 # "tor: checked" when it lets a push through and one line
 # "tor: refused: <reason>: <detail>" for each rule broken; a detail never
@@ -129,6 +130,7 @@ has_green_note() {
     tree="$(git rev-parse "$1^{tree}")"
     printf '%s\n' "$text" | grep -qE "(^| )kind=final( |$)" \
         && printf '%s\n' "$text" | grep -qE "(^| )result=green( |$)" \
+        && printf '%s\n' "$text" | grep -qE "(^| )cases=[1-9][0-9]*( |$)" \
         && printf '%s\n' "$text" | grep -qE "(^| )tree=$tree( |$)"
 }
 
